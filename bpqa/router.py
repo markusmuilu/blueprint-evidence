@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from . import checks as checking
 from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
@@ -30,6 +31,7 @@ class Context:
     out_dir: Path
     evidence: bool = True
     prior: bool = False          # allow the labelled dev-prior fallback on raster questions
+    checks: bool = True          # run the checking layer on raster answers (bpqa/checks.py)
     tried: list = field(default_factory=list)
 
     @property
@@ -99,8 +101,13 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
             a = fn(ctx, query)
         except Exception as ex:  # a broken route must never take the run down
             a = abstain(getattr(fn, "__module__", "route").rsplit(".", 1)[-1], f"error: {type(ex).__name__}: {ex}")
+        if ctx.checks and a.answered:
+            try:
+                a = checking.apply(ctx, query, a)
+            except Exception as ex:   # a broken check must not hide a route's answer
+                a.checks = [{"name": "checking-layer", "status": "error", "detail": f"{type(ex).__name__}: {ex}"}]
         ctx.tried.append(a.route)
-        if a.answered:
+        if a.answered or a.checks:      # a check-abstained answer keeps its checks and evidence
             return query, a
         reasons.append(f"{a.route}: {a.abstain}")
     if reasons:

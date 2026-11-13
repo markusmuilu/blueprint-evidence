@@ -95,15 +95,33 @@ class ImageCanvas:
         self.d.rectangle(bounds, fill=color)
 
 
-def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: str = "", max_w=1600) -> str:
-    """Add the header strip and save. Returns the path as a string."""
+_STASH: dict = {}      # evidence path -> (overlay without header, question, answer line, note)
+
+
+def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: str = "", max_w=1600,
+           checks=None) -> str:
+    """Add the header strip and save. Returns the path as a string.
+
+    `checks` (from bpqa/checks.py) are listed under the note, green for pass and red for fail.
+    """
+    if len(_STASH) > 8:
+        _STASH.clear()
+    _STASH[str(out)] = (img, question, answer_line, note)
     if img.width > max_w:
         img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
     f, fb = font(15), font(19)
     cw = max(img.width, 900)                      # narrow scans: keep the header readable
     lines = textwrap.wrap(question, max(40, cw // 8))[:3]
     note_lines = textwrap.wrap(note, max(50, cw // 7))[:3] if note else []
-    head_h = 14 + 20 * len(lines) + 26 + 18 * len(note_lines) + 8
+    check_lines = []
+    for c in checks or []:
+        st = c["status"] if isinstance(c, dict) else c.status
+        nm = c["name"] if isinstance(c, dict) else c.name
+        dt = c["detail"] if isinstance(c, dict) else c.detail
+        mark = {"pass": "PASS", "fail": "FAIL"}.get(st, st.upper())
+        for i, ln in enumerate(textwrap.wrap(f"check {mark}  {nm}: {dt}", max(50, cw // 7))[:2]):
+            check_lines.append((ln if i == 0 else "      " + ln, st))
+    head_h = 14 + 20 * len(lines) + 26 + 18 * len(note_lines) + 18 * len(check_lines) + 8
     canvas = Image.new("RGB", (cw, img.height + head_h), "white")
     d = ImageDraw.Draw(canvas)
     y = 8
@@ -115,8 +133,22 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     for ln in note_lines:
         d.text((12, y), ln, fill=(90, 90, 90), font=font(13))
         y += 18
+    for ln, st in check_lines:
+        d.text((12, y), ln, fill=(30, 130, 60) if st == "pass" else (200, 30, 50), font=font(13))
+        y += 18
     d.line([(0, head_h - 2), (cw, head_h - 2)], fill=(200, 200, 200), width=2)
     canvas.paste(img, (0, head_h))
     out.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(out)
     return str(out)
+
+
+def add_checks(path: str, checks, abstained: bool = False, value=None) -> str:
+    """Redraw an evidence image's header with the checks that fired (and the abstention, if any)."""
+    if path not in _STASH:
+        return path
+    img, question, answer_line, note = _STASH[path]
+    if abstained:
+        answer_line = f"ABSTAINED: would answer {value}, a consistency check failed"
+        note = (note + "; " if note else "") + "the boxes show what the route read; the failed check is below"
+    return finish(img, Path(path), question, answer_line, note, checks=checks)

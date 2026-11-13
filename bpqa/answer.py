@@ -15,6 +15,7 @@ class Answer:
     items: list = field(default_factory=list)   # what was counted / summed (ids, labels, values)
     cost_usd: float = 0.0                # 0 for every no-model route
     abstain: str | None = None           # reason, when no answer is given
+    checks: list = field(default_factory=list)  # consistency checks run on the answer (bpqa/checks.py)
 
     @property
     def answered(self) -> bool:

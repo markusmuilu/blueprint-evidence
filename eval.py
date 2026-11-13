@@ -58,6 +58,7 @@ def main(argv=None):
     ap.add_argument("--evidence", action="store_true", help="render evidence PNGs into out/evidence/")
     ap.add_argument("--prior", action="store_true",
                     help="answer raster questions without a CV detector with the dev-split majority value (labelled baseline)")
+    ap.add_argument("--no-checks", action="store_true", help="turn the checking layer off (for before/after numbers)")
     ap.add_argument("--out", default=str(REPO / "out"))
     args = ap.parse_args(argv)
 
@@ -78,7 +79,7 @@ def main(argv=None):
 
     out = Path(args.out)
     ev_dir = out / "evidence"
-    run_dir = out / (args.split + ("-prior" if args.prior else ""))
+    run_dir = out / (args.split + ("-prior" if args.prior else "") + ("-nochecks" if args.no_checks else ""))
     run_dir.mkdir(parents=True, exist_ok=True)
 
     stats = defaultdict(lambda: {"n": 0, "answered": 0, "correct": 0, "cost": 0.0})
@@ -87,7 +88,8 @@ def main(argv=None):
     t0 = time.time()
     with open(run_dir / "answers.jsonl", "w", encoding="utf-8") as f:
         for i, q in enumerate(qs):
-            ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence, prior=args.prior)
+            ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence, prior=args.prior,
+                          checks=not args.no_checks)
             query, a = solve(ctx)
             ok = score(q, a)
             for key in [(q.source, q.type), (q.source, "ALL"), ("ALL", "ALL")]:
