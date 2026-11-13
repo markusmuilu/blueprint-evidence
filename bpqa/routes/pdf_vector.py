@@ -54,6 +54,22 @@ def _poly(pts):
     return p
 
 
+def _poly_holes(subpaths):
+    """Filled path with several subpaths: the largest is the outline, subpaths inside it are holes
+    (a balcony that runs round the building is a ring, not a disc)."""
+    polys = [q for q in (_poly(sp) for sp in subpaths) if q is not None]
+    if not polys:
+        return None
+    ext = max(polys, key=lambda q: q.area)
+    holes = [q for q in polys if q is not ext and ext.contains(q.representative_point())]
+    if holes:
+        from shapely.ops import unary_union
+        ext = ext.difference(unary_union(holes))
+        if ext.geom_type == "MultiPolygon":
+            ext = max(ext.geoms, key=lambda g: g.area)
+    return ext
+
+
 def _lum(c):
     return None if c is None else 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
 
@@ -130,7 +146,7 @@ class PdfFloor:
         for p in vp.paths:
             if p.fill is None or not p.closed or len(p.pts) < 4 or _lum(p.fill) < 0.75:   # walls are dark
                 continue
-            poly = _poly(p.pts)
+            poly = _poly_holes(p.subpaths)
             if poly is None or poly.area < 4 or poly.area > 0.5 * page_area:
                 continue
             sig = ("stroke", _round_c(p.stroke), round(p.width, 2)) if p.stroke is not None else ("fill", _round_c(p.fill))
@@ -159,7 +175,7 @@ class PdfFloor:
                 continue
             dedup.append((p, poly))
         self.rooms = [{"poly": poly, "path": p, "name": None, "number": None, "area_label": None, "unit": None,
-                       "texts": [], "fill": _round_c(p.fill)} for p, poly in dedup]
+                       "texts": [], "fill": _round_c(p.fill), "outline": Polygon(poly.exterior)} for p, poly in dedup]
 
         # plan region: box around the room shapes (legend and title block lie outside)
         polys = [r["poly"] for r in self.rooms]
@@ -252,8 +268,8 @@ class PdfFloor:
                 if p.fill is None and p.kind == "s":
                     if 0.3 <= Lm <= 6.0 and 0.02 <= Sm <= 0.6 and L >= 2 * S:
                         door_c.append((p, q4))
-                    elif 0.3 <= Sm and Lm <= 1.8 and L <= 2.0 * S:
-                        shower_c.append((p, q4))
+                    if 0.15 <= Sm and Lm <= 2.0 and L <= 3.5 * S:
+                        shower_c.append((p, q4))       # kept only with a drain circle inside
                 elif p.fill is not None and _lum(p.fill) > 0.9 and 0.15 <= Lm <= 15 and Sm <= 1.5:
                     c4 = Polygon(q4).centroid
                     if not any(r["poly"].contains(c4) for r in self.rooms if r["poly"].distance(c4) == 0
@@ -363,7 +379,9 @@ class PdfFloor:
     def room_area(self, r) -> float | None:
         if not self.scale.known:
             return None
-        return round(r["poly"].area * self.scale.m_per_pt ** 2, 2)
+        # area of the drawn outline, islands not subtracted: the dataset's room areas follow the
+        # room outline polyline (checked against the DXF twins on dev)
+        return round(r["outline"].area * self.scale.m_per_pt ** 2, 2)
 
     def is_outdoor(self, r) -> bool:
         return fold_name(r["name"] or "") in {fold_name(o) for o in OUTDOOR}
