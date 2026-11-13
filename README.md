@@ -124,6 +124,74 @@ neither route reproduces). IFC plan PDFs: room areas only (the drawn footprint v
 flattened polylines, so the door convention is not recognised. opening_design answers come from
 `pdf-text` (schedules); `pdf-vector` abstains on all of them.
 
+### Quantity takeoff: room-type areas (`bpqa/takeoff.py`)
+
+Stoa's own example: "How many square meters of tiling should I order for the toilets?" The dataset only
+asks per-room and per-label areas, so takeoff questions are a layer on top of the existing area rules,
+not a change to them.
+
+- **Parsing.** A question with an area unit (m2, square metres, nelio), a material (tiles, laatta,
+  flooring, parquet, paint, waterproofing, screed) or an area word, plus a room type, becomes
+  `{measure: area, obj: room, variant: type_sum, takeoff: {types, material, surface, aggregation: sum}}`.
+  Room types are read in EN and FI (stems, so "kylpyhuoneisiin", "keittioon", "vessoihin" match), DE, FR,
+  IT, and from the Finnish plan abbreviations KH, KPH, PH, PESUH, SH, WC, S, MH, OH, K, KK, ET, TK, VH,
+  VAR, KHH, RT (case-sensitive, "KH:hon" allowed). "Wet rooms" / "markatilat" means bathroom + WC +
+  sauna. It never fires on a question with a quoted label, a room number, an apartment, "named ...",
+  or an exclusion clause's room words ("except balconies"); on Stoa's 127,044 questions it changes the
+  parse of 2 (ifc_bench takeoff questions), checked by `tests/test_takeoff.py` and a full-file run.
+- **Interpretation, stated in every answer:** the sum of net floor areas of the matching rooms as drawn
+  inside the walls, no allowance for cutting waste. Wall surfaces abstain (they need room heights and
+  openings). "Toilets" means separate WC rooms; bathrooms are not included, and the answer says so.
+  Paint answers the floor area and says walls are not included.
+- **Room types from drawing labels** (`room_types`): Swiss (Bad, Kuche, Bain, Bagno, Schlafzimmer ...),
+  IFC (Bathroom 1, Toilet, TUALETTRUUM, doucheruimte, Bad - Dame, 1IZQ-BAN ...) and Finnish
+  abbreviations. Generic "Zimmer" / "Piece" / "Room" are not typed; they are listed in the answer as
+  not included. A label naming two types ("Wohnen/Essen", "PH/KHH") counts for both.
+- **Answer:** value = total m2; `items` = one line per room (label, number, type, area, where the number
+  came from); `explanation` = "16.76 m2 = Bad (7.05) 6.01 + ... " plus the interpretation; evidence PNG =
+  the rooms filled and numbered with their areas, the total and "floor area only" in the header.
+- **Routes:** DXF room outlines (Swiss), PDF room shapes x scale (`--pdf-only` or no twin), IfcSpace
+  areas (NetFloorArea, else footprint). On an IFC plan sheet without a level in the question, the
+  storey is the one whose name and (uniqueness-weighted) space labels are printed on the sheet; no
+  clear winner abstains. Zero matching rooms abstains with the labels that were read.
+
+Raster scans (`bpqa/routes/raster_area.py`, route `raster-area`):
+
+- printed areas ("12,1 m2", "9.7m2", comma or point decimals) are read from the upright OCR pass and
+  attached to the room label just above or beside them; level marks (+22,65) and totals
+  (HUONEISTOALA, KERROSALA) are skipped
+- room regions: text erased, thin linework removed (furniture, swings, stairs), doorway gaps bridged
+  along the wall direction, flood fill from the label, floor under counters and wardrobes along a wall
+  given back; a region that reaches the image edge, holds another label or is tiny is unusable
+- scale (m2 per pixel) only when 2+ rooms with a printed area and a usable region agree within 4% and
+  form the majority; the doorway width (1.0 m) is tried at 10 pixel-per-metre hypotheses and a
+  hypothesis counts only if the scale it produces agrees with it within 20%
+- a takeoff answers only from printed areas. A room without one makes the sum abstain, and the
+  abstention gives the measured estimate (region x scale) with its dev error, because measured areas
+  are not yet within Stoa's 2% (see below; `MEASURED_ANSWERS` in `raster_area.py` switches them on).
+  It also abstains when the full eight-pass OCR (when cached) reads more labels of the asked type than
+  were located. One-letter labels (S, K) must be upper case.
+
+Takeoff results (every number against a stated reference; dev was used for development, test run once):
+
+| check | reference | dev | test |
+|---|---|---|---|
+| Swiss bedroom sum (DXF route) | Stoa's "total net area of rooms labelled 'Schlafzimmer' / 'Chambre a coucher' / 'Camera da letto'" | 150/150 within 2% | 91/91 |
+| Swiss bedroom sum (`--pdf-only`) | same | 60/60 | - |
+| Swiss bathroom, kitchen rooms in the sums | Stoa's per-room areas, every asked room | 158/158 | 155/156 |
+| Swiss bathroom, kitchen sums, where Stoa asks about every such room on the floor | sum of Stoa's per-room areas | 18/18 | 19/20 |
+| IFC bathroom, WC, kitchen, bedroom sums (models and plan sheets) | sum of Stoa's per-room areas, same completeness rule | 56/56 (60 type sets: 2 abstain, 2 answered with a room list that differs from the asked rooms) | 18/18 (19 sets: 1 differs) |
+| IFC rooms in the sums | Stoa's per-room areas | 204/204 | 184/184 |
+| CubiCasa measured room area, leave-one-out | the area printed on the plan, held out of the scale | 18.7% within 2%, 36.8% within 5%, median error 9.3% (193 of 1471 printed rooms measurable, 52 of 197 plans) | TEST_RASTER |
+
+Baselines: before this branch every takeoff question was a parser abstention (0% coverage). The
+existing area answers did not change: `eval.py` on the preview dev split gives the same Swiss, IFC
+and opening_design rows as the Results table; ifc_bench answers one more question (the duplex
+bathroom tiling question, 15.81 m2 from IfcSpace footprints, where the ifc_bench answer is 18.85 m2
+from finish data while Stoa's own ifc_models answers give Bathroom 1 (A104) 3.16 m2 as we do).
+CubiCasa takeoffs are answered only from printed areas, so their accuracy is the OCR read of those
+labels, which has no reference in Stoa's data.
+
 ### Detector
 
 Toilets, sinks, showers, bathtubs, doors and windows on the scans are counted by a small YOLO detector
@@ -163,6 +231,18 @@ One question:
 ```
 .venv\Scripts\python ask.py data/swiss_dwellings/site1000_bldg2082_floor9385.pdf "How many windows are drawn on this floor plan?"
 ```
+
+Takeoff questions go through the same command (evidence PNG path in the JSON):
+
+```
+.venv\Scripts\python ask.py data/swiss_dwellings/site3387_bldg5238_floor23498.pdf "Kuinka monta neliötä laattaa kylpyhuoneisiin?" --pdf-only
+.venv\Scripts\python ask.py data/ifc_models/bsc-molio_molio-with-uris_plan-04-1-sal.pdf "How many square meters of tiling should I order for the toilets?"
+.venv\Scripts\python ask.py data/cubicasa5k/high_quality_architectural-10372.png "How many m2 of flooring for the bedrooms?"
+```
+
+Takeoff checks: `python tests/test_takeoff.py`; `tools/takeoff_eval.py --split dev` (vector sums vs.
+Stoa's area answers); `tools/ocr_r0.py --split dev --limit 2000` then `tools/area_eval.py --split dev
+--mode walls` (raster leave-one-out).
 
 The data is never copied into the repo; point at it with `--data` or `STOA_DATA` (default:
 `../data/stoa-preview/junction-dataset-preview`).
@@ -285,6 +365,11 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 - The door-schedule parser is tuned on one sheet (Sports Complex A-801). The CTR schedule uses a different
   layout and abstains.
 - `kit-fzk-haus` plan PDFs have no IFC model in the dataset, so model-level questions about them abstain.
+- Takeoff answers are floor areas. Wall areas (tiles on walls, paint) abstain: they need heights and
+  openings. A room type the classifier does not know (or a generic "Zimmer") is left out and listed.
+- CubiCasa takeoffs need printed areas. Measured room regions are an estimate only (median error 9%
+  on dev); furniture drawn against walls, open doorways without swing arcs and stairs are the main
+  causes. Printed areas are read from the upright OCR pass only.
 - Unnamed numbered rooms in Swiss floors are ambiguous (wet rooms, shafts, balconies). The fixture rule
   is right more often than not, and is where most remaining Swiss area errors are.
 

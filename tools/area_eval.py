@@ -58,7 +58,7 @@ def main():
     ap.add_argument("--dark", type=int, default=RA.DARK)
     ap.add_argument("--tol", type=float, default=RA.SCALE_TOL)
     ap.add_argument("--out")
-    ap.add_argument("--mode", default="auto", choices=["auto", "lines", "walls"])
+    ap.add_argument("--mode", default="walls", choices=["auto", "lines", "walls"])
     ap.add_argument("--close-k", type=int, default=RA.CLOSE_K)
     ap.add_argument("--open-k", type=int, default=RA.OPEN_K)
     ap.add_argument("--door-m", type=float, default=RA.DOOR_M)

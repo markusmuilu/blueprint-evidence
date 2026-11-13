@@ -3,6 +3,43 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: quantity takeoff (room-type areas), branch `area-route`
+
+Problem: Stoa said areas matter most to them ("How many square meters of tiling should I order for the
+toilets?"), and judging may ask such questions on any drawing type. Before this branch every takeoff
+phrasing was a parser abstention.
+
+- `bpqa/takeoff.py`: takeoff parser (EN, FI with inflected stems and the plan abbreviations, DE, FR,
+  IT), room-type classifier for drawing labels, shared answer layout (rooms, areas, total,
+  interpretation). Fires on 2 of Stoa's 127,044 questions (both ifc_bench takeoff questions); the
+  existing parses are unchanged (`tests/test_takeoff.py`, full-file check).
+- Vector routes get a `type_sum` branch only; the existing per-room and per-label rules were not
+  touched. Preview dev `eval.py` after the change: Swiss 99.4%, IFC 94.3%, opening_design 45.5%, the
+  same as before; ifc_bench answers one more question (wrong against its 18.85 m2 finish-data answer).
+- IFC plan sheets: a takeoff without a level uses the storey whose name and space labels are printed
+  on the sheet. First version counted plain label hits and picked the wrong storey on a model whose
+  floors all have "Bad" and "Gang"; labels are now weighted by 1 / (storeys that have them) and the
+  printed storey name counts 3.
+- Vector results (`tools/takeoff_eval.py`): Swiss bedroom sums 150/150 (dev), 91/91 (test) against
+  Stoa's label-sum answers; every per-room area inside the sums within 2% except one Swiss kitchen on
+  test; IFC type sums 56/56 dev, 18/18 test where Stoa asks about every room of the type.
+
+Raster (`bpqa/routes/raster_area.py`): printed areas by OCR, room regions, pixel scale. Measured
+against the printed areas, leave-one-out (`tools/area_eval.py`, 2,061 dev images with an upright
+OCR pass, 197 plans with 3+ printed areas, 1,471 printed rooms):
+
+| region method | rooms measured | within 2% | within 5% | median error |
+|---|---|---|---|---|
+| every dark line is a barrier (thickened 2 px) | 65 of 894 (first 1,267 images) | 10.8% | 18.5% | 17.2% |
+| walls only, doorway bridging at 10 scale hypotheses | 203 | 10.8% | 27.6% | 15.3% |
+| walls only, plus floor under counters and wardrobes along walls | 193 | 18.7% | 36.8% | 9.3% |
+
+Morphology sizes tried (close 3-9 px, open 4-8 px): close 5 / open 4 kept the most rooms; larger
+openings lose thin partitions. Gating by rectangularity and by 4+ agreeing scale rooms reached at best
+57.6% within 5% on 33 rooms. That is not Stoa's 2%, so measured areas are not answered: a CubiCasa
+takeoff uses printed areas only and abstains, with the measured estimate in the reason, when a room
+has none. Test split, once, same settings: TEST_RASTER_CL.
+
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
 Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the

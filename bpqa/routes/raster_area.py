@@ -395,7 +395,7 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
         return None
     toks = [t for t in toks if t["conf"] >= 0.5]
     proto, free, others = plan_rooms(toks)
-    hyps = hypotheses(img, toks, proto, others)
+    hyps = hypotheses(img, toks, proto, others, mode="walls")   # walls beat lines and auto on dev (CHANGELOG)
     name, rooms, sc = choose(hyps)
     if rooms is None:
         rooms = hyps[0][2]
@@ -409,6 +409,10 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
 # ---------------------------------------------------------------- takeoff answer
 
 ROUTE = "raster-area"
+# Measured areas (region x scale) are not used as answers: on dev, leave-one-out against printed
+# areas puts only 37% of measured rooms within 5% (18.7% within 2%, Stoa's tolerance). They are
+# reported as an estimate in the abstention instead. Set True to answer with them anyway.
+MEASURED_ANSWERS = False
 
 
 def _inside(contour, pt) -> bool:
@@ -461,8 +465,11 @@ def takeoff_answer(ctx, q, img):
             if r.measured is not None:
                 src += f" (measured {r.measured:.2f})"
             rows.append({"label": r.label, "area": r.printed, "source": src, "room": r})
-        elif r.measured is not None:
+        elif r.measured is not None and MEASURED_ANSWERS:
             rows.append({"label": r.label, "area": r.measured, "source": f"measured region x scale ({sc.method})", "room": r})
+        elif r.measured is not None:
+            missing.append(f"{r.label}: no printed area; measured region x scale gives about {r.measured:.1f} m2, "
+                           f"an estimate only (dev leave-one-out: median error 9%, within 5% for 37% of rooms)")
         else:
             missing.append(f"{r.label}: " + ("no printed area and no scale" if not sc.known else (r.why or "no region")))
     if missing:
