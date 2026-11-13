@@ -12,7 +12,8 @@ floortrans/loaders/house.py in the CubiCasa5K repository):
     </g>
   </g>
 
-Coordinates are in the pixel frame of F1_scaled.png. Transforms are composed down the whole
+Coordinates are in the pixel frame of F1_scaled.png. The root svg width/height attributes are only
+the drawing's extent (they differ from the image size), so pass the F1_scaled size to to_yolo. Transforms are composed down the whole
 ancestor chain (proper SVG semantics, a superset of the reference loader). A door or window box is
 the bounding box of its first polygon (the opening in the wall); a fixture box is its boundary
 polygon (or rects) after transforms, falling back to all of its geometry.
@@ -31,11 +32,16 @@ from pathlib import Path
 import numpy as np
 
 CLASSES = ["toilet", "sink", "shower", "bathtub", "door", "window"]
+# Fitted to Stoa's answers on 600 train-split images (count agreement with this mapping: toilet
+# 600/600, sink 593/593, shower_or_bath 565/565, door 430/430, window 600/600). ShowerCab,
+# ShowerScreen and ShowerPlatform are not counted as showers by Stoa; adding ShowerCab drops the
+# shower_or_bath agreement to 537/565.
 FURNITURE = {
     "Toilet": "toilet",
-    "Sink": "sink", "CornerSink": "sink", "DoubleSink": "sink", "DoubleSinkRight": "sink", "SideSink": "sink",
-    "Bathtub": "bathtub", "BathtubRound": "bathtub",
-    "Shower": "shower", "ShowerCab": "shower", "ShowerPlatform": "shower",
+    "Sink": "sink", "RoundSink": "sink", "CornerSink": "sink", "DoubleSink": "sink", "DoubleSinkRight": "sink",
+    "SideSink": "sink",
+    "Bathtub": "bathtub",
+    "Shower": "shower",
 }
 __doc__ += "\n" + "\n".join(f"  {k:16s} -> {v}" for k, v in FURNITURE.items()) + "\n"
 
@@ -188,7 +194,9 @@ def convert(svg_text: str):
 
 
 def to_yolo(boxes, svg_size, img_size, min_px=2.0):
-    """Boxes in SVG units -> YOLO label lines for an image of img_size (w, h)."""
+    """Boxes in SVG units -> YOLO label lines for an image of img_size (w, h).
+
+    svg_size is the (w, h) of the frame the coordinates are in (for CubiCasa5K: F1_scaled.png)."""
     W, H = img_size
     sx, sy = (W / svg_size[0], H / svg_size[1]) if svg_size else (1.0, 1.0)
     lines = []

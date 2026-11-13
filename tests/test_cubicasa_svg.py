@@ -41,10 +41,10 @@ SVG = """<?xml version="1.0" encoding="UTF-8"?>
    <g class="FixedFurniture Bathtub" transform="matrix(1,0,0,1,200,200)">
     <g class="BoundaryPolygon"><polygon points="0,0 170,0 170,75 0,75 "/></g>
    </g>
-   <g class="FixedFurniture ShowerCab" transform="rotate(90 50 50) translate(700 0)">
+   <g class="FixedFurniture Shower" transform="rotate(90 50 50) translate(700 0)">
     <g class="BoundaryPolygon"><polygon points="0,0 90,0 90,90 0,90 "/></g>
    </g>
-   <g class="FixedFurniture Closet" transform="matrix(1,0,0,1,0,0)">
+   <g class="FixedFurniture ShowerCab" transform="matrix(1,0,0,1,0,0)">
     <g class="BoundaryPolygon"><polygon points="0,0 60,0 60,60 0,60 "/></g>
    </g>
   </g>
@@ -69,7 +69,7 @@ def test_transforms():
 def test_convert():
     boxes, size, unknown = convert(SVG)
     assert size == (1000.0, 800.0)
-    assert dict(unknown) == {"Closet": 1}
+    assert dict(unknown) == {"ShowerCab": 1}          # not counted by Stoa
     by = {}
     for k, *b in boxes:
         by.setdefault(k, []).append(b)
