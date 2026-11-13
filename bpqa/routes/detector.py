@@ -4,8 +4,8 @@ The detector (Ultralytics YOLO, classes toilet, sink, shower, bathtub, door, win
 tools/train_detector.py on public CubiCasa5K annotations (only plans allowed by tools/overlap.py)
 and synthetic renders of Swiss DXF floors. A count is the number of boxes of the asked classes
 scored at or above a per-object threshold; the threshold, and an uncertainty band around it, are
-tuned on held-out Stoa train-split images by tools/tune_detector.py. If any box scores inside the
-band, the count is not provable and the route abstains. Every counted box is drawn and numbered.
+tuned on held-out Stoa train-split images by tools/tune_detector.py. If too many boxes (a tuned
+number, usually one) score inside the band, the count is not provable and the route abstains. Every counted box is drawn and numbered.
 
 Files (not committed): models/detector.pt, models/detector_thresholds.json. Without them the route
 abstains. Detections are cached per model under out/det/.
@@ -91,7 +91,7 @@ def answer(ctx, q, img=None) -> Answer:
         return abstain(ROUTE, "detector model missing")
     t, band, mx = th["conf"], th.get("band", 0.0), th.get("max", 99)
     hits, unsure = count(dets, q.obj, t, band)
-    if unsure:
+    if len(unsure) >= th.get("max_unsure", 1):
         return abstain(ROUTE, f"{len(hits)} {q.obj} detected at score >= {t:.2f}, but {len(unsure)} box(es) scored within "
                               f"{band:.2f} of the threshold; count not provable")
     if len(hits) > mx:
@@ -100,7 +100,7 @@ def answer(ctx, q, img=None) -> Answer:
     ans = Answer(value=n, unit="count", route=ROUTE, confidence=round(th.get("precision", 0.5), 2),
                  items=[{"n": i + 1, "class": d["cls"], "score": d["conf"], "xyxy": d["xyxy"]} for i, d in enumerate(hits)],
                  explanation=f"{n} box(es) of {', '.join(OBJECTS[q.obj])} scored >= {t:.2f} by the detector; "
-                             f"no box within {band:.2f} of the threshold")
+                             f"{len(unsure)} box(es) within {band:.2f} of it")
     if ctx.evidence:
         if img is None:
             img = cv2.imread(str(ctx.file))

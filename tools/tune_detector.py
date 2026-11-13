@@ -4,8 +4,8 @@
     python tools/tune_detector.py                     # preview dev images (synthetic-only smoke model)
 
 Per object (toilet, sink, shower_or_bath, door, window): the score threshold t that maximises exact
-count accuracy, then an uncertainty band around t (abstain when any box scores within it) chosen to
-maximise correct minus wrong answers. An object whose best policy still gives more wrong than right
+count accuracy, then an uncertainty band around t and a number k (abstain when k or more boxes score
+within the band) chosen together to maximise correct minus wrong answers. An object whose best policy still gives more wrong than right
 answers is switched off (the route abstains on it). Also reports a 2-fold cross-validated estimate (fit on one half
 of the images, measured on the other), which is the honest number. Writes models/detector_thresholds.json.
 Test-split answers are never read.
@@ -27,6 +27,7 @@ from bpqa.routes import detector as det  # noqa: E402
 
 TS = [round(0.05 * i, 2) for i in range(2, 19)]
 BANDS = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25]
+KS = [1, 2, 3, 99]          # abstain when this many boxes score inside the band (99: never)
 
 
 def gold_counts(root: Path, paths: set[str]):
@@ -43,11 +44,11 @@ def gold_counts(root: Path, paths: set[str]):
     return out
 
 
-def evaluate(rows, t, band, mx=99):
+def evaluate(rows, t, band, mx=99, k=1):
     a = c = 0
     for dets, gold in rows:
         hits, unsure = det.count(dets, rows_obj[0], t, band)
-        if unsure or len(hits) > mx:
+        if len(unsure) >= k or len(hits) > mx:
             continue
         a += 1
         c += len(hits) == gold
@@ -59,11 +60,11 @@ rows_obj = [None]
 
 def fit(rows):
     best_t = max(TS, key=lambda t: (evaluate(rows, t, 0.0)[1], -abs(t - 0.5)))
-    def score(b):
-        a, c = evaluate(rows, best_t, b)
+    def score(bk):
+        a, c = evaluate(rows, best_t, bk[0], k=bk[1])
         return c - (a - c)
-    best_b = max(BANDS, key=lambda b: (score(b), -b))
-    return best_t, best_b
+    best_b, best_k = max(((b, k) for b in BANDS if b > 0 for k in KS), key=lambda bk: (score(bk), -bk[0], bk[1]))
+    return best_t, best_b, best_k
 
 
 def main():
@@ -94,22 +95,23 @@ def main():
         rows = [(dets[p], g[obj]) for p, g in sorted(gold.items()) if obj in g]
         if not rows:
             continue
-        t, b = fit(rows)
+        t, b, k = fit(rows)
         mx = max(g for _, g in rows)
-        n_ans, n_ok = evaluate(rows, t, b, mx)
+        n_ans, n_ok = evaluate(rows, t, b, mx, k)
         # 2-fold cross-validation by image
         half = [[r for r, p in zip(rows, sorted(p for p in gold if obj in gold[p]))
-                 if (int(hashlib.sha1(p.encode()).hexdigest()[:4], 16) % 2) == k] for k in (0, 1)]
+                 if (int(hashlib.sha1(p.encode()).hexdigest()[:4], 16) % 2) == h] for h in (0, 1)]
         cv_a = cv_c = cv_c0 = 0
-        for k in (0, 1):
-            tt, bb = fit(half[k])
-            aa, cc = evaluate(half[1 - k], tt, bb, mx)
+        for h in (0, 1):
+            tt, bb, kk = fit(half[h])
+            aa, cc = evaluate(half[1 - h], tt, bb, mx, kk)
             cv_a, cv_c = cv_a + aa, cv_c + cc
-            cv_c0 += evaluate(half[1 - k], tt, 0.0, mx)[1]
+            cv_c0 += evaluate(half[1 - h], tt, 0.0, mx)[1]
         # answer this object only if the tuned policy gives more right than wrong answers
         enabled = n_ok - (n_ans - n_ok) > 0
-        out[obj] = {"conf": t, "band": b, "max": mx, "precision": round(n_ok / max(1, n_ans), 3), "enabled": enabled}
-        report[obj] = {"n": len(rows), "t": t, "band": b, "enabled": enabled, "fitted": f"{n_ok}/{n_ans} answered correct, coverage {n_ans / len(rows):.0%}",
+        out[obj] = {"conf": t, "band": b, "max": mx, "max_unsure": k,
+                    "precision": round(n_ok / max(1, n_ans), 3), "enabled": enabled}
+        report[obj] = {"n": len(rows), "t": t, "band": b, "abstain_at_unsure": k, "enabled": enabled, "fitted": f"{n_ok}/{n_ans} answered correct, coverage {n_ans / len(rows):.0%}",
                        "cv_no_band_accuracy": f"{cv_c0}/{len(rows)} = {cv_c0 / len(rows):.1%}",
                        "cv_with_band": f"accuracy {cv_c / len(rows):.1%}, coverage {cv_a / len(rows):.1%}, "
                                        f"precision {cv_c / max(1, cv_a):.1%}"}
