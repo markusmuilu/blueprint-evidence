@@ -28,6 +28,7 @@ class Context:
     q: Question
     out_dir: Path
     evidence: bool = True
+    prior: bool = False          # allow the labelled dev-prior fallback on raster questions
     tried: list = field(default_factory=list)
 
     @property

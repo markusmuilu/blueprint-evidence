@@ -56,11 +56,17 @@ def main(argv=None):
     ap.add_argument("--sources", default="", help="comma-separated source filter")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--evidence", action="store_true", help="render evidence PNGs into out/evidence/")
+    ap.add_argument("--prior", action="store_true",
+                    help="answer raster questions without a CV detector with the dev-split majority value (labelled baseline)")
     ap.add_argument("--out", default=str(REPO / "out"))
     args = ap.parse_args(argv)
 
     root = data_root(args.data)
     qs = load_questions(root)
+    if args.prior:
+        from bpqa.query import parse
+        from bpqa.routes.raster import fit_priors
+        fit_priors(qs, parse, split_of)   # fitted on dev answers only
     qs = [q for q in qs if args.split == "all" or split_of(q.path) == args.split]
     if args.sources:
         keep = set(args.sources.split(","))
@@ -72,15 +78,16 @@ def main(argv=None):
 
     out = Path(args.out)
     ev_dir = out / "evidence"
-    run_dir = out / args.split
+    run_dir = out / (args.split + ("-prior" if args.prior else ""))
     run_dir.mkdir(parents=True, exist_ok=True)
 
     stats = defaultdict(lambda: {"n": 0, "answered": 0, "correct": 0, "cost": 0.0})
     routes = defaultdict(int)
+    by_obj = defaultdict(lambda: {"n": 0, "answered": 0, "correct": 0})
     t0 = time.time()
     with open(run_dir / "answers.jsonl", "w", encoding="utf-8") as f:
         for i, q in enumerate(qs):
-            ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence)
+            ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence, prior=args.prior)
             query, a = solve(ctx)
             ok = score(q, a)
             for key in [(q.source, q.type), (q.source, "ALL"), ("ALL", "ALL")]:
@@ -90,6 +97,10 @@ def main(argv=None):
                 s["correct"] += bool(ok)
                 s["cost"] += a.cost_usd
             routes[a.route if a.answered else f"abstain:{a.route}"] += 1
+            o = by_obj[(q.source, query.obj or "?")]
+            o["n"] += 1
+            o["answered"] += a.answered
+            o["correct"] += bool(ok)
             rec = {"qid": q.qid, "path": q.path, "question": q.question, "gold": q.answer, "type": q.type,
                    "split": args.split, "correct": ok, "query": query.as_dict(), **a.as_dict()}
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -108,6 +119,11 @@ def main(argv=None):
     for r in rows:
         lines.append(f"{r['source']:<16}{r['type']:<8}{r['n']:>6}{r['answered']:>10}{r['coverage']:>10.1%}"
                      f"{r['correct']:>9}{r['accuracy']:>10.1%}{r['precision']:>11.1%}{r['cost_per_q']:>8.4f}")
+    lines.append("")
+    lines.append(f"{'source':<16}{'object':<16}{'n':>6}{'answered':>10}{'correct':>9}{'accuracy':>10}{'precision':>11}")
+    for (src, obj), o in sorted(by_obj.items()):
+        lines.append(f"{src:<16}{obj:<16}{o['n']:>6}{o['answered']:>10}{o['correct']:>9}{o['correct'] / o['n']:>10.1%}"
+                     f"{(o['correct'] / o['answered'] if o['answered'] else 0):>11.1%}")
     lines.append("routes: " + ", ".join(f"{k}={v}" for k, v in sorted(routes.items(), key=lambda kv: -kv[1])))
     lines.append("accuracy = correct / all questions (abstain counts as wrong); precision = correct / answered")
     text = "\n".join(lines)
