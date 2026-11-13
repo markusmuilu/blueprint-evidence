@@ -36,7 +36,7 @@ MAX_COUNT_REGIONS = 40
 NUMERIC = {"count", "area", "length", "volume"}
 # Assumed list price of a paid API per million tokens, only used to put a $ figure on an answer.
 PRICE_IN, PRICE_OUT = float(os.environ.get("NEMO_PRICE_IN", "3")), float(os.environ.get("NEMO_PRICE_OUT", "15"))
-ANSWER_MAX_TOKENS = 8192
+ANSWER_MAX_TOKENS = 16384
 THINK = os.environ.get("NEMO_THINK", "1") != "0"   # reasoning on for the image answer, off for the question parse
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -246,5 +246,14 @@ class NemotronParser(QueryParser):
         q.scope, q.variant = d.get("scope") or "drawing", d.get("variant")
         if q.apartment:
             q.apartment = q.apartment.upper()
+        # Same conventions as the rule parser, so the routes see one shape of query whoever parsed it:
+        if q.label or q.room_no:                 # a named or numbered room is obj "room" (name in `label`)
+            q.obj, q.variant = "room", None
+        if q.apartment and q.measure == "area":
+            q.obj = "apartment"
+        if q.level and q.scope == "drawing":
+            q.scope = "level"
+        if not q.level and q.scope == "level":
+            q.scope = "drawing"
         q.extra["llm_parsed"] = True
         return q
