@@ -99,6 +99,12 @@ class Model:
                     return float(vals[k]), f"{pset}.{k}"
         return None, None
 
+    def is_external(self, el):
+        for pset, vals in E.get_psets(el, psets_only=True).items():
+            if pset.endswith("Common") and "IsExternal" in vals:
+                return bool(vals["IsExternal"])
+        return None
+
     def footprint(self, el):
         if el.id() not in self._fp:
             try:
@@ -140,6 +146,18 @@ def load(path: str) -> Model:
     return Model(Path(path))
 
 
+def _external_filter(M, ents, q):
+    if q.extra.get("slab_type"):
+        ents = [e for e in ents if getattr(e, "PredefinedType", None) == q.extra["slab_type"]]
+    want = q.extra.get("external")
+    if want is None:
+        return ents
+    flags = [(e, M.is_external(e)) for e in ents]
+    if all(f is None for _, f in flags):
+        return None
+    return [e for e, f in flags if f is want]
+
+
 def space_label_variants(sp):
     n, ln = sp.Name or "", getattr(sp, "LongName", None) or ""
     return {norm(f"{ln} ({n})"), norm(n), norm(ln), norm(f"{n} {ln}")}
@@ -163,6 +181,9 @@ def answer(ctx, q) -> Answer:
         ents = M.entities(q.obj)
         if storey is not None:
             ents = [e for e in ents if M.storey_of(e) == storey]
+        ents = _external_filter(M, ents, q)
+        if ents is None:
+            return abstain(ROUTE, "interior/exterior asked but IsExternal not set in the model")
         used = [(e, None) for e in ents]
         value, unit = len(ents), "count"
         note = f"{len(ents)} x {CLASSES[q.obj][0]}" + (f" on storey {storey.Name}" if storey else " in the model")
@@ -190,6 +211,9 @@ def answer(ctx, q) -> Answer:
             ents = M.entities(q.obj)
             if storey is not None:
                 ents = [e for e in ents if M.storey_of(e) == storey]
+            ents = _external_filter(M, ents, q)
+            if ents is None:
+                return abstain(ROUTE, "interior/exterior asked but IsExternal not set in the model")
             scale = {"length": M.len_scale, "area": M._area_scale(), "volume": M._vol_scale()}[q.measure]
             srcs = set()
             for e in ents:

@@ -156,6 +156,25 @@ class RuleParser(QueryParser):
             q.obj, q.variant = "room", "net_indoor_total"
         if q.obj == "wall" and q.measure == "area":
             q.variant = "side_area"
+        ext = re.search(r"\b(exterior|outside|external|outer)\b", f)
+        inn = re.search(r"\b(interior|inside|internal|inner)\b", f)
+        if ext and not inn:
+            q.extra["external"] = True
+        elif inn and not ext and q.obj in ("wall", "door") and not re.search(r"together|entrance", f):
+            q.extra["external"] = False
+        if q.obj == "slab" and re.search(r"floor slabs", f):
+            q.extra["slab_type"] = "FLOOR"
+        # Compound or breakdown questions want a table, not one number: leave them to a text route.
+        compound = re.search(r"\b(types?|breakdown|each|with their|compared|list|distribution|grouped|"
+                             r"along with|and what|which)\b", f)
+        schedule_filter = re.search(r"door type [a-z]\d|labelled|bezeichnung|designation|denominazione", f)
+        if compound and q.measure != "text" and not schedule_filter:
+            q.extra["compound"] = True
+        # A scope named without quotes ("on level 1", "ground floor", "north facade", "house A")
+        # cannot be resolved by the rules; better to abstain than to answer for the whole building.
+        if not qs and re.search(r"\b(on|in) (the )?(level|floor|ground|basement|first|second|underground|"
+                                r"north|south|east|west|house)\b", f):
+            q.extra["unresolved_scope"] = True
         if q.scope == "model" and qs:
             q.extra["model_name"] = qs[0]
         return q
