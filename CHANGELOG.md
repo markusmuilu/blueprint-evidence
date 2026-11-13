@@ -3,6 +3,28 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14 night: detector v2 (tiers, test-time augmentation, tiled detector), branch `detector-v2`
+
+### Baseline: cubi2 on the full set's test split, before any change here
+
+`cubi2` (yolo26n from scratch, 80 epochs, imgsz 1280, same data as `cubi1`) and its thresholds, tuned
+by main's `tools/tune_detector.py` on the 624 held-out train-split images, run with main's code and
+the same flags as the earlier full-set run: `eval.py --data ../data/stoa-full/junction-dataset --split
+test --sources cubicasa5k --objects toilet,sink,shower_or_bath,door,window --no-checks` (1,510 images,
+14,108 questions in all languages). The overall full-set test accuracy was not run: it needs OCR of every
+test image for the label routes (several hours), so this baseline is detector questions only.
+
+| object | n | exact (abstain = wrong) | coverage | precision |
+|---|---|---|---|---|
+| toilet | 3016 | 81.0% | 96.4% | 84.0% |
+| sink | 2982 | 57.5% | 77.3% | 74.5% |
+| door | 2274 | 23.2% | 30.4% | 76.3% |
+| window | 3020 | 25.0% | 39.1% | 63.9% |
+| shower/bath (switched off) | 2816 | 0% | 0% | - |
+| **all detector questions** | 14108 | 38.6% | 50.2% | 76.8% |
+
+For comparison, `cubi1` on the same questions: toilets 74.8%, sinks 38.8%, doors 24.9%, windows 18.7%.
+
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
 Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the
