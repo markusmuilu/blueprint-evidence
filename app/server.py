@@ -78,6 +78,10 @@ def resolve(ref: str) -> tuple[Path, str]:
     return root, rel
 
 
+def display_name(stored: str) -> str:
+    return re.sub(r"^u[0-9a-f]{12}-", "", stored)
+
+
 def _safe_name(name: str) -> str:
     name = Path(name.replace("\\", "/")).name
     name = re.sub(r"[^\w.\- ]+", "_", name).strip(" .")
@@ -101,14 +105,17 @@ async def upload(files: list[UploadFile] = File(...)):
         if len(data) > MAX_UPLOAD:
             shutil.rmtree(UPLOADS / uid, ignore_errors=True)
             raise HTTPException(413, f"{name}: larger than 200 MB")
-        (folder / name).write_bytes(data)
-        saved.append({"name": name, "ext": ext, "bytes": len(data)})
+        # the OCR and detector caches are keyed by file stem, so every upload gets a unique stem;
+        # twins uploaded together keep a shared stem
+        stored = f"u{uid}-{name}"
+        (folder / stored).write_bytes(data)
+        saved.append({"name": name, "stored": stored, "ext": ext, "bytes": len(data)})
     if not saved:
         raise HTTPException(400, "no file")
     # the drawing to ask about: a PDF or image over its DXF/IFC twin
     order = {"pdf": 0, "png": 1, "jpg": 1, "jpeg": 1, "tif": 1, "tiff": 1, "ifc": 2, "dxf": 3}
     main = sorted(saved, key=lambda s: order.get(s["ext"], 9))[0]
-    return {"path": f"upload:{uid}/{main['name']}", "name": main["name"], "ext": main["ext"], "files": saved}
+    return {"path": f"upload:{uid}/{main['stored']}", "name": main["name"], "ext": main["ext"], "files": saved}
 
 
 @app.get("/api/drawings")
@@ -124,7 +131,7 @@ def drawing(path: str):
         root, rel = resolve(path)
         name = rel.rsplit("/", 1)[-1]
         twins = sorted(p.suffix[1:] for p in (root / rel).parent.iterdir() if p.name != name)
-        return {"path": path, "name": name, "source": "upload", "ext": name.rsplit(".", 1)[-1].lower(),
+        return {"path": path, "name": display_name(name), "source": "upload", "ext": name.rsplit(".", 1)[-1].lower(),
                 "split": None, "n_questions": 0, "types": [], "twins": twins, "questions": []}
     d = CATALOG.detail(path)
     if d is None:
@@ -201,7 +208,7 @@ def scale_source(a: dict, query: dict, ext: str) -> str | None:
 
 
 def where(a: dict, query: dict, rel: str) -> list[dict]:
-    rows = [{"k": "Drawing", "v": rel.rsplit("/", 1)[-1]}]
+    rows = [{"k": "Drawing", "v": display_name(rel.rsplit("/", 1)[-1])}]
     route = a.get("route") or ""
     rows.append({"k": "Route", "v": ROUTES.get(route, (route,))[0], "code": route})
     scope = []
@@ -321,7 +328,7 @@ def ask(body: AskBody):
     status, rule = tier(a)
     gold = CATALOG.gold(rel, question) if not body.path.startswith("upload:") else None
     rec = {
-        "path": body.path, "drawing": rel.rsplit("/", 1)[-1], "question": question, "query": qd,
+        "path": body.path, "drawing": display_name(rel.rsplit("/", 1)[-1]), "question": question, "query": qd,
         "value": a.get("value"), "unit": a.get("unit") or "", "route": a.get("route"),
         "confidence": a.get("confidence"), "abstain": a.get("abstain"), "explanation": a.get("explanation"),
         "checks": a.get("checks") or [], "items": a.get("items") or [], "cost_usd": a.get("cost_usd") or 0.0,

@@ -180,6 +180,36 @@ land in `models/`, which is not committed):
 .venv\Scripts\python tools/tune_detector.py --stoa ../data/stoa-full/junction-dataset --images ../data/detector/ds_cubi/tune_images.txt --imgsz 1280
 ```
 
+## Demo app
+
+Blueprint Evidence is a small web app over the same router: pick a drawing from the dataset or upload
+one, ask a question, and get the answer with its status, the route, numbered reasons, checks, cost and
+response time next to a zoomable evidence overlay. A second view shows the eval results.
+
+```
+.venv\Scripts\pip install -r app\requirements.txt
+.venv\Scripts\python -m app
+```
+
+Then open http://127.0.0.1:8000. Options: `--port`, `--host`, `--data <dataset root>` (default:
+`STOA_DATA`, then `../data/stoa-full/junction-dataset`, then the preview), `--results <folder>` (extra
+eval outputs), `--gpu` (by default the detector runs on the CPU).
+
+- Status tiers: "proven" for structured routes (DXF, IFC, PDF text or linework) at confidence 0.8 or
+  more; "estimate, check highlighted items" for answers read from pixels; "cannot prove" with the
+  router's reason when every route abstains. An explicit tier from the router, if a later version
+  returns one, takes precedence.
+- Counted items on scans are listed with the numbers drawn on the overlay; selecting one marks it in
+  the viewer. If the question is a dataset question, the dataset answer is shown beside the result.
+- Uploads (PDF, DXF, IFC, PNG, JPG; a PDF with its DXF twin can go in one upload) are stored in the OS
+  temp folder (`%TEMP%\blueprint-evidence\uploads`), never in the repo. Answers and evidence are
+  cached in `out/app/`.
+- Without `ultralytics` and `torch` the symbol detector is unavailable and those counts abstain
+  (cached detections in `out/det/` still answer); the rail's status button says what is missing.
+- API: `POST /api/ask {path, question, pdf_only}`, `POST /api/upload`, `GET /api/drawings`,
+  `GET /api/drawing`, `GET /api/preview`, `GET /api/evidence/<id>.png`, `GET /api/results[/<run>]`,
+  `GET /api/status`; docs at `/api/docs`. The design system is in `DESIGN.md`.
+
 Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG) and
 `python tools/test_overlap.py --work <scratch folder>` (overlap tool on the preview).
 

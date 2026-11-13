@@ -60,6 +60,7 @@ function showView(name) {
     if (b.dataset.view === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   }
   $("#view-ask").hidden = name !== "ask";
+  $("#pickerToggle").hidden = name !== "ask";
   $("#view-results").hidden = name !== "results";
   if (name === "results") loadRuns();
   if (name === "ask") requestAnimationFrame(() => viewer.fitIfNeeded());
