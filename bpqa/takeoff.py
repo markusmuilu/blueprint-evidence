@@ -1,0 +1,239 @@
+"""Quantity takeoff: "how many m2 of tiling for the bathrooms?" -> a room-type area sum.
+
+Two halves, both rules, no model:
+
+  parse_takeoff(question)  question -> {types, material, surface, aggregation}. EN and FI first
+                           (with the Finnish plan abbreviations KH, PH, WC, S, KPH, MH, OH, K, KK,
+                           ET, VH, PESUH, KHH), plus the DE / FR / IT room words that the Swiss
+                           drawings use.
+  room_types(name)         a room label on a drawing -> the set of room types it names. Labels
+                           in the data are Swiss (Bad, Kuche, Bain, Bagno ...), IFC (Bathroom,
+                           Toilet, TUALETTRUUM, doucheruimte, 1IZQ-BAN ...) and Finnish
+                           abbreviations on the CubiCasa scans.
+
+What a takeoff answer is: the sum of the FLOOR areas of the matching rooms, net as drawn (inside
+the walls), with no allowance for cutting waste. Wall areas need room heights, which a floor plan
+does not carry, so wall questions abstain and say why. Every answer states this interpretation.
+"""
+from __future__ import annotations
+
+import re
+
+from .query import fold
+
+# ---------------------------------------------------------------- room types
+
+TYPE_NAMES = {
+    "bathroom": "bathroom", "wc": "WC / toilet room", "sauna": "sauna", "kitchen": "kitchen",
+    "bedroom": "bedroom", "living": "living room", "dining": "dining", "hall": "hall / corridor",
+    "utility": "utility / laundry", "storage": "storage / closet", "balcony": "balcony / terrace",
+    "stair": "stair", "room": "generic room",
+}
+# Groups a question can name. "wet rooms" follows the Finnish usage of marka-tila for the rooms with
+# a floor drain that are tiled: bathroom, WC, sauna. A utility room (KHH) is listed but not included.
+GROUPS = {"wet": ("bathroom", "wc", "sauna")}
+
+# Drawing labels, matched on the folded label (lower case, accents stripped, U+FFFD dropped).
+# A label may name several types ("Wohnen/Essen", "ELUTUBA+KOOK"); each part is matched.
+LABEL_RE = {
+    "bathroom": r"bad|badezimmer|bain|bains|salle de bains?|salle d'eau|bagno|bagni|bathroom\s*\d*|bath|"
+                r"shower(\s*room)?|dusche|douche(ruimte)?|badkamer|badevaerelse|badrum|vannituba|dushiruum|"
+                r"kh\d?|kph\d?|ph\d?|pesuh(uone)?\d?|sh\d?|kylpyhuone|pesuhuone|suihkuhuone|ban|bano|aseo",
+    "wc": r"(m\.|w\.|staff|specimen|public|men'?s|women'?s)?\s*(toilet|toilets|toilette|toiletten|wc\d?|w\.c\.|"
+          r"restroom|lavatory|tualett(ruum)?|tualettruum|vessa|sanitair|toilet(ruimte)?)",
+    "sauna": r"sauna|s|leiliruum|bastu|loylyhuone|lh",
+    "kitchen": r"kuche|kche|kueche|cuisine|cucina|kitchen(ette)?|keuken|kokken|tekokken|kok|kook|keittio|"
+               r"keittokomero|k|kk|kt|avok|avokeittio|tupak|coc|cocina|kitchen\s*\d*",
+    "bedroom": r"schlafzimmer|chambre( a coucher)?|chambre a coucher|camera( da letto)?|camera da letto|"
+               r"bedroom\s*\d*|slaapkamer|sovevaerelse|soverum|sovrum|magamistuba|mh\d?|makuuhuone\d?|hab\d?",
+    "living": r"wohnen|wohnzimmer|sejour|sjour|salon|soggiorno|living( room)?|woonkamer|stue|opholdsrum|"
+              r"elutuba|oh|olohuone|sal",
+    "dining": r"essen|repas|pranzo|dining|eetkamer|spisestue|rt|ruokailu(tila)?|ruokailuh",
+    "hall": r"korridor|flur|diele|eingang|entree|couloir|corridoio|disimpegno|ingresso|corridor|hall|hallway|"
+            r"foyer|entrance|gang|esik|et|eteinen|aula|tk|tuulikaappi|dist|kaytava",
+    "utility": r"khh|kodinhoitohuone|buanderie|waschkuche|waschraum|lavanderia|laundry|utility|bijkeuken|"
+               r"bryggers|wasruimte",
+    "storage": r"reduit|rduit|abstellraum|ripostiglio|storage|store|berging|kast|depot|vh\d?|var\d?|varasto|"
+               r"vaatehuone|abiruum|cave|keller|closet|walk-in closet|compartiment cave|vano cantina|kellari",
+    "balcony": r"balkon|balcon|balcone|balcony|loggia|terrasse|terrazza|terrace|sitzplatz|parveke\d?|"
+               r"terassi|lasitettu parveke|altan|veranda",
+    "stair": r"treppenhaus|treppe|cage d'escalier|vano scala|stair(s|case)?|trappe(rum)?|trepikoda|porras",
+    "room": r"zimmer|piece|pice|stanza|room|raum|local|locale|huone|ruum",
+}
+_LABEL_RE = {k: re.compile(rf"(?:{v})") for k, v in LABEL_RE.items()}
+
+
+def _fold_label(s: str) -> str:
+    return fold((s or "").replace("�", "")).strip()
+
+
+def label_parts(name: str) -> list[str]:
+    f = _fold_label(name)
+    f = re.sub(r"\(.*?\)", " ", f)
+    # Spanish IFC codes "1IZQ-BAN", "2DER-HAB3": the room code is the last dash-separated part
+    parts = [p.strip() for p in re.split(r"[/+,&;]|\s-\s|(?<=\w)-(?=[a-z])", f) if p.strip()]
+    return parts or ([f] if f else [])
+
+
+def room_types(name: str | None) -> set[str]:
+    """Room types a drawing label names. 'Wohnen/Essen' -> {living, dining}; unknown -> empty."""
+    out = set()
+    for p in label_parts(name or ""):
+        p = re.sub(r"^\d+\s*", "", p).strip(" .")          # "1izq" prefixes, "2 bad"
+        p = re.sub(r"\s*\d+$", "", p).strip(" .")           # "bedroom 2", "mh3"
+        for t, rx in _LABEL_RE.items():
+            if rx.fullmatch(p):
+                out.add(t)
+                break
+    if out - {"room"}:
+        out.discard("room")
+    return out
+
+
+# ---------------------------------------------------------------- question side
+
+# room-type words in a question (folded text, quotes and exclusion clauses removed). Finnish
+# words are stems, so inflected forms match (kylpyhuoneisiin, keittioon, saunaan, vessoihin).
+Q_TYPE_RE = {
+    "wet": r"wet ?rooms?|wet areas?|markatil|kosteat tilat|kosteisiin tiloihin|nassraum|nassraeume|nasszell|"
+           r"pieces humides|locali umidi",
+    "bathroom": r"bathrooms?|bath rooms?|washrooms?|shower rooms?|kylpyhuone|pesuhuone|suihkuhuone|badezimmer|"
+                r"\bbad\b|\bbader\b|salles? de bains?|salles? d'eau|bagn[oi]\b",
+    "wc": r"toilets?|\bwcs?\b|w\.c\.|restrooms?|lavator(y|ies)|powder rooms?|water closets?|vessa|vesso|"
+          r"\bwc-|toilette",
+    "sauna": r"saunas?|saunaan|saunan|saunoihin|saunoj|loylyhuone",
+    "kitchen": r"kitchens?|kitchenette|keittio|keittokomero|\bkuche|cuisines?|cucin[ae]",
+    "bedroom": r"bedrooms?|makuuhuone|schlafzimmer|chambres?( a coucher)?|camer[ae] da letto",
+    "living": r"living ?rooms?|lounge|olohuone|wohnzimmer|sejour|soggiorno",
+    "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|eteinen|eteise|kaytav|korridor|\bflur|couloir",
+    "utility": r"utility rooms?|laundry|kodinhoitohuone|waschkuche|buanderie",
+    "storage": r"storage|store ?rooms?|closets?|walk-in|varasto|vaatehuone|abstellraum|reduit",
+    "balcony": r"balcon(y|ies)|terraces?|parveke|parvekkee|balkon|terrass",
+}
+_Q_TYPE_RE = {k: re.compile(v) for k, v in Q_TYPE_RE.items()}
+# Finnish plan abbreviations, matched case-sensitively on the original question
+# ("KH:n", "MH:t", "WC-tila" allowed). Single letters (S, K) only count in an area question.
+ABBR = {"KH": "bathroom", "KPH": "bathroom", "PH": "bathroom", "PESUH": "bathroom", "SH": "bathroom",
+        "WC": "wc", "S": "sauna", "MH": "bedroom", "OH": "living", "K": "kitchen", "KK": "kitchen",
+        "ET": "hall", "TK": "hall", "VH": "storage", "VAR": "storage", "KHH": "utility", "RT": "dining"}
+ABBR_RE = re.compile(r"(?<![A-Za-z0-9])(" + "|".join(sorted(ABBR, key=len, reverse=True)) + r")\d?(?=$|[\s,.;:?!)/+-])")
+
+# (fold() applies NFKD, so "m²" arrives here as "m2")
+AREA_UNIT = re.compile(r"\bm2\b|\bm\^2|square ?met|\bsq\.? ?m\b|\bsqm\b|sq\.? ?ft|square f(ee|oo)t|nelio|"
+                       r"quadratmeter|metres? carres|metri quadr")
+AREA_WORD = re.compile(r"pinta-ala|\barea\b|flache|surface|superficie|\bala\b|lattiapinta|lattiaala|floor ?space|"
+                       r"how much|kuinka paljon|paljonko|wie viel")
+COUNT_Q = re.compile(r"\b(how many|kuinka monta|montako|wie viele|combien|quant[ie])\b")
+NAMED = re.compile(r"\b(named|labell?ed|called|schedule|nimetty|bezeichnung)\b")
+SCOPE_ID = re.compile(r"\b(house|building|block|wing|unit|apartment|flat|talo|rakennus|asunto|huoneisto)\s+[a-z0-9]{1,3}\b")
+MATERIALS = {
+    "tiles": r"\btil(e|es|ing|ed)\b|laatta|laato|laatoi|laatat|laattoj|klinkkeri|fliese|carrelage|piastrell|kakel",
+    "flooring": r"flooring|floor covering|floor finish|parquet|laminate|vinyl|carpet|linoleum|lattiapaallyste|"
+                r"parketti|laminaatti|vinyyli|\bmatto|bodenbelag|parkett|revetement de sol|pavimento",
+    "paint": r"\bpaint|maali|maalaus|farbe|peinture|vernice|pittura",
+    "waterproofing": r"waterproof|vedeneristy|membrane|abdichtung|etancheite",
+    "screed": r"screed|tasoite|estrich|chape|massaus",
+}
+_MATERIALS = {k: re.compile(v) for k, v in MATERIALS.items()}
+WALLS = re.compile(r"\bwalls?\b|seina|seiniin|\bwand|\bwande|\bmurs?\b|pareti|parete")
+CEILING = re.compile(r"ceilings?|\bkatto|kattoon|katon|kattoj|\bdecke|plafond|soffitt")
+EXCLUDE = re.compile(r"\b(except|excluding|without|apart from|other than|ohne|ausser|sauf|hors|sans|esclus[oi]|"
+                     r"tranne|paitsi|lukuun ottamatta|pois lukien|ilman)\b[^)?.;]*")
+QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"|«[^»]*»|„[^“”]*[“”]|“[^”]*”")
+
+
+def parse_takeoff(question: str) -> dict | None:
+    """Takeoff interpretation of a question, or None when it is not a room-type area question."""
+    raw = QUOTED.sub(" ", question)
+    f = fold(raw)
+    f_incl = EXCLUDE.sub(" ", f)
+    material = next((m for m, rx in _MATERIALS.items() if rx.search(f)), None)
+    if NAMED.search(f):
+        return None          # "rooms named RESTROOM": a label filter, not a room type
+    # "how many bathrooms ... and the area of each" is a count; an area unit or a material makes
+    # "how many m2 of tiles ..." an area question
+    area = material or AREA_UNIT.search(f) or (AREA_WORD.search(f) and not COUNT_Q.search(f))
+    if not area:
+        return None
+    types: list[str] = []
+    for t, rx in _Q_TYPE_RE.items():
+        if rx.search(f_incl):
+            types += list(GROUPS.get(t, (t,)))
+    for m in ABBR_RE.finditer(EXCLUDE.sub(" ", raw)):
+        types.append(ABBR[m.group(1)])
+    types = list(dict.fromkeys(types))
+    if not types:
+        return None
+    walls, ceiling = bool(WALLS.search(f)), bool(CEILING.search(f))
+    surface = "walls" if walls and not re.search(r"\bfloors?\b|lattia", f) else ("ceiling" if ceiling else "floor")
+    if walls and re.search(r"\bfloors?\b|lattia", f):
+        surface = "floor+walls"
+    group = next((g for g in GROUPS if _Q_TYPE_RE[g].search(f_incl)), None)
+    out = {"types": types, "group": group, "material": material, "surface": surface, "aggregation": "sum"}
+    m = SCOPE_ID.search(f)
+    if m:
+        out["scope_named"] = m.group(0)     # "house A": not resolvable from labels in general
+    return out
+
+
+def describe(tk: dict) -> str:
+    """One sentence that says how the question was read; goes into every takeoff answer."""
+    names = ", ".join(TYPE_NAMES[t] for t in tk["types"])
+    grp = f" ('{tk['group']} rooms' read as {names})" if tk.get("group") else ""
+    mat = f" for {tk['material']}" if tk.get("material") else ""
+    s = f"Takeoff{mat}: sum of net floor areas of rooms typed {names}{grp}, as drawn inside the walls, no waste allowance"
+    if tk.get("surface") == "ceiling":
+        s += "; ceiling area taken equal to floor area"
+    if tk.get("material") == "paint" and tk.get("surface") == "floor":
+        s += "; paint usually also covers walls, which need room heights and are not included"
+    if "wc" in tk["types"] and "bathroom" not in tk["types"]:
+        s += "; 'toilets' read as separate WC rooms (bathrooms with a WC seat not included)"
+    return s
+
+
+def wall_reason(tk: dict) -> str:
+    return ("wall area needs room heights and wall openings, which a floor plan does not carry; "
+            "only floor areas are answered (ask for the floor area of the same rooms)")
+
+
+def matches(name: str | None, tk: dict) -> bool:
+    return bool(room_types(name) & set(tk["types"]))
+
+
+# ---------------------------------------------------------------- shared answer building
+
+def precheck(tk: dict) -> str | None:
+    """Reason to abstain before any route looks at the drawing, or None."""
+    if tk.get("surface") in ("walls", "floor+walls"):
+        return wall_reason(tk)
+    return None
+
+
+def select(rooms: list[dict], tk: dict, name_key: str = "name") -> tuple[list[dict], list[dict]]:
+    """Rooms whose label names one of the asked types; and the labelled rooms left out as generic
+    ('Zimmer', 'Room 3'), which are listed in the answer so the reader can see what was not counted."""
+    want = set(tk["types"])
+    used, generic = [], []
+    for r in rooms:
+        ts = room_types(r.get(name_key))
+        if ts & want:
+            used.append(r)
+        elif ts == {"room"}:
+            generic.append(r)
+    return used, generic
+
+
+def summary(rows: list[dict], tk: dict, unit: str = "m2") -> tuple[float, list[dict], str]:
+    """rows: {label, area, source[, number]} -> (total, items, explanation). Items read like a
+    takeoff sheet: one line per room with its area and where the number came from, then the total."""
+    total = round(sum(r["area"] for r in rows), 2)
+    items = []
+    for i, r in enumerate(rows):
+        it = {"n": i + 1, "room": r["label"], "type": ", ".join(sorted(room_types(r["label"]) & set(tk["types"]))),
+              "area_m2": round(r["area"], 2), "source": r["source"]}
+        if r.get("number"):
+            it["number"] = r["number"]
+        items.append(it)
+    lines = " + ".join(f"{r['label']} {r['area']:.2f}" for r in rows[:20]) + (" + ..." if len(rows) > 20 else "")
+    expl = f"{total:.2f} {unit} = {lines}. {describe(tk)}."
+    return total, items, expl

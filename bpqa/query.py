@@ -177,6 +177,20 @@ class RuleParser(QueryParser):
             q.extra["unresolved_scope"] = True
         if q.scope == "model" and qs:
             q.extra["model_name"] = qs[0]
+        # Quantity takeoff ("how many m2 of tiling for the bathrooms", "kuinka monta neliota laattaa
+        # kylpyhuoneisiin"): a room-type area sum. Only when nothing more specific was read (a quoted
+        # label, a room number, an apartment, the numbered-indoor total).
+        if not qs and not q.room_no and not q.apartment and q.variant != "net_indoor_total":
+            from .takeoff import parse_takeoff
+            tk = parse_takeoff(question)
+            if tk is not None:
+                q.measure, q.obj, q.variant, q.label = "area", "room", "type_sum", None
+                # a breakdown per room is part of every takeoff answer, so "with a breakdown by
+                # bathroom" is answered; a named sub-building ("house A") is not resolvable
+                q.extra.pop("compound", None)
+                if tk.get("scope_named"):
+                    q.extra["unresolved_scope"] = True
+                q.extra["takeoff"] = tk
         return q
 
 
