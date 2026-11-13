@@ -31,7 +31,6 @@ class Context:
     q: Question
     out_dir: Path
     evidence: bool = True
-    prior: bool = False          # allow the labelled dev-prior fallback on raster questions
     checks: bool = True          # run the checking layer on raster answers (bpqa/checks.py)
     pdf_only: bool = False       # ignore DXF/IFC twins: answer from the file itself (eval.py --pdf-only)
     tried: list = field(default_factory=list)
@@ -113,6 +112,8 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
             except Exception as ex:   # a broken check must not hide a route's answer
                 a.checks = [{"name": "checking-layer", "status": "error", "detail": f"{type(ex).__name__}: {ex}"}]
         ctx.tried.append(a.route)
+        if a.answered and a.tier is None:
+            a.tier = "proven"           # structured routes: the answer is derived from the file's own data
         if a.answered or a.checks:      # a check-abstained answer keeps its checks and evidence
             return query, a
         reasons.append(f"{a.route}: {a.abstain}")

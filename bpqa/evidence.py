@@ -143,12 +143,14 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     return str(out)
 
 
-def add_checks(path: str, checks, abstained: bool = False, value=None) -> str:
-    """Redraw an evidence image's header with the checks that fired (and the abstention, if any)."""
+def add_checks(path: str, checks, abstained: bool = False, value=None, estimate: bool = False) -> str:
+    """Redraw an evidence image's header with the checks that fired (and the abstention or estimate, if any)."""
     if path not in _STASH:
         return path
     img, question, answer_line, note = _STASH[path]
-    if abstained:
+    if estimate:
+        answer_line = f"Answer: {value}   (ESTIMATE: a consistency check failed, see below)"
+    elif abstained:
         answer_line = f"ABSTAINED: would answer {value}, a consistency check failed"
         note = (note + "; " if note else "") + "the boxes show what the route read; the failed check is below"
     return finish(img, Path(path), question, answer_line, note, checks=checks)

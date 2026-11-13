@@ -4,11 +4,22 @@ The detector (Ultralytics YOLO, classes toilet, sink, shower, bathtub, door, win
 tools/train_detector.py on public CubiCasa5K annotations (only plans allowed by tools/overlap.py)
 and synthetic renders of Swiss DXF floors. A count is the number of boxes of the asked classes
 scored at or above a per-object threshold; the threshold, and an uncertainty band around it, are
-tuned on held-out Stoa train-split images by tools/tune_detector.py. If too many boxes (a tuned
-number, usually one) score inside the band, the count is not provable and the route abstains. Every counted box is drawn and numbered.
+tuned on held-out Stoa train-split images by tools/tune_detector.py.
 
-Files (not committed): models/detector.pt, models/detector_thresholds.json. Without them the route
-abstains. Detections are cached per model under out/det/.
+Every question the detector has a class for gets its best count, in one of two tiers:
+  proven    no more than the tuned number of boxes scored inside the band, the count is inside the
+            tuned range, and the object is one the detector is right on more often than wrong
+  estimate  otherwise; the reason is given and the boxes inside the band are listed (`uncertain`)
+            and drawn amber on the evidence image, so a person can check exactly those
+The route abstains only when there is no model or no tuning for the object.
+
+Detection modes, per object in the thresholds file (so each object uses whichever model and mode won
+on the tune images): the whole image at `imgsz`, or tiles at a fixed scale (bpqa/tiling.py) merged
+at the seams; either one optionally with test-time augmentation (`tta`: the eight rotations and
+mirrors of the square, boxes fused across views, bpqa/tiling.fuse_views).
+
+Files (not committed): models/detector*.pt, models/detector_thresholds.json. Detections are cached
+per model and mode under out/det/.
 """
 from __future__ import annotations
 
@@ -18,10 +29,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import cv2
+import numpy as np
 from PIL import Image
 
-from ..answer import Answer, abstain
+from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
+from .. import tiling
 
 ROUTE = "raster-detector"
 REPO = Path(__file__).resolve().parents[2]
@@ -33,41 +46,103 @@ OBJECTS = {"toilet": ["toilet"], "sink": ["sink"], "shower_or_bath": ["shower", 
 NAMES = {"toilet": "WC seat", "sink": "sink or wash basin", "shower_or_bath": "shower or bathtub",
          "door": "door", "window": "window"}
 MIN_CONF = 0.05
+AMBER = (245, 160, 0)
 
 
 def model_tag(model: Path = MODEL) -> str | None:
-    if not model.exists():
+    if not Path(model).exists():
         return None
-    st = model.stat()
+    st = Path(model).stat()
     return hashlib.sha1(f"{st.st_size}-{int(st.st_mtime)}".encode()).hexdigest()[:10]
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=4)
 def _model(path: str):
     from ..yolo_env import yolo
     return yolo()(path)
 
 
-def detect(file: Path, model: Path = MODEL, imgsz: int = 1280, device=None) -> list[dict] | None:
-    """All boxes scored >= MIN_CONF: [{"cls", "conf", "xyxy"}], cached per model and image."""
+def _predict(model: str, img: np.ndarray, imgsz: int, device) -> list[dict]:
+    res = _model(model).predict(img, imgsz=imgsz, conf=MIN_CONF, iou=0.5, max_det=600, verbose=False, device=device)[0]
+    return [{"cls": CLASSES[int(c)], "conf": round(float(s), 4), "xyxy": [round(float(v), 1) for v in b]}
+            for b, s, c in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist(), res.boxes.cls.tolist())]
+
+
+def _predict_tiled(model: str, img: np.ndarray, tile: dict, device) -> list[dict]:
+    """Resize by the training scale rule, run every tile (padded white to full size), merge the seams."""
+    h0, w0 = img.shape[:2]
+    f = tiling.scale_for(w0, h0, tile["scale"], tile["max_side"])
+    w, h = round(w0 * f), round(h0 * f)
+    im = cv2.resize(img, (w, h), interpolation=cv2.INTER_CUBIC) if (w, h) != (w0, h0) else img
+    T, ov = tile["tile"], tile["overlap"]
+    out = []
+    for x0, y0 in tiling.tile_origins(w, h, T, ov):
+        crop = im[y0:y0 + T, x0:x0 + T]
+        pad = np.full((T, T, 3), 255, np.uint8)
+        pad[: crop.shape[0], : crop.shape[1]] = crop
+        for d in _predict(model, pad, T, device):
+            b = d["xyxy"]
+            if b[0] >= crop.shape[1] or b[1] >= crop.shape[0]:
+                continue                              # in the white padding
+            out.append({**d, "xyxy": [round((b[0] + x0) / f, 1), round((b[1] + y0) / f, 1),
+                                      round(min(b[2], crop.shape[1]) / f + x0 / f, 1),
+                                      round(min(b[3], crop.shape[0]) / f + y0 / f, 1)]})
+    return tiling.merge_seams(out)
+
+
+def _views(model: str, img: np.ndarray, imgsz: int, tile: dict | None, tta: bool, device) -> list[list[dict]]:
+    h, w = img.shape[:2]
+    views = []
+    for k, m in (tiling.DIHEDRAL if tta else [(0, False)]):
+        im = tiling.transform(img, k, m)
+        ds = _predict_tiled(model, im, tile, device) if tile else _predict(model, im, imgsz, device)
+        views.append([{**d, "xyxy": [round(v, 1) for v in tiling.untransform_box(d["xyxy"], k, m, w, h)]} for d in ds])
+    return views
+
+
+def detect_views(file: Path, model: Path = MODEL, imgsz: int = 1280, tile: dict | None = None, tta: bool = False,
+                 device=None) -> list[list[dict]] | None:
+    """Boxes scored >= MIN_CONF per view ([{"cls", "conf", "xyxy"}] in original pixels), cached."""
     tag = model_tag(model)
     if tag is None:
         return None
-    cache = REPO / "out" / "det" / f"{tag}-{imgsz}" / f"{Path(file).stem}.json"
+    mode = f"{imgsz}" + (f"-t{tile['tile']}s{tile['scale']}o{tile['overlap']}m{tile['max_side']}" if tile else "") \
+           + ("-d4" if tta else "")
+    cache = REPO / "out" / "det" / f"{tag}-{mode}" / f"{Path(file).stem}.json"
     if cache.exists():
-        return json.loads(cache.read_text(encoding="utf-8"))
-    res = _model(str(model)).predict(str(file), imgsz=imgsz, conf=MIN_CONF, iou=0.5, max_det=600, verbose=False,
-                                     device=device)[0]
-    out = [{"cls": CLASSES[int(c)], "conf": round(float(s), 4), "xyxy": [round(float(v), 1) for v in b]}
-           for b, s, c in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist(), res.boxes.cls.tolist())]
+        v = json.loads(cache.read_text(encoding="utf-8"))
+        return v["views"] if isinstance(v, dict) else [v]     # a plain list: one view (older cache format)
+    img = cv2.imread(str(file))
+    if img is None:
+        return None
+    views = _views(str(model), img, imgsz, tile, tta, device)
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps(out), encoding="utf-8")
-    return out
+    cache.write_text(json.dumps({"views": views}), encoding="utf-8")
+    return views
+
+
+def combine(views: list[list[dict]]) -> list[dict]:
+    return views[0] if len(views) == 1 else tiling.fuse_views(views)
+
+
+def detect(file: Path, model: Path = MODEL, imgsz: int = 1280, device=None, tile=None, tta=False) -> list[dict] | None:
+    v = detect_views(file, model=model, imgsz=imgsz, tile=tile, tta=tta, device=device)
+    return None if v is None else combine(v)
 
 
 @lru_cache(maxsize=1)
 def thresholds() -> dict:
     return json.loads(THRESHOLDS.read_text(encoding="utf-8")) if THRESHOLDS.exists() else {}
+
+
+def config(obj: str) -> dict | None:
+    """Per-object policy merged over the file-wide defaults (model, imgsz, tile, tta)."""
+    th = thresholds()
+    if obj not in th:
+        return None
+    c = {"model": "detector.pt", "imgsz": th.get("_imgsz", 1280), "tile": th.get("_tile"), "tta": th.get("_tta", False)}
+    c.update(th[obj])
+    return c
 
 
 def count(dets, obj, t, band):
@@ -77,41 +152,87 @@ def count(dets, obj, t, band):
     return [d for d in mine if d["conf"] >= t], [d for d in mine if t - band <= d["conf"] < t + band]
 
 
+def count_views(views, fused, obj, c):
+    """(count, counted boxes, boxes inside the band, spread of the per-view counts) for policy c.
+
+    One view: boxes at or above the threshold. Several views (test-time augmentation): with agg
+    "fuse" the fused boxes at or above the threshold; with agg "median" the median of the per-view
+    counts, shown as that many of the highest-scored fused boxes."""
+    t, band = c["conf"], c.get("band", 0.0)
+    hits, unsure = count(fused, obj, t, band)
+    if len(views) == 1:
+        return len(hits), hits, unsure, 0
+    per = sorted(len(count(v, obj, t, 0.0)[0]) for v in views)
+    spread = per[-1] - per[0]
+    if c.get("agg") == "median":
+        n = per[(len(per) - 1) // 2]
+        cl = set(OBJECTS[obj])
+        hits = sorted((d for d in fused if d["cls"] in cl), key=lambda d: -d["conf"])[:n]
+        return n, hits, unsure, spread
+    return len(hits), hits, unsure, spread
+
+
+def policy(hits, unsure, c, spread: int = 0, n: int | None = None) -> list[str]:
+    """Why a count is only an estimate; empty when it is proven."""
+    n = len(hits) if n is None else n
+    why = []
+    if not c.get("enabled", True):
+        why.append("on held-out train-split images this object's tuned count was wrong more often than right")
+    if len(unsure) >= c.get("max_unsure", 1):
+        why.append(f"{len(unsure)} box(es) scored within {c.get('band', 0.0):.2f} of the threshold {c['conf']:.2f}")
+    if n > c.get("max", 99):
+        why.append(f"{n} counted, above the largest count seen while tuning ({c.get('max')})")
+    if spread > c.get("max_spread", 99):
+        why.append(f"the rotated and mirrored views disagree: their counts differ by {spread}")
+    return why
+
+
 def answer(ctx, q, img=None) -> Answer:
     if q.obj not in OBJECTS:
         return abstain(ROUTE, f"detector has no class for {q.obj}")
-    th = thresholds().get(q.obj)
-    if not MODEL.exists() or not th:
+    c = config(q.obj)
+    model = REPO / "models" / c["model"] if c else MODEL
+    if not c or not model.exists():
         return abstain(ROUTE, "detector not trained or not tuned (tools/train_detector.py, tools/tune_detector.py)")
-    if not th.get("enabled", True):
-        return abstain(ROUTE, f"detector switched off for {q.obj}: on held-out train-split images it was wrong more "
-                              f"often than right (tools/tune_detector.py)")
-    dets = detect(ctx.file, imgsz=thresholds().get("_imgsz", 1280))
-    if dets is None:
-        return abstain(ROUTE, "detector model missing")
-    t, band, mx = th["conf"], th.get("band", 0.0), th.get("max", 99)
-    hits, unsure = count(dets, q.obj, t, band)
-    if len(unsure) >= th.get("max_unsure", 1):
-        return abstain(ROUTE, f"{len(hits)} {q.obj} detected at score >= {t:.2f}, but {len(unsure)} box(es) scored within "
-                              f"{band:.2f} of the threshold; count not provable")
-    if len(hits) > mx:
-        return abstain(ROUTE, f"{len(hits)} {q.obj} detected; above the range tuned on dev (max {mx})")
-    n = len(hits)
-    ans = Answer(value=n, unit="count", route=ROUTE, confidence=round(th.get("precision", 0.5), 2),
+    views = detect_views(ctx.file, model=model, imgsz=c["imgsz"], tile=c["tile"], tta=c["tta"])
+    if views is None:
+        return abstain(ROUTE, "image unreadable or detector model missing")
+    dets = combine(views)
+    t, band = c["conf"], c.get("band", 0.0)
+    n, hits, unsure, spread = count_views(views, dets, q.obj, c)
+    why = policy(hits, unsure, c, spread, n)
+    mode = ("tiles " if c["tile"] else "") + ("with rotations and mirrors " if c["tta"] else "")
+    ans = Answer(value=n, unit="count", route=ROUTE, tier="proven",
+                 confidence=round(c.get("precision_estimate" if why else "precision", c.get("precision", 0.5)), 2),
                  items=[{"n": i + 1, "class": d["cls"], "score": d["conf"], "xyxy": d["xyxy"]} for i, d in enumerate(hits)],
-                 explanation=f"{n} box(es) of {', '.join(OBJECTS[q.obj])} scored >= {t:.2f} by the detector; "
-                             f"{len(unsure)} box(es) within {band:.2f} of it")
+                 uncertain=[{"class": d["cls"], "score": d["conf"], "xyxy": d["xyxy"], "counted": d["conf"] >= t}
+                            for d in unsure],
+                 explanation=(f"median count of {len(views)} rotated and mirrored views at score >= {t:.2f} "
+                              f"(per-view counts differ by {spread}); "
+                              if c.get("agg") == "median" and len(views) > 1 else
+                              f"{n} box(es) of {', '.join(OBJECTS[q.obj])} scored >= {t:.2f} by the detector {mode}; ")
+                             + f"{len(unsure)} box(es) within {band:.2f} of the threshold")
+    for w in why:
+        estimate(ans, w)
     if ctx.evidence:
         if img is None:
             img = cv2.imread(str(ctx.file))
         cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+        amber = {id(d) for d in unsure}
         for d in dets:                       # the other boxes of this type, thin grey: what was not counted
-            if d["cls"] in OBJECTS[q.obj] and d["conf"] < t and d["conf"] >= 0.1:
+            if d["cls"] in OBJECTS[q.obj] and 0.1 <= d["conf"] < t and id(d) not in amber:
                 cv.box(d["xyxy"], color=(160, 160, 160), width=1)
         for i, d in enumerate(hits):
-            cv.box(d["xyxy"], n=i + 1, color=PALETTE[CLASSES.index(d["cls"]) % len(PALETTE)], width=3)
+            cv.box(d["xyxy"], n=i + 1, color=AMBER if id(d) in amber else PALETTE[CLASSES.index(d["cls"]) % len(PALETTE)],
+                   width=3)
+        for d in unsure:
+            if d["conf"] < t:
+                cv.box(d["xyxy"], color=AMBER, width=2)
+        head = f"Answer: {n}" + ("   (ESTIMATE: check the amber boxes)" if why else "   (proven)")
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {n}   route: {ROUTE} (local model, cost $0)",
+                              f"{head}   route: {ROUTE} (local model, cost $0)",
                               note=f"numbered boxes: each counted {NAMES[q.obj]} with its detector score >= {t:.2f}; "
-                                   f"grey: lower-scored boxes of the same type, not counted")
+                                   f"amber: scored close to the threshold, numbered ones counted, plain ones not; "
+                                   f"grey: lower-scored boxes, not counted"
+                                   + (f". Estimate because: {ans.tier_reason}" if why else ""))
     return ans

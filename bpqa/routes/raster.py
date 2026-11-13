@@ -13,23 +13,18 @@ Implemented:
              and tuned thresholds exist; otherwise the older fixture classifier, which abstains
              without its model.
 
-Everything else abstains by default. With `prior=True` (eval.py --prior) the route instead
-answers with the most common dev-split value for that object type, labelled route
-"raster-prior", low confidence and an evidence image that says plainly it is not visual proof.
-That is a baseline to beat, not a method.
+Counted answers come in two tiers (Answer.tier): "proven" when the route's tuned conditions hold,
+"estimate" otherwise, with the reason. An earlier dev-majority fallback (`--prior`) is no longer
+in the route; eval.py --prior reports it as a labelled baseline only.
 """
 from __future__ import annotations
 
-import json
-from collections import Counter
-from functools import lru_cache
-from pathlib import Path
 
 import cv2
 import numpy as np
 from PIL import Image
 
-from ..answer import Answer, abstain
+from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
 from .labels import ROOM_PATTERNS, dedupe, find_rooms, is_word, quad_box
 from .ocr import ocr_image
@@ -37,7 +32,6 @@ from . import detector
 from . import fixtures as fx
 
 ROUTE = "raster-cv"
-PRIOR_FILE = Path(__file__).resolve().parents[2] / "out" / "priors.json"
 
 
 def panels(img_bgr, white=245, min_frac=0.04):
@@ -50,30 +44,6 @@ def panels(img_bgr, white=245, min_frac=0.04):
     return sorted(out, key=lambda b: (b[0], b[1]))
 
 
-@lru_cache(maxsize=1)
-def priors() -> dict:
-    if PRIOR_FILE.exists():
-        return json.loads(PRIOR_FILE.read_text(encoding="utf-8"))
-    return {}
-
-
-def fit_priors(questions, parse, split_of) -> dict:
-    """Most common answer per (source, object) on the dev split only."""
-    c: dict = {}
-    for q in questions:
-        if split_of(q.path) != "dev" or q.ext not in ("png", "jpg", "jpeg"):
-            continue
-        p = parse(q.question)
-        if p.measure == "count" and p.obj:
-            c.setdefault(f"{q.source}/{p.obj}", Counter())[q.answer] += 1
-    out = {k: {"value": v.most_common(1)[0][0], "freq": v.most_common(1)[0][1] / sum(v.values()), "n": sum(v.values())}
-           for k, v in c.items()}
-    PRIOR_FILE.parent.mkdir(parents=True, exist_ok=True)
-    PRIOR_FILE.write_text(json.dumps(out, indent=1, sort_keys=True), encoding="utf-8")
-    priors.cache_clear()
-    return out
-
-
 def answer(ctx, q) -> Answer:
     if q.measure != "count":
         return abstain(ROUTE, "raster route only counts")
@@ -84,7 +54,7 @@ def answer(ctx, q) -> Answer:
     if q.obj == "storey":
         boxes = panels(img)
         value = max(1, len(boxes))
-        ans = Answer(value=value, unit="count", route=ROUTE, confidence=0.85 if value == 1 else 0.75,
+        ans = Answer(value=value, unit="count", route=ROUTE, confidence=0.85 if value == 1 else 0.75, tier="proven",
                      items=[{"panel": i + 1, "xywh": b} for i, b in enumerate(boxes)],
                      explanation=f"{value} separate drawing panel(s) on the white canvas")
         if ctx.evidence:
@@ -107,21 +77,7 @@ def answer(ctx, q) -> Answer:
                 first = second
             else:
                 first.abstain = f"{first.abstain}; {second.route}: {second.abstain}"
-    if first is not None and (first.answered or not getattr(ctx, "prior", False)):
-        return first
-
-    if getattr(ctx, "prior", False):
-        pr = priors().get(f"{ctx.q.source}/{q.obj}")
-        if pr:
-            ans = Answer(value=pr["value"], unit="count", route="raster-prior", confidence=round(pr["freq"] * 0.5, 2),
-                         explanation=f"no visual method yet; most common dev answer ({pr['freq']:.0%} of {pr['n']} dev questions)")
-            if ctx.evidence:
-                im = Image.open(ctx.file).convert("RGB")
-                ans.evidence = finish(im, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                                      f"Answer: {pr['value']} (PRIOR, not visual proof)   route: raster-prior",
-                                      note=ans.explanation)
-            return ans
-    return first or abstain(ROUTE, f"no classical-CV detector for {q.obj} yet")
+    return first or abstain(ROUTE, f"no raster method for {q.obj}")
 
 
 LABEL_ROUTE = "raster-ocr-labels"
@@ -140,18 +96,21 @@ def room_labels(ctx, q, img) -> Answer:
     toks = ocr_image(ctx.file)
     hits = find_rooms(toks, q.obj)
     words = [t for t in dedupe(toks) if is_word(t["text"])]
-    if not hits and len(words) < MIN_WORDS_FOR_ZERO:
-        return abstain(LABEL_ROUTE, f"only {len(words)} room labels readable; cannot prove absence")
     n = len(hits)
     rule = ANSWER_COUNTS[q.obj]
-    if not (rule == "all" or (rule == "positive" and n > 0) or (isinstance(rule, set) and n in rule)):
-        return abstain(LABEL_ROUTE, f"{n} {q.obj} label(s) read ({', '.join(h['text'] for h in hits)}); "
-                                    f"this count is not reliable for {q.obj} on dev, abstaining")
-    ans = Answer(value=n, unit="count", route=LABEL_ROUTE, confidence=0.7,
+    ans = Answer(value=n, unit="count", route=LABEL_ROUTE, confidence=0.7, tier="proven",
                  items=[{"n": i + 1, "label": h["text"], "match": h["part"], "ocr_conf": h["conf"],
                          "xyxy": [round(v) for v in h["box"]]} for i, h in enumerate(hits)],
                  explanation=f"{n} room label(s) read as {NAMES[q.obj]}"
                              + (f"; {len(words)} room labels read in total, none of this type" if not n else ""))
+    if not hits and len(words) < MIN_WORDS_FOR_ZERO:
+        estimate(ans, f"only {len(words)} room labels readable, so a zero is not proof of absence")
+    elif not (rule == "all" or (rule == "positive" and n > 0) or (isinstance(rule, set) and n in rule)):
+        estimate(ans, f"{n} {q.obj} label(s) read; on dev this count is often wrong for {q.obj} "
+                      f"(unlabelled rooms, or labels of a neighbouring flat in the scan)")
+    if ans.tier == "estimate":
+        ans.confidence = 0.3
+        ans.uncertain = [{"label": h["text"], "xyxy": [round(v) for v in h["box"]]} for h in hits]
     if ctx.evidence:
         cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
         hit_boxes = {tuple(h["box"]) for h in hits}
@@ -162,8 +121,9 @@ def room_labels(ctx, q, img) -> Answer:
         for i, h in enumerate(hits):
             b = h["box"]
             cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=PALETTE[0], width=3)
+        tier = "   (ESTIMATE: " + ans.tier_reason + ")" if ans.tier == "estimate" else "   (proven)"
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {n}   route: {LABEL_ROUTE} (local OCR, cost $0)",
+                              f"Answer: {n}{tier}   route: {LABEL_ROUTE} (local OCR, cost $0)",
                               note=f"red numbered boxes: labels read as {NAMES[q.obj]}: "
                                    + ", ".join(h["text"] for h in hits) + "; grey boxes: other room labels read")
     return ans
