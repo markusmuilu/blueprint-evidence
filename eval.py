@@ -54,6 +54,7 @@ def main(argv=None):
     ap.add_argument("--data", help="dataset root (folder with questions.jsonl); default from STOA_DATA")
     ap.add_argument("--split", default="dev", choices=["dev", "test", "all"])
     ap.add_argument("--sources", default="", help="comma-separated source filter")
+    ap.add_argument("--objects", default="", help="comma-separated parsed-object filter, e.g. toilet,sink,door")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--evidence", action="store_true", help="render evidence PNGs into out/evidence/")
     ap.add_argument("--prior", action="store_true",
@@ -72,6 +73,10 @@ def main(argv=None):
     if args.sources:
         keep = set(args.sources.split(","))
         qs = [q for q in qs if q.source in keep]
+    if args.objects:
+        from bpqa.query import parse
+        keep_o = set(args.objects.split(","))
+        qs = [q for q in qs if parse(q.question).obj in keep_o]
     # group by file so per-drawing caches stay warm
     qs.sort(key=lambda q: (q.path, q.qid))
     if args.limit:
@@ -79,7 +84,12 @@ def main(argv=None):
 
     out = Path(args.out)
     ev_dir = out / "evidence"
-    run_dir = out / (args.split + ("-prior" if args.prior else "") + ("-nochecks" if args.no_checks else ""))
+    tag = args.split + ("-prior" if args.prior else "") + ("-nochecks" if args.no_checks else "")
+    if args.data:
+        tag += "-" + Path(args.data).name
+    if args.objects:
+        tag += "-" + args.objects.replace(",", "+")
+    run_dir = out / tag
     run_dir.mkdir(parents=True, exist_ok=True)
 
     stats = defaultdict(lambda: {"n": 0, "answered": 0, "correct": 0, "cost": 0.0})
