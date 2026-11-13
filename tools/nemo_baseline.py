@@ -96,11 +96,15 @@ def run_nemo(root, sample, workers=3):
 
     def one(q):
         png, sent, orig = cache[q.path]
-        r = N.chat(prompt_for(q), png)
+        r = N.chat(prompt_for(q), png, max_tokens=4096)
+        retried = False
+        if r.get("finish_reason") == "length" or (r.get("content") is None and not r.get("error")):
+            # the reasoning phase ate the 4096-token budget: ask again with 16384, as if it had been the limit
+            r, retried = N.chat(prompt_for(q), png, max_tokens=16384), True
         return {"qid": q.qid, "pred": N.parse_number(r.get("content")), "raw": (r.get("content") or "")[:80],
                 "error": r.get("error"), "prompt_tokens": r.get("prompt_tokens"),
                 "completion_tokens": r.get("completion_tokens"), "latency_s": r.get("latency_s"),
-                "finish": r.get("finish_reason"), "image": list(sent)}
+                "finish": r.get("finish_reason"), "image": list(sent), "retried_16k": retried}
     with ThreadPoolExecutor(workers) as ex:
         return list(ex.map(one, sample))
 
