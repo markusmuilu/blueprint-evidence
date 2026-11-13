@@ -9,6 +9,10 @@ Implemented:
              local OCR model (RapidOCR) and matched against the Finnish abbreviations (MH, K, KK,
              S, WC, KH, PH, PARVEKE ...). Each matched label is boxed and numbered.
 
+  fixtures, doors, windows = the raster-detector route (routes/detector.py), when a trained model
+             and tuned thresholds exist; otherwise the older fixture classifier, which abstains
+             without its model.
+
 Everything else abstains by default. With `prior=True` (eval.py --prior) the route instead
 answers with the most common dev-split value for that object type, labelled route
 "raster-prior", low confidence and an evidence image that says plainly it is not visual proof.
@@ -29,6 +33,7 @@ from ..answer import Answer, abstain
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
 from .labels import ROOM_PATTERNS, dedupe, find_rooms, is_word, quad_box
 from .ocr import ocr_image
+from . import detector
 from . import fixtures as fx
 
 ROUTE = "raster-cv"
@@ -94,8 +99,14 @@ def answer(ctx, q) -> Answer:
     first = None
     if q.obj in ROOM_PATTERNS:
         first = room_labels(ctx, q, img)
-    elif q.obj in FIXTURE_HEADS:
-        first = fixture_count(ctx, q, img)
+    elif q.obj in detector.OBJECTS:
+        first = detector.answer(ctx, q, img)
+        if not first.answered and q.obj in FIXTURE_HEADS:
+            second = fixture_count(ctx, q, img)
+            if second.answered:
+                first = second
+            else:
+                first.abstain = f"{first.abstain}; {second.route}: {second.abstain}"
     if first is not None and (first.answered or not getattr(ctx, "prior", False)):
         return first
 

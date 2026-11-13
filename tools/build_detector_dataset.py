@@ -13,8 +13,9 @@ Rules (README, "Training data"):
   - Converter counts are compared with Stoa's answers on train-split images only, per object type
     (count_check.json), to confirm the class mapping in tools/cubicasa_svg.py.
 
-Images are F1_scaled.png (the pixel frame the SVG coordinates are in), re-encoded as JPEG q95 with the
-long side capped at --max-side. Labels follow the image (normalised coordinates).
+Images are F1_original.png (the image Stoa's files are; the SVG coordinates are in the F1_scaled.png
+frame, so boxes are scaled by the size ratio), re-encoded as JPEG q95 with the long side capped at
+--max-side. Labels follow the image (normalised coordinates).
 """
 from __future__ import annotations
 
@@ -42,8 +43,11 @@ def stable_frac(key: str) -> float:
     return int(hashlib.sha1(("tune|" + key).encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
 
 
+IMAGE_ORDER = ("F1_original.png", "F1_scaled.png")   # original first: it is what Stoa's images are
+
+
 def plan_image(plan_dir: Path) -> Path | None:
-    for n in ("F1_scaled.png", "F1_original.png"):
+    for n in IMAGE_ORDER:
         if (plan_dir / n).exists():
             return plan_dir / n
     return None
