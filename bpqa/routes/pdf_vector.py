@@ -252,7 +252,7 @@ class PdfFloor:
                 if p.fill is None and p.kind == "s":
                     if 0.3 <= Lm <= 6.0 and 0.02 <= Sm <= 0.6 and L >= 2 * S:
                         door_c.append((p, q4))
-                    elif 0.6 <= Sm and Lm <= 1.8 and L <= 2.0 * S:
+                    elif 0.3 <= Sm and Lm <= 1.8 and L <= 2.0 * S:
                         shower_c.append((p, q4))
                 elif p.fill is not None and _lum(p.fill) > 0.9 and 0.15 <= Lm <= 15 and Sm <= 1.5:
                     c4 = Polygon(q4).centroid
@@ -312,6 +312,7 @@ class PdfFloor:
             self.windows += [g for g, k in groups3 if k >= 3]
 
         # sanitary fixtures: many-segment closed outlines
+        ellipses, fix_styles = [], {}
         for p in objs:
             if p.fill is not None and _lum(p.fill) < 0.9:
                 continue
@@ -321,17 +322,30 @@ class PdfFloor:
             poly = _poly(sp)
             if poly is None:
                 continue
-            x0, y0, x1, y1 = poly.bounds
-            w, h = (x1 - x0) * mpp, (y1 - y0) * mpp
-            fillr = poly.area / max((x1 - x0) * (y1 - y0), 1e-9)
-            Lm, Sm = max(w, h), min(w, h)
+            mrr = poly.minimum_rotated_rectangle      # rotated fixtures: measure in their own frame
+            if mrr.geom_type != "Polygon" or mrr.area <= 0:
+                continue
+            Lr, Sr, _ = _rect_dims(list(mrr.exterior.coords)[:4])
+            Lm, Sm = Lr * mpp, Sr * mpp
+            fillr = poly.area / mrr.area
             if 0.70 <= fillr <= 0.82 and 0.1 <= Sm and Lm <= 1.3:
                 drain = any(r * mpp < 0.06 and poly.contains(Point(cx, cy)) for cx, cy, r in circles)
-                (self.washbasins if drain else self.toilets).append(poly.bounds)
-                self.fixture_centroids.append(poly.centroid.coords[0])
+                ellipses.append((p, poly, drain))
             elif fillr > 0.85 and 0.3 <= Lm <= 2.5 and 0.3 <= Sm <= 1.3:
                 self.bathtubs.append(poly.bounds)
                 self.fixture_centroids.append(poly.centroid.coords[0])
+                fix_styles[(_round_c(p.stroke), round(p.width, 2))] = fix_styles.get((_round_c(p.stroke), round(p.width, 2)), 0) + 1
+        # the fixture line style is the one used by basins (ellipses with a drain) and tubs; an
+        # ellipse drawn in another style (a round column in the wall style) is not a toilet
+        for p, poly, drain in ellipses:
+            if drain:
+                k = (_round_c(p.stroke), round(p.width, 2))
+                fix_styles[k] = fix_styles.get(k, 0) + 1
+        for p, poly, drain in ellipses:
+            if fix_styles and (_round_c(p.stroke), round(p.width, 2)) not in fix_styles:
+                continue
+            (self.washbasins if drain else self.toilets).append(poly.bounds)
+            self.fixture_centroids.append(poly.centroid.coords[0])
         for p, q4 in shower_c:      # a shower tray has its drain drawn as a small circle
             sp_ = Polygon(q4)
             if not any(r * mpp < 0.08 and sp_.contains(Point(cx, cy)) for cx, cy, r in circles):
