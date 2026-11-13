@@ -190,6 +190,28 @@ Every response is cached on disk keyed by model, prompt and image hash, requests
 assumed list price (`NEMO_PRICE_IN`, `NEMO_PRICE_OUT`, default 3 and 15 USD per million tokens; an
 assumption, not a quote). On the NVIDIA Build free tier the real cost is 0.
 
+### Nemotron results
+
+Measured with the model as described above; details, per-object numbers and the exact setup are in
+`CHANGELOG.md` (section "Nemotron baseline and fallback route"). Preview TEST split, 150 questions, seeded
+sample (CubiCasa 50, Swiss counts 40, Swiss areas 30, IFC room areas 30):
+
+| | Nemotron, plain prompt (number only) | our router |
+|---|---|---|
+| accuracy, all 150 | 39.3% | 82.0% (100% on the 100 PDF questions with PDF only) |
+| CubiCasa counts | 66.0% | 46.0% (answers 27 of 50) |
+| Swiss counts / areas | 50.0% / 16.7% | 100% / 100% |
+| IFC room areas (plan PDF) | 3.3% | 100% |
+| median latency | 25 s (reasoning model) | seconds, local |
+| cost per question | about $0.10 at an assumed 3 / 15 USD per million input / output tokens, about $0.005 if the model answered without reasoning; free on NVIDIA Build | $0 |
+
+Used as the last-resort route on the preview dev questions that otherwise get no answer (1,327 eligible, a
+seeded sample of 200): 85% get a valid estimate and about half of all of them are correct, which raises dev
+accuracy from 64.8% to about 77% and lowers the precision of answered questions from about 92% to about 83%.
+Room-label questions on CubiCasa (bathrooms, kitchens, saunas, bedrooms) are mostly right; doors, windows,
+balconies and WC rooms are mostly wrong. Those answers are `tier: "estimate"` and the evidence image shows the
+boxes the model gave.
+
 ## Run it
 
 Windows, Python 3.11:
@@ -325,6 +347,11 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
   cases abstain instead of answering.
 - The test split holds few drawings for some sources: ifc_models test is a single model (Esplanades,
   630 questions), so its 100% says the rules transfer to one unseen model, not to IFC in general.
+- Nemotron estimates are not proofs. On the dev abstentions about half are right, and doors, windows,
+  balconies and WC rooms on scans are mostly wrong. The model sees the drawing downscaled to 1600 px, its
+  boxes are checked for shape and count but not for position, and 23% of plain-prompt replies ran out of tokens
+  even at 16,384 (reasoning). The Nemotron numbers come from one 150-question test sample and a 200-question
+  dev sample, so each percentage carries several points of sampling error.
 - Compound and breakdown questions ("which types and how many of each", "on level 1" without quotes)
   abstain on purpose. Answering them with one number for the whole building was wrong every time.
 - Text answers (ifc_bench, some opening_design) are free-form; `eval.py` scores them approximately (all
@@ -340,8 +367,9 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 1. Detector: longer training, a larger model and tiled inference for the small fixtures; a shower and
    bathtub head that works; a counting policy for doors and windows that tolerates one uncertain box.
-2. A cheap vision-LLM route behind the router, called only when no structured route exists, with its
-   answer required to point at regions that are then drawn as evidence.
+2. Nemotron route: verify the boxes it returns (a second pass per box, or the detector on the cropped region)
+   so that a wrong estimate can be withdrawn instead of only drawn; reasoning latency is 60 to 100 s on dense
+   floors.
 3. Generalise the schedule parser (column detection from header words) to cover other door, window and
    finish schedules in the opening_design sets.
 
