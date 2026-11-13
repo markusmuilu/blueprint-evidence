@@ -49,8 +49,8 @@ VOLUME = r"(volume|volumen|volym|tilavuus|maht)"
 
 # Object vocabulary. Order matters: the first match wins, so specific phrases come first.
 OBJECTS: list[tuple[str, str]] = [
-    ("wc_room", r"separate wc rooms|erillista wc-tilaa"),
     ("bathroom", r"bathrooms or washrooms|kylpy- tai pesuhuone"),
+    ("wc_room", r"separate wc rooms|erillista wc-tilaa"),
     ("sink", r"sinks and wash basins|pesu- ja tiskiallas"),
     ("shower_or_bath", r"showers and bathtubs|suihkua ja kylpyammetta"),
     ("toilet", r"water closets|toilet bowls|wc-istuin|toilets \(wc\)|\bwcs\b|combien de wc|quanti wc|\bwc\b sont|toilets exist"),
