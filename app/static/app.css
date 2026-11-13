@@ -428,11 +428,14 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
   .results { padding: var(--s5); }
 }
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; height: auto; }
   .rail { flex-direction: row; padding: var(--s2) var(--s4); border-right: 0; border-bottom: 1px solid var(--border); }
   .mark { margin: 0 var(--s2) 0 0; }
   .rail-btn::after { display: none; }
-  .view-ask, .view-ask.no-picker { grid-template-columns: 1fr; height: auto; }
+  .view-ask, .view-ask.no-picker { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .view-ask > * { min-width: 0; }
+  .workbar { padding: var(--s3) var(--s4); }
+  .ask-row input { min-width: 0; }
   .view-ask .picker { position: static; width: auto; max-height: 60vh; border-right: 0; border-bottom: 1px solid var(--border); }
   .viewer { height: 60vh; }
   .detail { border-left: 0; border-top: 1px solid var(--border); }

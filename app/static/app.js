@@ -750,6 +750,10 @@ function renderObjTable(d) {
 
 /* ================================================================ boot */
 (async function boot() {
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    $("#view-ask").classList.add("no-picker");      // phones start on the question, library one tap away
+    $("#pickerToggle").setAttribute("aria-expanded", "false");
+  }
   renderExamples();
   loadStatus();
   await loadDrawings();
