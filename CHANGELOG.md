@@ -77,6 +77,31 @@ Stoa's CubiCasa counts are the public annotations: with the class mapping in
 100% (sinks, showers/baths) of about 3,300 images per type. ShowerCab, ShowerScreen and
 ShowerPlatform are not counted as showers by Stoa.
 
+### Detector pipeline
+
+- `tools/cubicasa_svg.py` converts a CubiCasa5K `model.svg` into boxes for toilet, sink, shower,
+  bathtub, door, window (transforms composed down the tree; unit test on a hand-made SVG). The SVG
+  coordinates are in the F1_scaled.png frame; the root width/height attributes are not the image size.
+- `tools/build_detector_dataset.py` uses only `train_clean.txt`, refuses any plan matching a test image,
+  trains on F1_original.png (the image Stoa ships) with boxes scaled from the F1_scaled frame, and holds
+  617 train-split plans (624 Stoa images, every preview dev image among them) out of training for
+  threshold tuning. Training set: 2,820 CubiCasa plans + 1,376 synthetic renders; validation 19 + 72.
+- `tools/render_dxf_synth.py` renders the 724 train-split Swiss DXF floors twice each (1,448 images,
+  about 89,600 boxes) with boxes from the DXF route's rules. The 5-vertex DOOR polygon is the opening in
+  the wall, the same thing a CubiCasa door box marks.
+- `bpqa/routes/detector.py` (`raster-detector`): counts boxes of the asked classes at or above a tuned
+  score; abstains when any box scores within a tuned band of the threshold; draws every counted box.
+  `tools/tune_detector.py` picks threshold and band per object on held-out train-split images, reports a
+  2-fold cross-validated estimate, and switches an object off when its best policy is wrong more often
+  than right. Ultralytics runs offline (`bpqa/yolo_env.py`: no telemetry, no auto-install); it still
+  fetched its plotting font once at the first training start.
+
+Smoke test, synthetic only (yolo26n from scratch, 15 epochs, imgsz 1024; synthetic val mAP50 0.40).
+Exact-count accuracy on the 165 preview dev images, 2-fold cross-validated, no abstention: toilets
+18.3%, sinks 7.9%, showers/baths 23.2%, doors 8.6%, windows 10.9%. A constant "1 toilet" gets 65%. The
+domain gap is large (clean vector lines vs scanned, hatched, annotated plans), so the tuner switched
+all five objects off for this model.
+
 ## 2026-11-13 evening: CubiCasa raster counts
 
 Starting point (cubicasa5k, dev): 10.0% accuracy, 11.3% coverage; only the storey count answered.
