@@ -248,6 +248,7 @@ const viewer = (() => {
   function apply() {
     stage.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
     stage.classList.toggle("pixel", k > 2.5);
+    stage.style.setProperty("--inv", String(1 / k));
     $("#zoomLvl").textContent = Math.round(k * 100) + "%";
   }
   function fit() {
@@ -369,6 +370,7 @@ async function showEvidence(a, refit = true) {
   await viewer.load(src, refit);
   $("#openImg").href = src;
   $("#openImg").hidden = false;
+  drawPins(a);
 }
 $("#headerToggle").addEventListener("click", (e) => {
   state.showHeader = !state.showHeader;
@@ -377,10 +379,10 @@ $("#headerToggle").addEventListener("click", (e) => {
   if (state.answer?.evidence_id) showEvidence(state.answer, true);
 });
 
-/* ---------------------------------------------------------------- reticle on cited items */
+/* ---------------------------------------------------------------- pins and reticle on cited items */
 function itemRect(it, a) {
   const g = a.evidence_geometry;
-  if (!g || g.scale == null || typeof it !== "object") return null;
+  if (!g || g.scale == null || typeof it !== "object" || it === null) return null;
   let r = null;
   if (Array.isArray(it.xyxy) && it.xyxy.length === 4) r = [it.xyxy[0], it.xyxy[1], it.xyxy[2] - it.xyxy[0], it.xyxy[3] - it.xyxy[1]];
   else if (Array.isArray(it.xywh) && it.xywh.length === 4) r = it.xywh;
@@ -388,14 +390,39 @@ function itemRect(it, a) {
   const off = state.showHeader ? g.header : 0;
   return [r[0] * g.scale, r[1] * g.scale + off, Math.max(r[2] * g.scale, 4), Math.max(r[3] * g.scale, 4)];
 }
-function clearMarks() { $("#marks").innerHTML = ""; document.querySelectorAll(".item.on").forEach((b) => b.classList.remove("on")); }
+function answerItems(a) {
+  return (a.items || []).filter((it) => !(it && typeof it === "object" && "would_answer" in it));
+}
+/* every counted item gets a pin in the app's own layer, numbered like the overlay, so estimates
+   can be checked one by one at any zoom */
+function drawPins(a) {
+  const tone = a.status === "estimate" ? "warn" : a.status === "cannot" ? "bad" : "ok";
+  const html = answerItems(a).map((it, i) => {
+    const r = itemRect(it, a);
+    if (!r) return "";
+    const n = (it && it.n) || i + 1;
+    return `<div class="pin ${tone}" data-i="${i}" style="left:${r[0]}px;top:${r[1]}px;width:${r[2]}px;height:${r[3]}px"><span>${esc(n)}</span></div>`;
+  }).join("");
+  $("#marks").innerHTML = html + '<div class="reticle" hidden></div>';
+}
+function clearMarks() { $("#marks").innerHTML = ""; clearFocus(); }
+function clearFocus() {
+  document.querySelectorAll(".item.on, .pin.on").forEach((b) => b.classList.remove("on"));
+  const ret = $("#marks .reticle");
+  if (ret) ret.hidden = true;
+}
 function markItem(btn, it, a, n, focus) {
   const r = itemRect(it, a);
   if (!r || state.layer !== "evidence") return;
-  clearMarks();
+  clearFocus();
   btn.classList.add("on");
-  const pad = 4;
-  $("#marks").innerHTML = `<div class="reticle" data-n="#${n}" style="left:${r[0] - pad}px;top:${r[1] - pad}px;width:${r[2] + pad * 2}px;height:${r[3] + pad * 2}px"></div>`;
+  $(`#marks .pin[data-i="${btn.dataset.i}"]`)?.classList.add("on");
+  const ret = $("#marks .reticle");
+  if (ret) {
+    const pad = 4;
+    Object.assign(ret.style, { left: r[0] - pad + "px", top: r[1] - pad + "px", width: r[2] + pad * 2 + "px", height: r[3] + pad * 2 + "px" });
+    ret.hidden = false;
+  }
   if (focus) viewer.focusRect(...r);
 }
 
@@ -468,7 +495,7 @@ function renderAnswer(a) {
   const valText = fmtValue(a.value);
   const isText = hasVal && typeof a.value === "string" && valText.length > 12;
 
-  const items = (a.items || []).filter((it) => !(it && typeof it === "object" && "would_answer" in it));
+  const items = answerItems(a);
   const would = (a.items || []).find((it) => it && typeof it === "object" && "would_answer" in it);
   const why = a.why || [];
   const nWhy = why.length;
@@ -498,10 +525,11 @@ function renderAnswer(a) {
       ${gold}
       <dl class="facts">
         <dt>Confidence</dt><dd>${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
-        <dt>Response</dt><dd>${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}${a.cached ? " cached" : ""}</dd>
+        <dt>Response</dt><dd>${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}</dd>
         <dt>Cost</dt><dd>$${Number(a.cost_usd || 0).toFixed(4)}</dd>
         <dt>Model calls</dt><dd>${a.cost_usd ? "yes" : "none"}</dd>
       </dl>
+      ${a.cached ? `<p class="note">Served from the answer cache. The response time is from the first run; Run again recomputes it.</p>` : ""}
     </div>
 
     <section class="sec" aria-labelledby="hWhere">
@@ -548,7 +576,7 @@ function renderAnswer(a) {
     b.addEventListener("focus", () => markItem(b, it, a, n, false));
     b.addEventListener("click", () => markItem(b, it, a, n, true));
   });
-  $("#itemList")?.addEventListener("mouseleave", () => { if (!document.activeElement?.classList.contains("item")) clearMarks(); });
+  $("#itemList")?.addEventListener("mouseleave", () => { if (!document.activeElement?.classList.contains("item")) clearFocus(); });
   $("#copyCsv").addEventListener("click", () => copyCsv(a));
   $("#dlCsv").addEventListener("click", () => downloadCsv(a));
   $("#reask").addEventListener("click", () => ask(true));
