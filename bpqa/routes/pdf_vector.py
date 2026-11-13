@@ -346,6 +346,12 @@ class PdfFloor:
                 continue
             (self.washbasins if drain else self.toilets).append(poly.bounds)
             self.fixture_centroids.append(poly.centroid.coords[0])
+        # other closed shapes in the fixture line style (kitchen counters, washing machines) also
+        # mark a room as usable, as FIXTURE polylines do in the DXF route
+        if fix_styles:
+            for p in objs:
+                if p.closed and p.stroke is not None and (_round_c(p.stroke), round(p.width, 2)) in fix_styles                         and len(p.pts) >= 4 and "c" not in p.ops:
+                    self.fixture_centroids.append(((p.rect[0] + p.rect[2]) / 2, (p.rect[1] + p.rect[3]) / 2))
         for p, q4 in shower_c:      # a shower tray has its drain drawn as a small circle
             sp_ = Polygon(q4)
             if not any(r * mpp < 0.08 and sp_.contains(Point(cx, cy)) for cx, cy, r in circles):
@@ -425,7 +431,7 @@ def answer(ctx, q) -> Answer:
         return abstain(ROUTE, "not a PDF")
     fl = load(str(ctx.file))
     if fl.kind != "vector":
-        return abstain(ROUTE, f"PDF page is {fl.kind} (no vector linework); left to the raster route")
+        return abstain(ROUTE, f"PDF page is {fl.kind} (no vector linework); needs a raster route")
     sc = fl.scale
     items, value, rooms_used, boxes, note = [], None, [], [], ""
 
