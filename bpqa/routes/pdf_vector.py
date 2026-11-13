@@ -294,7 +294,7 @@ class PdfFloor:
                 return len(arc_tree.query(Polygon(q4).buffer(m(0.08)), predicate="intersects")) > 0
             sig_score = {s: sum(touches(q) for _, q in v) for s, v in by_sig.items()}
             best = max(sig_score, key=lambda s: (sig_score[s], len(by_sig[s])))
-            if sig_score[best] > 0 or len(by_sig) == 1:
+            if sig_score[best] > 0:
                 # the style is chosen from thin quads; then every unfilled four-corner shape in that
                 # style counts (doors in thick or skewed walls are not thin)
                 self.door_style = best
@@ -475,6 +475,10 @@ def answer(ctx, q) -> Answer:
         if q.obj in table:
             if not fl.rooms:
                 return abstain(ROUTE, "no room shapes found, so the plan region is unknown")
+            if getattr(fl, "door_style", None) is None:
+                # the object rules assume door openings drawn with swing arcs; without that the
+                # drawing convention is not recognised and a count of 0 would not be proof
+                return abstain(ROUTE, "drawing convention not recognised (no door openings with swing arcs)")
             boxes = table[q.obj]
             value = len(boxes)
             note = {"door": "thin unfilled door-opening quads in the door stroke style",
