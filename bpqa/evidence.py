@@ -100,10 +100,11 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     if img.width > max_w:
         img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
     f, fb = font(15), font(19)
-    lines = textwrap.wrap(question, 150)[:3]
-    note_lines = textwrap.wrap(note, 170)[:3] if note else []
+    cw = max(img.width, 900)                      # narrow scans: keep the header readable
+    lines = textwrap.wrap(question, max(40, cw // 8))[:3]
+    note_lines = textwrap.wrap(note, max(50, cw // 7))[:3] if note else []
     head_h = 14 + 20 * len(lines) + 26 + 18 * len(note_lines) + 8
-    canvas = Image.new("RGB", (img.width, img.height + head_h), "white")
+    canvas = Image.new("RGB", (cw, img.height + head_h), "white")
     d = ImageDraw.Draw(canvas)
     y = 8
     for ln in lines:
@@ -114,7 +115,7 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     for ln in note_lines:
         d.text((12, y), ln, fill=(90, 90, 90), font=font(13))
         y += 18
-    d.line([(0, head_h - 2), (img.width, head_h - 2)], fill=(200, 200, 200), width=2)
+    d.line([(0, head_h - 2), (cw, head_h - 2)], fill=(200, 200, 200), width=2)
     canvas.paste(img, (0, head_h))
     out.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(out)
