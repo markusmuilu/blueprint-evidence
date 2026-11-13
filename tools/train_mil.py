@@ -30,6 +30,9 @@ def model():
     return nn.Sequential(nn.Linear(D, 64), nn.ReLU(), nn.Dropout(0.2), nn.Linear(64, len(HEADS)))
 
 
+WARMUP = 15
+
+
 def train(tr, epochs=60, seed=0):
     torch.manual_seed(seed); random.seed(seed)
     allx = np.concatenate([b[1][:, 0] for b in tr])
@@ -45,8 +48,18 @@ def train(tr, epochs=60, seed=0):
             yt = torch.tensor(y)
             m = yt >= 0
             cnt = s.sum(0)
-            loss = (nn.functional.smooth_l1_loss(cnt[m], yt[m], reduction="sum")
-                    + 0.05 * (s * (1 - s)).sum())          # push scores to 0 or 1
+            if ep < WARMUP:
+                loss = (nn.functional.smooth_l1_loss(cnt[m], yt[m], reduction="sum")
+                        + 0.05 * (s * (1 - s)).sum())          # push scores to 0 or 1
+            else:
+                # self-training MIL: the top-g candidates of each head are this image's positives
+                tgt = torch.zeros_like(s)
+                for j in range(len(HEADS)):
+                    g = int(yt[j])
+                    if g > 0:
+                        tgt[torch.argsort(-s[:, j].detach())[:g], j] = 1
+                w = m.float().unsqueeze(0).expand_as(s)
+                loss = nn.functional.binary_cross_entropy(s, tgt, weight=w * (1 + 4 * tgt), reduction="sum")
             opt.zero_grad(); loss.backward(); opt.step()
     return net, mu, sd
 
