@@ -213,13 +213,7 @@ def scale_from_bar(spans):
                                               for u in unit_m)
         if not has_m:
             continue
-        xs = []
-        for v, s, hm in row:
-            if hm:   # '5 m': the number is left-aligned in the span; use the number's own centre
-                frac = len(s.text.split()[0]) / max(len(s.text), 1)
-                xs.append(s.bbox[0] + (s.bbox[2] - s.bbox[0]) * frac / 2)
-            else:
-                xs.append(s.c[0])
+        xs = [s.c[0] for v, s, hm in row]     # tick labels ('0', '5 m') are centred on their ticks
         n = len(vals)
         mx, my = sum(vals) / n, sum(xs) / n
         sxx = sum((v - mx) ** 2 for v in vals)

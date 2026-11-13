@@ -165,7 +165,10 @@ class PdfFloor:
         if scores and max(scores.values()) > 0:
             best = max(scores, key=scores.get)
             best_fills = {_round_c(p.fill) for p, _ in groups[best]}
-            chosen = [best] + [s for s in groups if s != best and s[0] == "fill" and s[1] in best_fills and scores[s] > 0]
+            # the same rooms drawn as an unstroked fill plus a stroked fill of the same colour
+            chosen = [best] + [s for s in groups if s != best and scores[s] > 0 and (
+                (s[0] == "fill" and s[1] in best_fills) or
+                (best[0] == "fill" and {_round_c(p.fill) for p, _ in groups[s]} <= best_fills))]
             self.room_style = best
             for s in chosen:
                 room_items.extend(groups[s])
@@ -431,16 +434,27 @@ def load(pdf_path: str) -> PdfFloor:
 
 
 def _match_room_label(fl, label):
-    """Rooms whose name is the label; for IFC-style labels 'NAME (number)' also name + number."""
+    """Rooms whose label matches. IFC-style labels 'NAME (number)' need both the name and the
+    number inside the same room shape (the number may be printed as 'Rum nr. K08' or '(0-12)')."""
+    m = re.match(r"^(.*?)\s*\(([^()]+)\)$", label)
+    if m:
+        nm, no = m.group(1), m.group(2)
+        no_core = re.sub(r"^(rum nr\.?|nr\.?|no\.?)\s*", "", no.strip(), flags=re.I)
+
+        def has_no(t):
+            t2 = t.strip().strip("()")
+            return name_eq(t2, no) or name_eq(t2, no_core) or bool(re.search(r"(^|\s|\()" + re.escape(no_core) + r"\)?$", t))
+        out = [r for r in fl.rooms if any(name_eq(t, nm) or name_eq(t, label) for t in r["texts"])
+               and any(has_no(t) or name_eq(t, label) for t in r["texts"])]
+        if out:
+            return out
+        out = [r for r in fl.rooms if any(name_eq(t, label) for t in r["texts"])]
+        if out:
+            return out
+        return []
     out = [r for r in fl.rooms if name_eq(r["name"], label)]
     if out:
         return out
-    m = re.match(r"^(.*?)\s*\((?:Rum nr\. )?([^()]+)\)$", label)
-    if m:
-        nm, no = m.group(1), m.group(2)
-        out = [r for r in fl.rooms if any(name_eq(t, nm) for t in r["texts"]) and any(name_eq(t, no) for t in r["texts"])]
-        if out:
-            return out
     return [r for r in fl.rooms if any(name_eq(t, label) for t in r["texts"])]
 
 
@@ -505,8 +519,8 @@ def answer(ctx, q) -> Answer:
                 return abstain(ROUTE, f"room '{q.label}' not unique")
             note = f"rooms labelled '{q.label}'"
         elif q.obj == "room" and q.variant == "total":
-            rooms_used = [r for r in fl.rooms if r["name"]]
-            note = "all labelled room shapes"
+            rooms_used = list(fl.rooms)
+            note = "all room shapes"
         else:
             return abstain(ROUTE, "area query not understood")
         if not rooms_used:
