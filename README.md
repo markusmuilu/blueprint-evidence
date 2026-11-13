@@ -91,7 +91,38 @@ dev failures only.
 
 ## Results
 
-RESULTS_PLACEHOLDER
+Produced by `eval.py` (dev: 5,289 questions, test: 2,701). Accuracy counts an abstention as wrong;
+coverage is the share answered; precision is correct / answered. Cost is $0.0000 per question on every
+row, because no route calls a model. "with --prior" adds the labelled dev-majority baseline on raster
+questions that have no detector (it changes only the cubicasa5k rows).
+
+| source | type | dev n | dev accuracy | dev coverage | test n | test accuracy | test coverage | test precision | test accuracy with --prior |
+|---|---|---|---|---|---|---|---|---|---|
+| cubicasa5k | count | 2908 | 10.0% | 11.3% | 1362 | 10.6% | 11.2% | 94.7% | 54.5% |
+| **cubicasa5k** | **ALL** | 2908 | 10.0% | 11.3% | 1362 | 10.6% | 11.2% | 94.7% | 54.5% |
+| ifc_bench | text | 214 | 0.5% | 2.3% | 35 | 0.0% | 0.0% | 0.0% | 0.0% |
+| **ifc_bench** | **ALL** | 214 | 0.5% | 2.3% | 35 | 0.0% | 0.0% | 0.0% | 0.0% |
+| ifc_models | area | 266 | 99.2% | 99.2% | 580 | 100.0% | 100.0% | 100.0% | 100.0% |
+| ifc_models | count | 103 | 84.5% | 84.5% | 50 | 100.0% | 100.0% | 100.0% | 100.0% |
+| ifc_models | length | 16 | 87.5% | 87.5% | 0 | - | - | - | - |
+| ifc_models | volume | 34 | 88.2% | 88.2% | 0 | - | - | - | - |
+| **ifc_models** | **ALL** | 419 | 94.3% | 94.3% | 630 | 100.0% | 100.0% | 100.0% | 100.0% |
+| opening_design | area | 9 | 0.0% | 0.0% | 0 | - | - | - | - |
+| opening_design | count | 22 | 68.2% | 68.2% | 17 | 0.0% | 0.0% | 0.0% | 0.0% |
+| opening_design | text | 13 | 38.5% | 38.5% | 3 | 0.0% | 0.0% | 0.0% | 0.0% |
+| **opening_design** | **ALL** | 44 | 45.5% | 45.5% | 20 | 0.0% | 0.0% | 0.0% | 0.0% |
+| swiss_dwellings | area | 536 | 98.1% | 100.0% | 208 | 100.0% | 100.0% | 100.0% | 100.0% |
+| swiss_dwellings | count | 1168 | 100.0% | 100.0% | 446 | 100.0% | 100.0% | 100.0% | 100.0% |
+| **swiss_dwellings** | **ALL** | 1704 | 99.4% | 100.0% | 654 | 100.0% | 100.0% | 100.0% | 100.0% |
+| **ALL** | **ALL** | 5289 | 45.4% | 46.4% | 2701 | 52.9% | 53.2% | 99.4% | 75.0% |
+
+Per object on CubiCasa test, for scale: storeys (the one CV detector) 144/152 correct. With `--prior`,
+kitchens 94/94, toilets 92/152, sinks 72/148, windows 20/152, doors 14/120: the prior is only strong
+where nearly every plan has the same answer.
+
+Why some cells are 0%: opening_design test is the CTR drawing set, whose schedule layout the parser does
+not read yet; ifc_bench answers are long free-form tables and the router abstains on them. The dev
+ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the dataset.
 
 ## Limits, stated plainly
 
