@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blueprint Evidence</title>
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23161b22'/%3E%3Cpath d='M4 4h5l3 3v5H4z' fill='none' stroke='%2385b7e0' stroke-width='1.5'/%3E%3C/svg%3E">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-ask" viewBox="0 0 16 16"><path d="M3 2.75h6.5L13 6.25v7H3z"/><path d="M9.5 2.75v3.5H13"/><path d="M5.5 9h5M5.5 11h3"/></symbol>
+    <symbol id="i-results" viewBox="0 0 16 16"><path d="M2.75 13.25h10.5"/><path d="M4.5 13.25V8.5M8 13.25V4.5M11.5 13.25V7"/></symbol>
+    <symbol id="i-library" viewBox="0 0 16 16"><path d="M2.75 3.25h3.5v9.5h-3.5zM6.25 3.25h3.5v9.5h-3.5z"/><path d="M10.4 3.6l2.9-.8 2 9.1-2.9.8z" transform="translate(-1.2 .4)"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 16 16"><path d="M8 10.5V2.75M5 5.5l3-2.75 3 2.75"/><path d="M2.75 10v3.25h10.5V10"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.25"/><path d="M10.25 10.25l3 3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3.5 8h9"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.75 6V2.75H6M10 2.75h3.25V6M13.25 10v3.25H10M6 13.25H2.75V10"/></symbol>
+    <symbol id="i-header" viewBox="0 0 16 16"><path d="M2.75 2.75h10.5v10.5H2.75z"/><path d="M2.75 6.25h10.5"/></symbol>
+    <symbol id="i-external" viewBox="0 0 16 16"><path d="M9 2.75h4.25V7M13.25 2.75L7.5 8.5"/><path d="M11 9.5v3.75H2.75V5H6.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><path d="M5.75 5.75h7.5v7.5h-7.5z"/><path d="M10.25 5.75V2.75h-7.5v7.5h3"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.75v7.75M5 7.75l3 2.75 3-2.75"/><path d="M2.75 13.25h10.5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M12.75 7.5a4.75 4.75 0 1 1-1.4-3.35"/><path d="M12.25 2.5v2.75H9.5"/></symbol>
+    <symbol id="i-proven" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M5.5 8.25l1.75 1.75 3.25-3.5"/></symbol>
+    <symbol id="i-estimate" viewBox="0 0 16 16"><path d="M8 2.5l5.75 10.25H2.25z"/><path d="M8 6.75v2.5M8 11.1v.15"/></symbol>
+    <symbol id="i-cannot" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5"/></symbol>
+    <symbol id="i-status" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M8 7.25v4M8 4.9v.15"/></symbol>
+  </defs>
+</svg>
+
+<div class="shell">
+  <nav class="rail" aria-label="Main">
+    <div class="mark" aria-hidden="true"><svg class="ico" width="20" height="20"><use href="#i-ask"/></svg></div>
+    <button class="rail-btn" data-view="ask" aria-current="page" aria-label="Ask a drawing" data-tip="Ask"><svg class="ico"><use href="#i-ask"/></svg></button>
+    <button class="rail-btn" data-view="results" aria-label="Results" data-tip="Results"><svg class="ico"><use href="#i-results"/></svg></button>
+    <button class="rail-btn" id="pickerToggle" aria-label="Show or hide the drawing library" aria-expanded="true" aria-controls="picker" data-tip="Drawings"><svg class="ico"><use href="#i-library"/></svg></button>
+    <div class="rail-gap"></div>
+    <button class="rail-btn" id="statusBtn" aria-label="System status" data-tip="Status"><svg class="ico"><use href="#i-status"/></svg></button>
+  </nav>
+
+  <!-- ============================================================ ASK -->
+  <section class="view view-ask" id="view-ask">
+    <aside class="picker" id="picker" aria-label="Drawings">
+      <div class="picker-head">
+        <h2 class="h-panel">Drawings</h2>
+        <span class="meta mono" id="drawCount"></span>
+      </div>
+
+      <label class="drop" id="drop">
+        <input type="file" id="fileInput" multiple accept=".pdf,.dxf,.ifc,.png,.jpg,.jpeg,.tif,.tiff">
+        <svg class="ico"><use href="#i-upload"/></svg>
+        <span><strong>Upload a drawing</strong><br><span class="meta">PDF, DXF, IFC or PNG. Add a PDF with its DXF twin to use both.</span></span>
+      </label>
+
+      <div class="field">
+        <label for="search" class="label">Search the dataset</label>
+        <div class="input-icon">
+          <svg class="ico"><use href="#i-search"/></svg>
+          <input id="search" type="search" placeholder="site1000, colorful-11960, esplanades" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="sources" id="sources" role="radiogroup" aria-label="Source"></div>
+
+      <ul class="draw-list" id="drawList" aria-label="Dataset drawings"></ul>
+      <button class="btn btn-quiet btn-block" id="moreBtn" hidden>Show more</button>
+    </aside>
+
+    <main class="work">
+      <header class="workbar">
+        <div class="drawing-head">
+          <h1 class="h-title mono" id="drawTitle">No drawing selected</h1>
+          <p class="meta" id="drawMeta">Pick one from the library or upload your own.</p>
+        </div>
+
+        <form class="ask" id="askForm" autocomplete="off">
+          <label for="question" class="label">Question</label>
+          <div class="ask-row">
+            <input id="question" name="question" type="text" placeholder="How many doors are drawn on this floor plan?" required maxlength="1000">
+            <button class="btn btn-primary" id="askBtn" type="submit">Ask</button>
+          </div>
+          <div class="ask-opts">
+            <label class="check"><input type="checkbox" id="pdfOnly"> <span>Ignore CAD and BIM twins (answer from the PDF alone)</span></label>
+          </div>
+        </form>
+
+        <div class="chips-block">
+          <span class="label chips-label">Examples</span>
+          <div class="chips" id="exampleChips" role="group" aria-label="Example questions"></div>
+          <details class="dq" id="drawingQs" hidden>
+            <summary><span id="dqCount">Questions from the dataset</span></summary>
+            <ul class="dq-list" id="dqList"></ul>
+          </details>
+        </div>
+      </header>
+
+      <div class="viewer" id="viewer" tabindex="0" aria-label="Drawing viewer. Drag to pan, scroll or plus and minus keys to zoom, zero to fit.">
+        <div class="stage" id="stage">
+          <img id="viewImg" alt="" draggable="false">
+          <div class="marks" id="marks" aria-hidden="true"></div>
+        </div>
+
+        <div class="viewer-empty" id="viewerEmpty">
+          <p class="empty-title">Choose a drawing to begin</p>
+          <p class="meta">The answer will be drawn on it: counted items boxed and numbered, measured rooms filled with their area.</p>
+        </div>
+
+        <div class="viewer-busy" id="viewerBusy" hidden role="status" aria-live="polite">
+          <div class="busy-bar"><span></span></div>
+          <p class="mono meta" id="busyText">Reading the drawing</p>
+        </div>
+
+        <div class="viewer-tools" role="toolbar" aria-label="Viewer">
+          <span class="layer-tag mono" id="layerTag">Drawing</span>
+          <button class="tool" id="zoomOut" aria-label="Zoom out"><svg class="ico"><use href="#i-minus"/></svg></button>
+          <output class="zoom mono" id="zoomLvl" aria-live="off">100%</output>
+          <button class="tool" id="zoomIn" aria-label="Zoom in"><svg class="ico"><use href="#i-plus"/></svg></button>
+          <button class="tool" id="zoomFit" aria-label="Fit to view"><svg class="ico"><use href="#i-fit"/></svg></button>
+          <button class="tool" id="headerToggle" aria-pressed="false" aria-label="Show the evidence header strip" disabled><svg class="ico"><use href="#i-header"/></svg></button>
+          <a class="tool" id="openImg" aria-label="Open image in a new tab" target="_blank" rel="noopener" hidden><svg class="ico"><use href="#i-external"/></svg></a>
+        </div>
+      </div>
+    </main>
+
+    <aside class="detail" id="detail" aria-label="Answer" aria-live="polite">
+      <div class="detail-empty" id="detailEmpty">
+        <h2 class="h-panel">Answer</h2>
+        <p class="meta">Ask a question to see the number, the part of the drawing it comes from, and each step that supports it. Every step is numbered so you can check it against the drawing.</p>
+      </div>
+      <div id="detailBody" hidden></div>
+    </aside>
+  </section>
+
+  <!-- ============================================================ RESULTS -->
+  <section class="view view-results" id="view-results" hidden>
+    <div class="results">
+      <header class="results-head">
+        <div>
+          <h1 class="h-page">Results</h1>
+          <p class="meta" id="runHeader"></p>
+        </div>
+        <div class="field field-inline">
+          <label for="runSel" class="label">Eval run</label>
+          <select id="runSel"></select>
+        </div>
+      </header>
+
+      <p class="headline" id="runHeadline"></p>
+
+      <div class="results-grid">
+        <section class="panel" aria-labelledby="hSrc">
+          <h2 class="h-panel" id="hSrc">By source and question type</h2>
+          <div class="table-wrap"><table class="tbl" id="srcTable"></table></div>
+        </section>
+
+        <div class="results-side">
+          <section class="panel" aria-labelledby="hChart">
+            <div class="panel-head">
+              <h2 class="h-panel" id="hChart">Accuracy by source</h2>
+              <div class="seg" role="radiogroup" aria-label="Measure" id="measureSeg">
+                <button role="radio" aria-checked="true" data-m="accuracy">Accuracy</button>
+                <button role="radio" aria-checked="false" data-m="coverage">Coverage</button>
+                <button role="radio" aria-checked="false" data-m="precision">Precision</button>
+              </div>
+            </div>
+            <div class="chart" id="chart"></div>
+            <div class="tip mono" id="chartTip" hidden></div>
+          </section>
+
+          <section class="panel panel-baseline" aria-labelledby="hBase">
+            <h2 class="h-panel" id="hBase">Naive AI baseline</h2>
+            <p class="value-na mono">Not measured yet</p>
+            <p class="meta">The same test questions sent straight to a general vision model with the drawing attached, scored the same way, with cost per question. It goes in this table when it has run.</p>
+          </section>
+        </div>
+      </div>
+
+      <section class="panel" aria-labelledby="hObj">
+        <div class="panel-head">
+          <h2 class="h-panel" id="hObj">By object</h2>
+          <div class="field field-inline">
+            <label for="objSource" class="label">Source</label>
+            <select id="objSource"></select>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="tbl" id="objTable"></table></div>
+      </section>
+
+      <p class="foot meta">Accuracy counts an abstention as wrong. Coverage is the share of questions answered. Precision is correct answers divided by answered ones. Counts must be exact; areas, lengths and volumes within 2%.</p>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="popover" id="statusPop" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
