@@ -426,7 +426,9 @@ def takeoff_answer(ctx, q, img):
     if pa is None:
         return abstain(ROUTE, "image or OCR unavailable")
     want = set(tk["types"])
-    typed = [r for r in pa.rooms if r.label and takeoff.room_types(r.label) & want]
+    # one-letter labels (S, K) only when printed upper case: OCR noise reads stray strokes as "s"
+    typed = [r for r in pa.rooms if r.label and takeoff.room_types(r.label) & want
+             and not (len(r.label.strip(" .")) == 1 and not r.label.strip(" .").isupper())]
     if not typed:
         read = sorted({r.label for r in pa.rooms if r.label})
         return abstain(ROUTE, f"no room label of type {', '.join(tk['types'])} read upright on the plan "
