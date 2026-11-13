@@ -11,6 +11,7 @@ Space names are matched as "LongName (Name)", "Name" or "LongName".
 """
 from __future__ import annotations
 
+import re
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
@@ -164,6 +165,32 @@ def space_label_variants(sp):
     return {norm(f"{ln} ({n})"), norm(n), norm(ln), norm(f"{n} {ln}")}
 
 
+def storey_of_sheet(M, pdf_path):
+    """The storey whose space labels appear most often in the sheet's text layer. Needs at least two
+    hits and a clear winner; returns (storey or None, how it was decided)."""
+    import pymupdf
+    with pymupdf.open(str(pdf_path)) as doc:
+        text = " ".join(page.get_text() for page in doc)
+    words = set(norm(w) for w in re.split(r"[\s()]+", text) if w)
+    full = norm(text)
+    hits = {}
+    for st in M.storeys:
+        n = 0
+        for sp in M.entities("room"):
+            if M.storey_of(sp) != st:
+                continue
+            nm = norm(sp.Name)
+            if nm and (nm in words or (len(nm) > 3 and nm in full)):
+                n += 1
+        hits[st] = n
+    ranked = sorted(hits.items(), key=lambda kv: -kv[1])
+    if not ranked or ranked[0][1] < 2 or (len(ranked) > 1 and ranked[1][1] >= 0.8 * ranked[0][1]):
+        return None, "space labels on the sheet do not single out one storey: " + ", ".join(
+            f"{st.Name} {n}" for st, n in ranked[:3])
+    st, n = ranked[0]
+    return st, f"sheet shows storey {st.Name} ({n} of its space labels printed on the sheet)"
+
+
 def space_type_label(sp) -> str:
     """The space label that names its type: LongName ('Bathroom 1') when it has one, else Name."""
     for s in (getattr(sp, "LongName", None), sp.Name):
@@ -187,6 +214,12 @@ def answer(ctx, q) -> Answer:
         storey = M.find_storey(q.level)
         if storey is None:
             return abstain(ROUTE, f"storey '{q.level}' not in model")
+    sheet_note = ""
+    if q.variant == "type_sum" and storey is None and ctx.q.ext == "pdf":
+        # a plan sheet shows one storey: find it from the space labels printed on the sheet
+        storey, sheet_note = storey_of_sheet(M, ctx.file)
+        if storey is None:
+            return abstain(ROUTE, f"cannot tell which storey this sheet shows ({sheet_note})")
 
     used, value, note, unit = [], None, "", ""
     if q.measure == "count":
@@ -264,7 +297,7 @@ def answer(ctx, q) -> Answer:
         ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
         for it, (e, _) in zip(ans.items, used):
             it["guid"] = e.GlobalId
-        ans.explanation = expl + f" Source: {path.name}, {note}."
+        ans.explanation = expl + f" Source: {path.name}, {note}" + (f"; {sheet_note}." if sheet_note else ".")
         value = ans.value
     if ctx.evidence:
         ans.evidence = render(ctx, M, storey, used, q, value, unit, note)

@@ -274,6 +274,14 @@ def measure_regions(img_bgr, rooms: list[Room], others: list[tuple], toks, k: in
     return rooms
 
 
+def rectangularity(r) -> float:
+    """Region pixels / area of its minimum rotated rectangle: 1.0 for a clean rectangular room."""
+    if r.contour is None or not r.pixels:
+        return 0.0
+    (_, _), (w, h), _ = cv2.minAreaRect(r.contour)
+    return float(r.pixels / max(w * h, 1.0))
+
+
 # ---------------------------------------------------------------- scale
 
 @dataclass

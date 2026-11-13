@@ -114,7 +114,8 @@ def main():
             st["w2"] += abs(err) <= 0.02
             st["w5"] += abs(err) <= 0.05
             rows.append({"file": f.name, "label": r.label, "printed": r.printed, "pred": round(pred, 2),
-                         "err": round(err, 4), "seed": r.seed, "n_scale": len(sc.rooms), "regions": name})
+                         "err": round(err, 4), "seed": r.seed, "n_scale": len(sc.rooms), "regions": name,
+                         "rect": round(RA.rectangularity(r), 3), "spread": round(sc.spread, 4)})
         st["plans_scaled"] += got
         rows_all += rows
         if args.debug:
