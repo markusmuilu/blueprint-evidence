@@ -3,6 +3,39 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
+
+Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the
+PDF. New route `pdf-vector` (`bpqa/pdfvec.py`, `bpqa/routes/pdf_vector.py`), used when a PDF has no
+DXF/IFC twin, and everywhere with `eval.py --pdf-only`.
+
+Developed on dev floors against the DXF twin (`tools/pdf_vs_dxf.py`: share of dev floors where the PDF
+count equals the DXF count; the sample grew from 60 to 120 to 200 floors as the rules settled). Steps
+that moved it:
+
+| step | doors | windows | toilets | washbasins | bathtubs | showers | room areas within 2% |
+|---|---|---|---|---|---|---|---|
+| first pass (60 floors) | 86.7% | 71.7% | 96.7% | 86.7% | 83.3% | 86.7% | 1738/1794 |
+| room fills must be light (wall hatch tiles had won the room-style vote) (60) | 91.7% | 85.0% | 98.3% | 90.0% | 86.7% | 90.0% | 1838/1838 |
+| windows: frames outside room shapes, square and thick-wall frames allowed (60) | | 100% | | | | | |
+| doors: style chosen from thin quads at swing arcs, then all quads of that style (60) | 100% | | | | | | |
+| fixtures measured in their rotated box; tub, basin size gates from the data; trays need a drain circle (120) | | | 99.2% | 98.3% | 100% | 97.5% | 3391/3391 |
+| fixture line style from basins and tubs (a round column in wall style was a "toilet") (200) | 99.5% | 100% | 100% | 99.0% | 100% | 98.5% | 5760/5760 |
+
+Other changes: room shapes keep holes (a balcony round the building is a ring) for containment, while
+the area is the drawn outline, which is what the dataset's room areas follow; unnamed numbered rooms
+count as indoor if any shape in the fixture line style lies inside (kitchen counters, as FIXTURE
+polylines do in the DXF route); IFC-style labels "NAME (number)" match name and number in the same
+shape; scale-bar tick labels are taken as centred on their ticks (IfcConvert prints "5 m" centred,
+which gave a 2.5% scale conflict before).
+
+Scale was set on every vector PDF: Swiss by scale bar + printed ratio (plus room-area labels where the
+sheet prints them), IFC plan PDFs by scale bar + printed ratio. No Swiss or IFC PDF needed the
+dimension-string method; it is implemented but untested on real dimension chains.
+
+Result, `eval.py --pdf-only` (dev, then test once): all PDF questions 94.4% / 97.1% accuracy,
+98.7% / 98.8% precision; Swiss 98.6% / 98.8% (DXF route on dev Swiss: 98.9%). Table in README.
+
 ## 2026-11-13 night: checking layer, overlap check, detector pipeline
 
 ### Checking layer (`bpqa/checks.py`)

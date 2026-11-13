@@ -27,6 +27,8 @@ drawing  --> router: cheapest route that can prove the answer
                1. dxf-geometry  DXF layers of the same drawing (Swiss Dwellings)
                2. ifc           IFC entities, storey containment, quantity sets, space geometry
                3. pdf-text      text layer and schedules (door schedule rows)
+               3b. pdf-vector   the PDF's own linework, when no DXF/IFC twin exists (or --pdf-only):
+                                room shapes, scale, doors, windows, fixtures; scanned PDFs abstain
                4. raster        scans (CubiCasa): panel segmentation, room labels read by local OCR,
                                 a trained detector for fixtures, doors and windows;
                                 abstains where the count is not provable
@@ -82,6 +84,46 @@ check that fired is listed in the answer JSON (`checks`) and drawn in the eviden
 or red FAIL. On CubiCasa test it raised precision from 93.5% to 95.7% at a cost of one point of
 coverage (CHANGELOG.md has the per-check table). `eval.py --no-checks` turns it off.
 
+### PDF without a twin (`pdf-vector`)
+
+If a PDF comes without its DXF or IFC twin (or `--pdf-only` tells the router to ignore twins), the
+`pdf-vector` route answers from the PDF's own vector paths and text (`bpqa/pdfvec.py`,
+`bpqa/routes/pdf_vector.py`). A page that is mostly one image with little linework is "scanned" and
+abstains. The rules are found from the drawing, not hard-coded per style where that was possible:
+
+| question | rule |
+|---|---|
+| scale | printed ratio ("1:100", "Massstab", "Echelle", "Scala", "Scale") on a page of real paper size; scale bar (tick numbers with "m" on one baseline, fitted linearly); room-area labels ("12.5 m2") inside room shapes; dimension strings on a parallel line. Agreement within 1.5% raises confidence; disagreement over 2% means areas abstain |
+| rooms | closed light fills grouped by stroke style; the group whose shapes hold the most labels is the room style. Labels attach to the smallest shape containing them (as in the DXF route). Area is the drawn outline x (metres per point)^2 |
+| apartments | unit labels; unit outlines are the coloured closed polylines |
+| doors | among thin unfilled four-corner shapes (the opening across the wall), the stroke style that touches door-swing arcs; then every unfilled four-corner shape in that style |
+| windows | a light-filled frame outside every room shape (windows sit in the walls) with two glazing lines along it |
+| toilets, washbasins | ellipse outlines (many segments, filling pi/4 of their rotated box); a small drain circle inside makes it a washbasin; only in the line style that basins and tubs use |
+| bathtubs, showers | many-segment rounded rectangles; four-corner trays with a drain circle |
+| when to answer | object counts only when the door convention is recognised (openings with swing arcs); without it a 0 would not be proof |
+
+Every answer draws its evidence on the rendered PDF page from the same shapes that produced it, and
+boxes the text that set the scale in blue. `tools/pdf_vs_dxf.py` compares what the route reads with the
+DXF twin, per object, on dev floors.
+
+Results with `eval.py --pdf-only` (PDF questions only, twins ignored; full dataset, same split):
+
+| source | type | dev n | dev accuracy | dev coverage | dev precision | test n | test accuracy | test coverage | test precision |
+|---|---|---|---|---|---|---|---|---|---|
+| swiss_dwellings | count | 17812 | 99.7% | 99.9% | 99.8% | 7756 | 99.8% | 99.9% | 99.9% |
+| swiss_dwellings | area | 8364 | 96.4% | 99.9% | 96.5% | 3652 | 96.8% | 100.0% | 96.8% |
+| ifc_models (plan PDFs) | area | 1208 | 54.9% | 57.5% | 95.5% | 718 | 87.5% | 89.6% | 97.7% |
+| ifc_models (plan PDFs) | count, length, volume | 652 | 0% | 0% | - | 116 | 0% | 0% | - |
+| opening_design | all | 44 | 45.5% | 45.5% | 100% | 20 | 0% | 0% | - |
+| **all PDFs** | **all** | 28080 | 94.4% | 95.7% | 98.7% | 12262 | 97.1% | 98.2% | 98.8% |
+
+For comparison, the DXF route on the same dev Swiss questions: count 100.0%, area 96.7%, all 98.9%
+(pdf-only: 98.6%). Most remaining Swiss area misses are shared with the DXF route (gold totals that
+neither route reproduces). IFC plan PDFs: room areas only (the drawn footprint vs. the model's
+`NetFloorArea`; corridors differ most); counts abstain because IfcConvert draws door swings as
+flattened polylines, so the door convention is not recognised. opening_design answers come from
+`pdf-text` (schedules); `pdf-vector` abstains on all of them.
+
 ### Detector
 
 Toilets, sinks, showers, bathtubs, doors and windows on the scans are counted by a small YOLO detector
@@ -112,7 +154,8 @@ set STOA_DATA=C:\path\to\junction-dataset-preview
 ```
 
 `eval.py` options: `--split dev|test|all`, `--sources swiss_dwellings,ifc_models`, `--limit N`,
-`--evidence` (render overlays into `out/evidence/`), `--prior` (see below). Results go to
+`--evidence` (render overlays into `out/evidence/`), `--prior` (see below), `--pdf-only` (PDF questions
+only, DXF/IFC twins ignored; `ask.py` takes it too). Results go to
 `out/<split>/answers.jsonl`, `summary.txt` and `summary.json`.
 
 One question:
