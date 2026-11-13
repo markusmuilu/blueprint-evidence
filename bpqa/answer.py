@@ -16,6 +16,7 @@ class Answer:
     cost_usd: float = 0.0                # 0 for every no-model route
     abstain: str | None = None           # reason, when no answer is given
     checks: list = field(default_factory=list)  # consistency checks run on the answer (bpqa/checks.py)
+    tier: str = ""                       # "estimate" = a model's reading (nemotron route); "" = derived by a route
 
     @property
     def answered(self) -> bool:

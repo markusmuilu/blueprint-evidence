@@ -59,18 +59,19 @@ def prepare_image(img: Image.Image, max_side: int = MAX_SIDE) -> tuple[bytes, tu
     return buf.getvalue(), img.size, orig
 
 
-def _cache_key(model: str, prompt: str, img_hash: str, max_tokens: int, system: str) -> str:
-    return hashlib.sha256(json.dumps([model, system, prompt, img_hash, max_tokens]).encode()).hexdigest()
+def _cache_key(model: str, prompt: str, img_hash: str, max_tokens: int, system: str, think: bool = True) -> str:
+    parts = [model, system, prompt, img_hash, max_tokens] + ([] if think else ["nothink"])
+    return hashlib.sha256(json.dumps(parts).encode()).hexdigest()
 
 
 def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: int = MAX_TOKENS,
-         model: str = MODEL, cache: bool = True) -> dict:
+         model: str = MODEL, cache: bool = True, think: bool = True) -> dict:
     """One request. Returns {content, prompt_tokens, completion_tokens, latency_s, cached, error}.
 
     `latency_s` is the wall time of the original (uncached) call; a cache hit returns it unchanged.
     """
     img_hash = hashlib.sha256(png).hexdigest() if png else ""
-    ck = _cache_key(model, prompt, img_hash, max_tokens, system)
+    ck = _cache_key(model, prompt, img_hash, max_tokens, system, think)
     path = CACHE_DIR / f"{ck}.json"
     if cache and path.exists():
         r = json.loads(path.read_text(encoding="utf-8"))
@@ -86,6 +87,8 @@ def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: in
                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}]
     msgs = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": content}]
     body = {"model": model, "messages": msgs, "max_tokens": max_tokens, "temperature": 0}
+    if not think:                                     # no reasoning phase: short, cheap, fine for parsing tasks
+        body["chat_template_kwargs"] = {"enable_thinking": False}
     err = None
     for attempt in range(6):
         with _lock:                                  # throttle: one request start per MIN_INTERVAL
