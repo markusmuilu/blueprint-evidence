@@ -91,10 +91,13 @@ def answer(ctx, q) -> Answer:
                                   note="each numbered box is one separately scanned floor panel")
         return ans
 
+    first = None
     if q.obj in ROOM_PATTERNS:
-        return room_labels(ctx, q, img)
-    if q.obj in FIXTURE_HEADS:
-        return fixture_count(ctx, q, img)
+        first = room_labels(ctx, q, img)
+    elif q.obj in FIXTURE_HEADS:
+        first = fixture_count(ctx, q, img)
+    if first is not None and (first.answered or not getattr(ctx, "prior", False)):
+        return first
 
     if getattr(ctx, "prior", False):
         pr = priors().get(f"{ctx.q.source}/{q.obj}")
@@ -107,7 +110,7 @@ def answer(ctx, q) -> Answer:
                                       f"Answer: {pr['value']} (PRIOR, not visual proof)   route: raster-prior",
                                       note=ans.explanation)
             return ans
-    return abstain(ROUTE, f"no classical-CV detector for {q.obj} yet")
+    return first or abstain(ROUTE, f"no classical-CV detector for {q.obj} yet")
 
 
 LABEL_ROUTE = "raster-ocr-labels"

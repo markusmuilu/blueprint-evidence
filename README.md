@@ -27,7 +27,8 @@ drawing  --> router: cheapest route that can prove the answer
                1. dxf-geometry  DXF layers of the same drawing (Swiss Dwellings)
                2. ifc           IFC entities, storey containment, quantity sets, space geometry
                3. pdf-text      text layer and schedules (door schedule rows)
-               4. raster-cv     classical CV on scans (CubiCasa); abstains where it has no detector
+               4. raster        scans (CubiCasa): panel segmentation, room labels read by local OCR;
+                                abstains where it has no detector or the count is not provable
           --> answer JSON {value, unit, route, confidence, evidence, explanation, items}
           --> evidence PNG: counted items boxed and numbered, measured rooms filled with their area
 ```
@@ -55,8 +56,18 @@ separate stairs), filtered by storey containment. Room areas come from `NetFloor
 quantity sets, otherwise from the footprint of the space geometry. Wall length, side area and volume,
 and slab volume are sums of quantity-set values, converted with the project units.
 
-Raster: multi-storey CubiCasa plans paste each floor as its own scan onto a white canvas, so the storey
-count is the number of large non-white panels. Nothing else on the scans has a detector yet.
+Raster (CubiCasa scans):
+
+| question | rule |
+|---|---|
+| storeys | multi-storey plans paste each floor as its own scan onto a white canvas; count the large non-white panels |
+| bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE) and a few Swedish ones; apartment summaries like "3H+K+S" are skipped |
+| when to answer | kitchen, bathroom, sauna only when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels |
+| toilets, sinks, showers, doors, windows | no detector; abstain |
+
+Every counted label is boxed and numbered on the scan; the other room labels that were read are boxed in
+grey, so a zero answer can be checked too. The OCR is the slow part (about 5-15 s per image for eight
+passes); `tools/ocr_cache.py` fills the cache in `out/ocr/` up front.
 
 ## Run it
 
@@ -94,12 +105,12 @@ dev failures only.
 Produced by `eval.py` (dev: 5,289 questions, test: 2,701). Accuracy counts an abstention as wrong;
 coverage is the share answered; precision is correct / answered. Cost is $0.0000 per question on every
 row, because no route calls a model. "with --prior" adds the labelled dev-majority baseline on raster
-questions that have no detector (it changes only the cubicasa5k rows).
+questions where the raster route abstains (it changes only the cubicasa5k rows).
 
 | source | type | dev n | dev accuracy | dev coverage | test n | test accuracy | test coverage | test precision | test accuracy with --prior |
 |---|---|---|---|---|---|---|---|---|---|
-| cubicasa5k | count | 2908 | 10.0% | 11.3% | 1362 | 10.6% | 11.2% | 94.7% | 54.5% |
-| **cubicasa5k** | **ALL** | 2908 | 10.0% | 11.3% | 1362 | 10.6% | 11.2% | 94.7% | 54.5% |
+| cubicasa5k | count | 2908 | 28.7% | 32.2% | 1362 | 29.4% | 31.4% | 93.5% | 61.2% |
+| **cubicasa5k** | **ALL** | 2908 | 28.7% | 32.2% | 1362 | 29.4% | 31.4% | 93.5% | 61.2% |
 | ifc_bench | text | 214 | 0.5% | 2.3% | 35 | 0.0% | 0.0% | 0.0% | 0.0% |
 | **ifc_bench** | **ALL** | 214 | 0.5% | 2.3% | 35 | 0.0% | 0.0% | 0.0% | 0.0% |
 | ifc_models | area | 266 | 99.2% | 99.2% | 580 | 100.0% | 100.0% | 100.0% | 100.0% |
@@ -114,11 +125,25 @@ questions that have no detector (it changes only the cubicasa5k rows).
 | swiss_dwellings | area | 536 | 98.1% | 100.0% | 208 | 100.0% | 100.0% | 100.0% | 100.0% |
 | swiss_dwellings | count | 1168 | 100.0% | 100.0% | 446 | 100.0% | 100.0% | 100.0% | 100.0% |
 | **swiss_dwellings** | **ALL** | 1704 | 99.4% | 100.0% | 654 | 100.0% | 100.0% | 100.0% | 100.0% |
-| **ALL** | **ALL** | 5289 | 45.4% | 46.4% | 2701 | 52.9% | 53.2% | 99.4% | 75.0% |
+| **ALL** | **ALL** | 5289 | 55.7% | 57.9% | 2701 | 62.3% | 63.4% | 98.4% | 78.4% |
 
-Per object on CubiCasa test, for scale: storeys (the one CV detector) 144/152 correct. With `--prior`,
-kitchens 94/94, toilets 92/152, sinks 72/148, windows 20/152, doors 14/120: the prior is only strong
-where nearly every plan has the same answer.
+CubiCasa per question type (EN and FI together; precision = correct / answered):
+
+| object | dev n | dev accuracy | dev coverage | dev precision | test n | test accuracy | test coverage | test precision |
+|---|---|---|---|---|---|---|---|---|
+| storey (panels) | 330 | 88.5% | 100% | 88.5% | 152 | 94.7% | 100% | 94.7% |
+| balcony (labels) | 94 | 74.5% | 80.9% | 92.1% | 42 | 76.2% | 76.2% | 100% |
+| WC room (labels) | 150 | 74.7% | 82.7% | 90.3% | 74 | 75.7% | 78.4% | 96.6% |
+| bedroom (labels) | 206 | 59.2% | 71.8% | 82.4% | 102 | 54.9% | 68.6% | 80.0% |
+| kitchen (labels) | 228 | 50.9% | 55.3% | 92.1% | 94 | 57.4% | 57.4% | 100% |
+| bathroom (labels) | 148 | 54.1% | 55.4% | 97.6% | 74 | 45.9% | 48.6% | 94.4% |
+| sauna (labels) | 222 | 19.8% | 22.5% | 88.0% | 108 | 22.2% | 24.1% | 92.3% |
+| toilet, sink, shower/bath, door, window | 1530 | 0% | 0% | - | 716 | 0% | 0% | - |
+
+The answer policy above was set on dev; test was run once afterwards. Bedrooms are the weakest answered
+type (80% precise): plans that show part of a neighbouring flat add its MH labels, and a missed label
+under-counts. With `--prior` on test, for scale: kitchens 94/94, toilets 92/152, sinks 72/148, windows
+20/152, doors 14/120: the prior is only strong where nearly every plan has the same answer.
 
 Why some cells are 0%: opening_design test is the CTR drawing set, whose schedule layout the parser does
 not read yet; ifc_bench answers are long free-form tables and the router abstains on them. The dev
@@ -126,13 +151,20 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 ## Limits, stated plainly
 
-- CubiCasa scans are 53% of the questions and only the storey count has a real detector. Everything else
-  on scans abstains. `--prior` answers those with the most common dev answer per object type, as a
+- CubiCasa scans are 53% of the questions. Storeys and the six room-type counts have methods; toilets,
+  sinks, showers/baths, doors and windows (53% of CubiCasa questions) still abstain. `--prior` answers those with the most common dev answer per object type, as a
   labelled baseline (route `raster-prior`, evidence says "PRIOR, not visual proof"). It is in the table
   so a real detector has a number to beat, not because it is a method.
 - One raster detector was tried and not shipped: counting ellipse-like inner contours as toilets and
   sinks. On dev it matched the exact toilet count on 2 of 164 plans (correlation 0.34), far below the
   65% a constant answer gets. Text glyphs and door swings produce too many ellipses.
+- A second fixture attempt was not shipped either: candidates are closed white regions (the inside of a
+  bowl, basin or tub) and a small MLP on HOG features is trained from dev image counts only (multiple-
+  instance counting). Cross-validated on dev it gets the exact toilet count on 31% of plans, sinks 19%,
+  showers/baths 27%; small rooms, text and hob symbols outrank the toilet bowls. See `CHANGELOG.md`.
+- Room counts follow the labels printed on the plan. An unlabelled open kitchen, a sauna marked only by
+  its stove, or a flat partly cut off by the scan edge is not recoverable this way, which is why those
+  cases abstain instead of answering.
 - The test split holds few drawings for some sources: ifc_models test is a single model (Esplanades,
   630 questions), so its 100% says the rules transfer to one unseen model, not to IFC in general.
 - Compound and breakdown questions ("which types and how many of each", "on level 1" without quotes)
@@ -148,8 +180,11 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 ## Next steps
 
-1. Raster detectors for the CubiCasa counts, trained or templated per symbol (toilet, sink, door swing,
-   window), with the same boxed-and-numbered evidence. This is where most of the remaining score is.
+1. Fixture, door and window detectors for the CubiCasa scans need box-level training labels; image
+   counts from 165 dev plans were not enough. If the public CubiCasa5K annotations may be used (asked of
+   Stoa), a small detector trained on them would cover all five remaining types with boxes as evidence;
+   the test images would have to be excluded from that training set. Without it, a few hundred
+   hand-drawn boxes would be the minimum.
 2. A cheap vision-LLM route behind the router, called only when no structured route exists, with its
    answer required to point at regions that are then drawn as evidence.
 3. Generalise the schedule parser (column detection from header words) to cover other door, window and
