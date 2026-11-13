@@ -192,8 +192,12 @@ def describe(tk: dict) -> str:
 
 
 def wall_reason(tk: dict) -> str:
-    return ("wall area needs room heights and wall openings, which a floor plan does not carry; "
-            "only floor areas are answered (ask for the floor area of the same rooms)")
+    return ("wall area needs room heights and the wall openings; this build answers floor areas only "
+            "(ask for the floor area of the same rooms)")
+
+
+def answer_line(value, n_rooms: int, route: str) -> str:
+    return f"Answer: {value:.2f} m2 total over {n_rooms} room(s), floor area only   route: {route} (cost $0)"
 
 
 def matches(name: str | None, tk: dict) -> bool:
@@ -234,6 +238,9 @@ def summary(rows: list[dict], tk: dict, unit: str = "m2") -> tuple[float, list[d
         if r.get("number"):
             it["number"] = r["number"]
         items.append(it)
-    lines = " + ".join(f"{r['label']} {r['area']:.2f}" for r in rows[:20]) + (" + ..." if len(rows) > 20 else "")
+    def tag(r):
+        no = r.get("number")
+        return f"{r['label']} ({no})" if no and no not in r["label"] else r["label"]
+    lines = " + ".join(f"{tag(r)} {r['area']:.2f}" for r in rows[:20]) + (" + ..." if len(rows) > 20 else "")
     expl = f"{total:.2f} {unit} = {lines}. {describe(tk)}."
     return total, items, expl

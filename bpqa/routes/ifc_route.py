@@ -23,6 +23,7 @@ import ifcopenshell.util.unit as UU
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
+from .. import takeoff
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
 
@@ -163,6 +164,19 @@ def space_label_variants(sp):
     return {norm(f"{ln} ({n})"), norm(n), norm(ln), norm(f"{n} {ln}")}
 
 
+def space_type_label(sp) -> str:
+    """The space label that names its type: LongName ('Bathroom 1') when it has one, else Name."""
+    for s in (getattr(sp, "LongName", None), sp.Name):
+        if s and takeoff.room_types(s):
+            return s
+    return getattr(sp, "LongName", None) or sp.Name or ""
+
+
+def space_display(sp) -> str:
+    n, ln = sp.Name or "", getattr(sp, "LongName", None) or ""
+    return f"{ln} ({n})" if ln and n and ln != n else (ln or n)
+
+
 def answer(ctx, q) -> Answer:
     path = ctx.model_ifc()
     if path is None:
@@ -192,6 +206,13 @@ def answer(ctx, q) -> Answer:
             spaces = M.entities("room")
             if storey is not None:
                 spaces = [s for s in spaces if M.storey_of(s) == storey]
+            if q.variant == "type_sum":
+                tk = q.extra["takeoff"]
+                spaces = [sp for sp in spaces if takeoff.room_types(space_type_label(sp)) & set(tk["types"])]
+                if not spaces:
+                    names = sorted({space_type_label(sp) for sp in M.entities("room")} - {""})
+                    return abstain(ROUTE, f"no IfcSpace of type {', '.join(tk['types'])} "
+                                          f"(space names: {', '.join(names[:15])})")
             if q.label and q.variant != "total":
                 lab = norm(q.label)
                 spaces = [s for s in spaces if lab in space_label_variants(s)]
@@ -234,6 +255,17 @@ def answer(ctx, q) -> Answer:
     items = [{"guid": e.GlobalId, "name": getattr(e, "Name", None), "value": (round(v, 3) if v is not None else None)} for e, v in used]
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=0.9, items=items,
                  explanation=f"{value} = {note} in {path.name}")
+    if q.variant == "type_sum":
+        rows = []
+        for e, v in used:
+            st = M.storey_of(e)
+            rows.append({"label": space_display(e), "area": v, "number": e.Name,
+                         "source": f"IfcSpace {M.space_area(e)[1]}" + (f", storey {st.Name}" if st is not None else "")})
+        ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
+        for it, (e, _) in zip(ans.items, used):
+            it["guid"] = e.GlobalId
+        ans.explanation = expl + f" Source: {path.name}, {note}."
+        value = ans.value
     if ctx.evidence:
         ans.evidence = render(ctx, M, storey, used, q, value, unit, note)
     return ans
@@ -275,5 +307,5 @@ def render(ctx, M, storey, used, q, value, unit, note):
             cv.text((c.x, c.y), lab if q.measure != "count" else f"#{i + 1}", size=11)
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     shown = sum(1 for _, _, g in hl if g is not None)
-    return finish(cv.img, out, ctx.q.question, f"Answer: {value} {unit}   route: ifc (cost $0)",
+    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(used), ROUTE) if q.variant == "type_sum" else f"Answer: {value} {unit}   route: ifc (cost $0)"),
                   note=f"{note}. Storey {storey.Name}: {shown} highlighted.")

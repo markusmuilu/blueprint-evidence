@@ -23,6 +23,7 @@ import ezdxf
 from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
+from .. import takeoff
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
 
@@ -267,6 +268,15 @@ def answer(ctx, q) -> Answer:
         elif q.label:
             rooms_used = [r for r in fl.rooms if r["name"] == q.label]
             note = f"rooms labelled '{q.label}'"
+        elif q.variant == "type_sum":
+            tk = q.extra["takeoff"]
+            rooms_used, generic = takeoff.select(fl.rooms, tk)
+            if not rooms_used:
+                named = sorted({r["name"] for r in fl.rooms if r["name"]})
+                return abstain(ROUTE, f"no room of type {', '.join(tk['types'])} among the {len(named)} room names "
+                                      f"on this floor ({', '.join(named[:15])})")
+            note = takeoff.describe(tk) + (f"; {len(generic)} generic room(s) ({generic[0]['name']}) not typed, not included"
+                                           if generic else "")
         else:
             return abstain(ROUTE, "area query not understood")
         value = round(sum(fl.room_area(r) for r in rooms_used), 2)
@@ -288,6 +298,11 @@ def answer(ctx, q) -> Answer:
     unit = "count" if q.measure == "count" else "m2"
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=conf, items=items,
                  explanation=f"{value} = {note} in {dxf.name}")
+    if q.variant == "type_sum":
+        rows = [{"label": r["name"], "number": r["number"], "area": fl.room_area(r), "source": "ROOM_OUTLINE polygon"}
+                for r in rooms_used]
+        ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
+        ans.explanation = expl + (" " + note.split("; ", 1)[1] if "generic" in note else "") + f" Source: {dxf.name}."
 
     if ctx.evidence:
         cv = base_canvas(fl)
@@ -297,6 +312,8 @@ def answer(ctx, q) -> Answer:
             cv.poly(list(ext), fill=col + (70,), outline=col, width=3)
             rp = r["poly"].representative_point()
             lab = f"{r['number'] or ''} {fl.room_area(r):.2f} m²" if q.measure == "area" else f"#{i + 1}"
+            if q.variant == "type_sum":
+                lab = f"{i + 1}. {r['name']} {fl.room_area(r):.2f} m²"
             cv.text((rp.x, rp.y), lab, size=13, color=(0, 0, 0))
         for i, b in enumerate(boxes):
             cv.box(b, n=i + 1)
@@ -310,6 +327,6 @@ def answer(ctx, q) -> Answer:
         if q.measure == "area" and len(rooms_used) > 1:
             sum_note = " + ".join(f"{fl.room_area(r):.2f}" for r in rooms_used[:25]) + (" + ..." if len(rooms_used) > 25 else "")
         out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-        ans.evidence = finish(cv.img, out, ctx.q.question, f"Answer: {value} {unit}   route: {ROUTE} (cost $0)",
+        ans.evidence = finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), ROUTE) if q.variant == "type_sum" else f"Answer: {value} {unit}   route: {ROUTE} (cost $0)"),
                               note=(note + (": " + sum_note if sum_note else "")))
     return ans

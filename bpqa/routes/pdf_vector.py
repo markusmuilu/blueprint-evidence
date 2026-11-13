@@ -31,6 +31,7 @@ from functools import lru_cache
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.strtree import STRtree
 
+from .. import takeoff
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
 from ..pdfvec import PT_M, load_page
@@ -525,6 +526,17 @@ def answer(ctx, q) -> Answer:
         elif q.obj == "room" and q.variant == "total":
             rooms_used = list(fl.rooms)
             note = "all room shapes"
+        elif q.variant == "type_sum":
+            tk = q.extra["takeoff"]
+            for r in fl.rooms:     # the label that names a room type ("Bathroom 1 (A104)", "Bad")
+                r["tname"] = next((t for t in r["texts"] if takeoff.room_types(t)), r["name"])
+            rooms_used, generic = takeoff.select(fl.rooms, tk, name_key="tname")
+            if not rooms_used:
+                named = sorted({r["tname"] for r in fl.rooms if r["tname"]})
+                return abstain(ROUTE, f"no room of type {', '.join(tk['types'])} among the {len(named)} room labels "
+                                      f"read ({', '.join(named[:15])})")
+            note = takeoff.describe(tk) + (f"; {len(generic)} generic room(s) ({generic[0]['tname']}) not typed, not included"
+                                           if generic else "")
         else:
             return abstain(ROUTE, "area query not understood")
         if not rooms_used:
@@ -546,6 +558,12 @@ def answer(ctx, q) -> Answer:
     scale_note = f"scale {sc.method} ({sc.detail})" if sc.known else "scale unknown"
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=conf, items=items,
                  explanation=f"{value} = {note} in {ctx.file.name}; {scale_note}")
+    if q.variant == "type_sum":
+        rows = [{"label": r["tname"], "number": r["number"], "area": fl.room_area(r), "source": "drawn room outline x scale"}
+                for r in rooms_used]
+        ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
+        ans.explanation = (expl + (" " + note.split("; ", 1)[1] + "." if "generic" in note else "")
+                           + f" Source: {ctx.file.name}; {scale_note}.")
 
     if ctx.evidence:
         ans.evidence = render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes)
@@ -564,6 +582,8 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes):
         cv.d.polygon(pts, fill=col + (80,), outline=col, width=3)
         rp = r["poly"].representative_point()
         lab = f"{r['number'] or r['name'] or ''} {fl.room_area(r):.2f} m²" if q.measure == "area" else f"#{i + 1}"
+        if q.variant == "type_sum":
+            lab = f"{i + 1}. {r['tname']} {fl.room_area(r):.2f} m²"
         x, y = tr(rp.x, rp.y)
         f = font(15)
         bb = cv.d.textbbox((x, y), lab, font=f, anchor="mm")
@@ -594,5 +614,5 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes):
         sum_note = " + ".join(f"{fl.room_area(r):.2f}" for r in rooms_used[:25]) + (" + ..." if len(rooms_used) > 25 else "")
     scale_line = f"scale: {sc.method}, {sc.m_per_pt * 100:.4f} cm per pt" if sc.known else "scale: unknown"
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-    return finish(cv.img, out, ctx.q.question, f"Answer: {value} {unit}   route: {ROUTE} (cost $0)",
+    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), ROUTE) if q.variant == "type_sum" else f"Answer: {value} {unit}   route: {ROUTE} (cost $0)"),
                   note=note + (": " + sum_note if sum_note else "") + f"; {scale_line} (scale sources boxed blue)")

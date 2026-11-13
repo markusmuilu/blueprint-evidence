@@ -98,6 +98,12 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         return query, abstain("parser", "question not understood by the rule parser (LLM parser hook not enabled)")
     if query.extra.get("compound") or query.extra.get("unresolved_scope"):
         return query, abstain("parser", "compound question or unresolved scope; needs the text/LLM route")
+    tk = query.extra.get("takeoff")
+    if tk is not None:
+        from .takeoff import precheck
+        why = precheck(tk)
+        if why:
+            return query, abstain("takeoff", why)
     last = abstain("router", "no route for this file type")
     reasons = []
     if ctx.evidence and no_derivatives(ctx):
