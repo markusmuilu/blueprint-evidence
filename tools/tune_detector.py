@@ -71,6 +71,7 @@ def main():
     ap.add_argument("--stoa", default=str(DEFAULT_DATA), help="dataset root with questions.jsonl")
     ap.add_argument("--images", default="", help="file listing dataset-relative image paths (default: all dev CubiCasa images)")
     ap.add_argument("--imgsz", type=int, default=1280)
+    ap.add_argument("--model", default=str(det.MODEL), help="detector weights (default models/detector.pt)")
     ap.add_argument("--out", default=str(det.THRESHOLDS))
     a = ap.parse_args()
     root = Path(a.stoa)
@@ -83,10 +84,10 @@ def main():
     print(f"tuning on {len(gold)} train-split images", file=sys.stderr)
     dets = {}
     for i, p in enumerate(sorted(gold)):
-        dets[p] = det.detect(root / p, imgsz=a.imgsz)
+        dets[p] = det.detect(root / p, model=Path(a.model), imgsz=a.imgsz)
         if (i + 1) % 200 == 0:
             print(f"  detected {i + 1}/{len(gold)}", file=sys.stderr)
-    out = {"_imgsz": a.imgsz, "_tuned_on": f"{len(gold)} Stoa train-split images", "_model": det.model_tag()}
+    out = {"_imgsz": a.imgsz, "_tuned_on": f"{len(gold)} Stoa train-split images", "_model": det.model_tag(Path(a.model))}
     report = {}
     for obj in det.OBJECTS:
         rows_obj[0] = obj
