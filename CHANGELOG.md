@@ -102,6 +102,30 @@ Exact-count accuracy on the 165 preview dev images, 2-fold cross-validated, no a
 domain gap is large (clean vector lines vs scanned, hatched, annotated plans), so the tuner switched
 all five objects off for this model.
 
+First real run `cubi1`: yolo26n from scratch, 40 epochs, imgsz 1280, batch 8, 2,820 CubiCasa plans +
+1,376 synthetic, RTX 5070, about 50 minutes. Validation mAP50 0.836, mAP50-95 0.59 (best epoch, 38).
+Tuned on the 624 held-out train-split images (2-fold cross-validated exact-count accuracy without
+abstention, then with the tuned band): toilets 76.8% / 74.4% at 93.8% coverage; sinks 58.8% / 37.3% at
+50.3%; doors 42.2% / 10.6% at 17.1%; windows 37.7% / 16.2% at 25.2%; showers and baths 24.3%, switched
+off. An abstention rule with a tuned number of near-threshold boxes (k) replaced "any box in the band".
+
+On detector answers (dev), the toilets >= WC rooms check removed 7 answers of which 6 were wrong, so it
+stays "abstain"; the sinks and doors bounds removed about as many right answers as wrong ones and now
+only lower the confidence.
+
+| CubiCasa | accuracy | coverage | precision |
+|---|---|---|---|
+| dev, labels only (before the detector) | 28.5% | 31.1% | 91.8% |
+| dev, with detector | 45.3% | 55.3% | 81.8% |
+| test, labels only | 29.1% | 30.4% | 95.7% |
+| test, with detector, checks off | 46.0% | 54.5% | 84.4% |
+| test, with detector and checks | 45.5% | 52.6% | 86.6% |
+| test, with detector, checks and --prior | 66.1% | 97.2% | 68.0% |
+
+Overall test: 62.2% -> 70.5% accuracy (95.2% precision); with `--prior` 78.4% -> 80.9%. Full-set
+test split, detector questions only (1,510 images, 14,108 questions, checks off): toilets 74.8% exact,
+sinks 38.8%, doors 24.9%, windows 18.7%.
+
 ## 2026-11-13 evening: CubiCasa raster counts
 
 Starting point (cubicasa5k, dev): 10.0% accuracy, 11.3% coverage; only the storey count answered.

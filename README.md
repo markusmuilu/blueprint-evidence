@@ -156,8 +156,8 @@ questions where the raster route abstains (it changes only the cubicasa5k rows).
 
 | source | type | dev n | dev accuracy | dev coverage | test n | test accuracy | test coverage | test precision | test accuracy with --prior |
 |---|---|---|---|---|---|---|---|---|---|
-| cubicasa5k | count | 2908 | 28.7% | 32.2% | 1362 | 29.4% | 31.4% | 93.5% | 61.2% |
-| **cubicasa5k** | **ALL** | 2908 | 28.7% | 32.2% | 1362 | 29.4% | 31.4% | 93.5% | 61.2% |
+| cubicasa5k | count | 2908 | 45.3% | 55.3% | 1362 | 45.5% | 52.6% | 86.6% | 66.1% |
+| **cubicasa5k** | **ALL** | 2908 | 45.3% | 55.3% | 1362 | 45.5% | 52.6% | 86.6% | 66.1% |
 | ifc_bench | text | 214 | 0.5% | 2.3% | 35 | 0.0% | 0.0% | 0.0% | 0.0% |
 | **ifc_bench** | **ALL** | 214 | 0.5% | 2.3% | 35 | 0.0% | 0.0% | 0.0% | 0.0% |
 | ifc_models | area | 266 | 99.2% | 99.2% | 580 | 100.0% | 100.0% | 100.0% | 100.0% |
@@ -172,25 +172,37 @@ questions where the raster route abstains (it changes only the cubicasa5k rows).
 | swiss_dwellings | area | 536 | 98.1% | 100.0% | 208 | 100.0% | 100.0% | 100.0% | 100.0% |
 | swiss_dwellings | count | 1168 | 100.0% | 100.0% | 446 | 100.0% | 100.0% | 100.0% | 100.0% |
 | **swiss_dwellings** | **ALL** | 1704 | 99.4% | 100.0% | 654 | 100.0% | 100.0% | 100.0% | 100.0% |
-| **ALL** | **ALL** | 5289 | 55.7% | 57.9% | 2701 | 62.3% | 63.4% | 98.4% | 78.4% |
+| **ALL** | **ALL** | 5289 | 64.8% | 70.6% | 2701 | 70.5% | 74.0% | 95.2% | 80.9% |
 
 CubiCasa per question type (EN and FI together; precision = correct / answered):
 
 | object | dev n | dev accuracy | dev coverage | dev precision | test n | test accuracy | test coverage | test precision |
 |---|---|---|---|---|---|---|---|---|
-| storey (panels) | 330 | 88.5% | 100% | 88.5% | 152 | 94.7% | 100% | 94.7% |
+| storey (panels) | 330 | 87.9% | 96.4% | 91.2% | 152 | 93.4% | 96.1% | 97.3% |
 | balcony (labels) | 94 | 74.5% | 80.9% | 92.1% | 42 | 76.2% | 76.2% | 100% |
-| WC room (labels) | 150 | 74.7% | 82.7% | 90.3% | 74 | 75.7% | 78.4% | 96.6% |
-| bedroom (labels) | 206 | 59.2% | 71.8% | 82.4% | 102 | 54.9% | 68.6% | 80.0% |
-| kitchen (labels) | 228 | 50.9% | 55.3% | 92.1% | 94 | 57.4% | 57.4% | 100% |
-| bathroom (labels) | 148 | 54.1% | 55.4% | 97.6% | 74 | 45.9% | 48.6% | 94.4% |
+| WC room (labels) | 150 | 74.7% | 80.0% | 93.3% | 74 | 75.7% | 78.4% | 96.6% |
+| bedroom (labels) | 206 | 57.3% | 65.0% | 88.1% | 102 | 54.9% | 62.7% | 87.5% |
+| kitchen (labels) | 228 | 50.9% | 54.4% | 93.5% | 94 | 57.4% | 57.4% | 100% |
+| bathroom (labels) | 148 | 54.1% | 55.4% | 97.6% | 74 | 43.2% | 45.9% | 94.1% |
 | sauna (labels) | 222 | 19.8% | 22.5% | 88.0% | 108 | 22.2% | 24.1% | 92.3% |
-| toilet, sink, shower/bath, door, window | 1530 | 0% | 0% | - | 716 | 0% | 0% | - |
+| toilet (detector) | 328 | 76.2% | 91.5% | 83.3% | 152 | 72.4% | 90.8% | 79.7% |
+| sink (detector) | 330 | 35.8% | 56.4% | 63.4% | 148 | 35.1% | 45.9% | 76.5% |
+| door (detector) | 232 | 25.0% | 49.1% | 50.9% | 120 | 31.7% | 46.7% | 67.9% |
+| window (detector) | 330 | 18.2% | 31.5% | 57.7% | 152 | 15.8% | 26.3% | 60.0% |
+| shower/bath (detector switched off) | 310 | 0% | 0% | - | 144 | 0% | 0% | - |
 
-The answer policy above was set on dev; test was run once afterwards. Bedrooms are the weakest answered
-type (80% precise): plans that show part of a neighbouring flat add its MH labels, and a missed label
-under-counts. With `--prior` on test, for scale: kitchens 94/94, toilets 92/152, sinks 72/148, windows
-20/152, doors 14/120: the prior is only strong where nearly every plan has the same answer.
+All rows include the checking layer. The answer policies and checks were set on dev; test was run once
+afterwards. The detector's dev images were held out of its training but are among the images its
+thresholds were tuned on, so its dev rows are slightly optimistic; test images were never used for
+either. Bedrooms are the weakest label type (88% precise): plans that show part of a neighbouring flat
+add its MH labels, and a missed label under-counts. With `--prior`, where a route abstains the most
+common dev answer is used (labelled `raster-prior`); on test that brings CubiCasa to 66.1%.
+
+The preview test holds 76 CubiCasa images. On the full set's test split (1,510 CubiCasa images, 14,108
+detector questions in all languages; checking layer off, because it needs OCR of every image) the
+detector gets toilets 74.8% exact (76.7% precise when it answers), sinks 38.8% (68.5%), doors 24.9%
+(62.6%), windows 18.7% (60.4%). Command: `eval.py --data ../data/stoa-full/junction-dataset --split test
+--sources cubicasa5k --objects toilet,sink,shower_or_bath,door,window --no-checks`.
 
 Why some cells are 0%: opening_design test is the CTR drawing set, whose schedule layout the parser does
 not read yet; ifc_bench answers are long free-form tables and the router abstains on them. The dev
@@ -198,11 +210,19 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 ## Limits, stated plainly
 
-- CubiCasa scans are 53% of the questions. Storeys and the six room-type counts have methods; toilets,
-  sinks, showers/baths, doors and windows (53% of CubiCasa questions) still abstain. `--prior` answers those with the most common dev answer per object type, as a
-  labelled baseline (route `raster-prior`, evidence says "PRIOR, not visual proof"). It is in the table
-  so a real detector has a number to beat, not because it is a method.
-- One raster detector was tried and not shipped: counting ellipse-like inner contours as toilets and
+- CubiCasa scans are 53% of the questions. The detector is good for toilets (about 75% exact) and weak
+  for sinks, doors and windows (16-36% exact on test, 60-77% precise when it answers). Showers and baths
+  are switched off: 24% exact even before abstention, below a constant answer. Doors and windows are
+  many-object counts where one missed or extra box makes the answer wrong.
+- `--prior` answers the remaining raster questions with the most common dev answer per object type, as
+  a labelled baseline (route `raster-prior`, evidence says "PRIOR, not visual proof"). It is there so
+  the detector has a number to beat, not because it is a method.
+- Stoa's CubiCasa images are all in the public CubiCasa5K, and Stoa's counts equal its annotations. The
+  detector uses those annotations only for plans whose image is in our train split or not in Stoa at
+  all; test-split images and anything matching them are excluded by image fingerprint. A judging set
+  drawn from the same CubiCasa5K images would be scored by a model that may have seen their public
+  annotations, which is a question for Stoa.
+- One classical raster detector was tried and not shipped: counting ellipse-like inner contours as toilets and
   sinks. On dev it matched the exact toilet count on 2 of 164 plans (correlation 0.34), far below the
   65% a constant answer gets. Text glyphs and door swings produce too many ellipses.
 - A second fixture attempt was not shipped either: candidates are closed white regions (the inside of a
@@ -227,11 +247,8 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 ## Next steps
 
-1. Fixture, door and window detectors for the CubiCasa scans need box-level training labels; image
-   counts from 165 dev plans were not enough. If the public CubiCasa5K annotations may be used (asked of
-   Stoa), a small detector trained on them would cover all five remaining types with boxes as evidence;
-   the test images would have to be excluded from that training set. Without it, a few hundred
-   hand-drawn boxes would be the minimum.
+1. Detector: longer training, a larger model and tiled inference for the small fixtures; a shower and
+   bathtub head that works; a counting policy for doors and windows that tolerates one uncertain box.
 2. A cheap vision-LLM route behind the router, called only when no structured route exists, with its
    answer required to point at regions that are then drawn as evidence.
 3. Generalise the schedule parser (column detection from header words) to cover other door, window and

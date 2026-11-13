@@ -111,7 +111,7 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
         img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
     f, fb = font(15), font(19)
     cw = max(img.width, 900)                      # narrow scans: keep the header readable
-    lines = textwrap.wrap(question, max(40, cw // 8))[:3]
+    lines = textwrap.wrap(question, max(40, cw // 9))[:3]
     note_lines = textwrap.wrap(note, max(50, cw // 7))[:3] if note else []
     check_lines = []
     for c in checks or []:
