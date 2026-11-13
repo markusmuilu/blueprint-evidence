@@ -27,9 +27,11 @@ drawing  --> router: cheapest route that can prove the answer
                1. dxf-geometry  DXF layers of the same drawing (Swiss Dwellings)
                2. ifc           IFC entities, storey containment, quantity sets, space geometry
                3. pdf-text      text layer and schedules (door schedule rows)
-               4. raster        scans (CubiCasa): panel segmentation, room labels read by local OCR;
-                                abstains where it has no detector or the count is not provable
-          --> answer JSON {value, unit, route, confidence, evidence, explanation, items}
+               4. raster        scans (CubiCasa): panel segmentation, room labels read by local OCR,
+                                a trained detector for fixtures, doors and windows;
+                                abstains where the count is not provable
+          --> checking layer (raster answers): consistency checks across routes; abstain on conflict
+          --> answer JSON {value, unit, route, confidence, evidence, explanation, items, checks}
           --> evidence PNG: counted items boxed and numbered, measured rooms filled with their area
 ```
 
@@ -63,11 +65,40 @@ Raster (CubiCasa scans):
 | storeys | multi-storey plans paste each floor as its own scan onto a white canvas; count the large non-white panels |
 | bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE) and a few Swedish ones; apartment summaries like "3H+K+S" are skipped |
 | when to answer | kitchen, bathroom, sauna only when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels |
-| toilets, sinks, showers, doors, windows | no detector; abstain |
+| toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold; abstains when any box scores close to the threshold (see "Detector") |
 
 Every counted label is boxed and numbered on the scan; the other room labels that were read are boxed in
 grey, so a zero answer can be checked too. The OCR is the slow part (about 5-15 s per image for eight
 passes); `tools/ocr_cache.py` fills the cache in `out/ocr/` up front.
+
+### Checking layer
+
+Before a raster answer is returned, `bpqa/checks.py` compares it with what the other raster signals
+on the same image imply, and abstains when they conflict. Examples: a label "MH3" means at least three
+bedrooms; an apartment summary "3H+K" means two bedrooms; two floor names on the sheet mean at least
+two storeys; every WC room label implies a WC seat, every bathroom and kitchen a sink, every bathroom a
+shower or bath, n room labels at least n-1 doors, every bedroom and the living room a window. Each
+check that fired is listed in the answer JSON (`checks`) and drawn in the evidence header, green PASS
+or red FAIL. On CubiCasa test it raised precision from 93.5% to 95.7% at a cost of one point of
+coverage (CHANGELOG.md has the per-check table). `eval.py --no-checks` turns it off.
+
+### Detector
+
+Toilets, sinks, showers, bathtubs, doors and windows on the scans are counted by a small YOLO detector
+(Ultralytics, `yolo26n` from scratch), with every counted box drawn and numbered. Training data:
+
+- Public CubiCasa5K annotations (5,000 plans with SVG annotations), converted by
+  `tools/cubicasa_svg.py`. Stoa's CubiCasa images are a subset of CubiCasa5K, and Stoa's counts are
+  the annotation counts (the converter reproduces Stoa's train-split answers on 99.6-100% of images).
+  So the plans used are restricted by `tools/overlap.py`, which finds every public plan that appears in
+  Stoa's data by perceptual hash: plans matching a Stoa **test-split** image (1,544) are never used;
+  plans matching only train-split images (3,245) and plans not in Stoa (211) may be. Of those, 617
+  plans, including every preview dev image, are held out of training to tune the count thresholds.
+- Synthetic plans rendered from train-split Swiss DXF floors (`tools/render_dxf_synth.py`): black on
+  white, random scale and rotation, boxes from the same rules the DXF route uses.
+
+The count threshold per object, and an uncertainty band around it, are tuned on the held-out
+train-split images (`tools/tune_detector.py`). Test answers are never read while tuning.
 
 ## Run it
 
@@ -92,6 +123,22 @@ One question:
 
 The data is never copied into the repo; point at it with `--data` or `STOA_DATA` (default:
 `../data/stoa-preview/junction-dataset-preview`).
+
+Detector, from the downloads to a tuned route (paths relative to the repo; the model and thresholds
+land in `models/`, which is not committed):
+
+```
+.venv\Scripts\pip install ultralytics
+.venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+.venv\Scripts\python tools/overlap.py --stoa ../data/stoa-full/junction-dataset --public ../data/cubicasa5k-public/cubicasa5k --out out/overlap
+.venv\Scripts\python tools/render_dxf_synth.py --data ../data/stoa-full/junction-dataset --out ../data/detector/synth --per 2
+.venv\Scripts\python tools/build_detector_dataset.py --public ../data/cubicasa5k-public/cubicasa5k --overlap out/overlap --stoa ../data/stoa-full/junction-dataset --synth ../data/detector/synth --out ../data/detector/ds_cubi
+.venv\Scripts\python tools/train_detector.py --data ../data/detector/ds_cubi/data.yaml --name cubi1 --epochs 40 --imgsz 1280
+.venv\Scripts\python tools/tune_detector.py --stoa ../data/stoa-full/junction-dataset --images ../data/detector/ds_cubi/tune_images.txt --imgsz 1280
+```
+
+Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG) and
+`python tools/test_overlap.py --work <scratch folder>` (overlap tool on the preview).
 
 ### Split
 
