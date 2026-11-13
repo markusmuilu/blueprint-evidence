@@ -120,7 +120,7 @@ def run_ours(root, sample, pdf_only):
     for q in sample:
         if pdf_only and q.ext != "pdf":
             continue
-        ctx = Context(root=root, q=q, out_dir=REPO / "out" / "evidence", evidence=False, pdf_only=pdf_only)
+        ctx = Context(root=root, q=q, out_dir=REPO / "out" / "evidence", evidence=False, pdf_only=pdf_only, nemotron=False)
         query, a = solve(ctx)
         res[q.qid] = {"pred": a.value if a.answered else None, "route": a.route, "ok": bool(score(q, a)),
                       "abstain": a.abstain}
