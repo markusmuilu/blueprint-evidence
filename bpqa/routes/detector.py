@@ -83,6 +83,9 @@ def answer(ctx, q, img=None) -> Answer:
     th = thresholds().get(q.obj)
     if not MODEL.exists() or not th:
         return abstain(ROUTE, "detector not trained or not tuned (tools/train_detector.py, tools/tune_detector.py)")
+    if not th.get("enabled", True):
+        return abstain(ROUTE, f"detector switched off for {q.obj}: on held-out train-split images it was wrong more "
+                              f"often than right (tools/tune_detector.py)")
     dets = detect(ctx.file, imgsz=thresholds().get("_imgsz", 1280))
     if dets is None:
         return abstain(ROUTE, "detector model missing")

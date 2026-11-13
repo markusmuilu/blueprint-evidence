@@ -5,7 +5,8 @@
 
 Per object (toilet, sink, shower_or_bath, door, window): the score threshold t that maximises exact
 count accuracy, then an uncertainty band around t (abstain when any box scores within it) chosen to
-maximise correct minus wrong answers. Also reports a 2-fold cross-validated estimate (fit on one half
+maximise correct minus wrong answers. An object whose best policy still gives more wrong than right
+answers is switched off (the route abstains on it). Also reports a 2-fold cross-validated estimate (fit on one half
 of the images, measured on the other), which is the honest number. Writes models/detector_thresholds.json.
 Test-split answers are never read.
 """
@@ -104,8 +105,10 @@ def main():
             aa, cc = evaluate(half[1 - k], tt, bb, mx)
             cv_a, cv_c = cv_a + aa, cv_c + cc
             cv_c0 += evaluate(half[1 - k], tt, 0.0, mx)[1]
-        out[obj] = {"conf": t, "band": b, "max": mx, "precision": round(n_ok / max(1, n_ans), 3)}
-        report[obj] = {"n": len(rows), "t": t, "band": b, "fitted": f"{n_ok}/{n_ans} answered correct, coverage {n_ans / len(rows):.0%}",
+        # answer this object only if the tuned policy gives more right than wrong answers
+        enabled = n_ok - (n_ans - n_ok) > 0
+        out[obj] = {"conf": t, "band": b, "max": mx, "precision": round(n_ok / max(1, n_ans), 3), "enabled": enabled}
+        report[obj] = {"n": len(rows), "t": t, "band": b, "enabled": enabled, "fitted": f"{n_ok}/{n_ans} answered correct, coverage {n_ans / len(rows):.0%}",
                        "cv_no_band_accuracy": f"{cv_c0}/{len(rows)} = {cv_c0 / len(rows):.1%}",
                        "cv_with_band": f"accuracy {cv_c / len(rows):.1%}, coverage {cv_a / len(rows):.1%}, "
                                        f"precision {cv_c / max(1, cv_a):.1%}"}
