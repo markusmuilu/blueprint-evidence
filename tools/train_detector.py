@@ -3,7 +3,8 @@
     python tools/train_detector.py --data ../data/detector/ds/data.yaml --name cubi1 --epochs 60 --imgsz 1280
 
 Starts from scratch (a model yaml) by default, so nothing is downloaded; --weights takes a local
-.pt to fine-tune from. Runs offline (bpqa/yolo_env.py). The best weights are copied to
+.pt to fine-tune from (for example Ultralytics' official pretrained yolo26s.pt, downloaded once).
+--time sets a wall-clock budget in hours (Ultralytics then fits the learning-rate schedule to it). Runs offline (bpqa/yolo_env.py). The best weights are copied to
 models/detector.pt (models/ is not committed); the run folder is under ../data/detector/runs/.
 """
 from __future__ import annotations
@@ -31,7 +32,9 @@ def main():
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--fraction", type=float, default=1.0, help="use a fraction of the training images")
     ap.add_argument("--project", default=str(REPO.parent / "data" / "detector" / "runs"))
-    ap.add_argument("--no-copy", action="store_true", help="do not copy best.pt to models/detector.pt")
+    ap.add_argument("--time", type=float, default=0.0, help="training budget in hours (overrides --epochs)")
+    ap.add_argument("--copy-as", default="detector.pt", help="file name in models/ for best.pt")
+    ap.add_argument("--no-copy", action="store_true", help="do not copy best.pt to models/")
     a = ap.parse_args()
     YOLO = yolo()
     model = YOLO(a.weights or a.model)
@@ -39,13 +42,14 @@ def main():
                 project=a.project, name=a.name, exist_ok=True, plots=False, fraction=a.fraction,
                 # plans: rotations by 90 degrees and mirroring are label-preserving; no colour jitter needed
                 fliplr=0.5, flipud=0.5, degrees=0.0, hsv_h=0.0, hsv_s=0.0, hsv_v=0.2, mosaic=0.5,
-                scale=0.3, translate=0.1, close_mosaic=5, patience=20, seed=0, verbose=True)
+                scale=0.3, translate=0.1, close_mosaic=5, patience=20, seed=0, verbose=True,
+                **({"time": a.time} if a.time else {}))
     best = Path(a.project) / a.name / "weights" / "best.pt"
     print("best weights:", best)
     if best.exists() and not a.no_copy:
         (REPO / "models").mkdir(exist_ok=True)
-        shutil.copy(best, REPO / "models" / "detector.pt")
-        print("copied to", REPO / "models" / "detector.pt")
+        shutil.copy(best, REPO / "models" / a.copy_as)
+        print("copied to", REPO / "models" / a.copy_as)
 
 
 if __name__ == "__main__":
