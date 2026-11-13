@@ -75,8 +75,14 @@ def fit_priors(questions, parse, split_of) -> dict:
 
 
 def answer(ctx, q) -> Answer:
+    if q.measure == "area" and q.variant == "type_sum":
+        img = cv2.imread(str(ctx.file))
+        if img is None:
+            return abstain(ROUTE, "unreadable image")
+        from . import raster_area
+        return raster_area.takeoff_answer(ctx, q, img)
     if q.measure != "count":
-        return abstain(ROUTE, "raster route only counts")
+        return abstain(ROUTE, "raster route only counts (and room-type area takeoffs)")
     img = cv2.imread(str(ctx.file))
     if img is None:
         return abstain(ROUTE, "unreadable image")
