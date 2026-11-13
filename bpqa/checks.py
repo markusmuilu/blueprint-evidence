@@ -190,14 +190,14 @@ def check_fixture_bounds(F, obj, v):
     if obj == "sink" and (kh or k):
         lo = kh + k
         out.append(Check("sinks>=bathrooms+kitchen", "pass" if v >= lo else "fail",
-                         f"{kh} bathroom and {k} kitchen label(s) read, each implies a sink; answer {v}", "abstain"))
+                         f"{kh} bathroom and {k} kitchen label(s) read, each implies a sink; answer {v}", "lower"))
     if obj == "shower_or_bath" and kh:
         out.append(Check("showers>=bathrooms", "pass" if v >= kh else "fail",
                          f"{kh} bathroom label(s) read, each implies a shower or bath; answer {v}", "abstain"))
     if obj == "door" and F["words"] >= 3:
         lo = F["words"] - 1
         out.append(Check("doors>=rooms-1", "pass" if v >= lo else "fail",
-                         f"{F['words']} room labels read, so at least {lo} doors connect them; answer {v}", "abstain"))
+                         f"{F['words']} room labels read, so at least {lo} doors connect them; answer {v}", "lower"))
     if obj == "window" and mh:
         out.append(Check("windows>=bedrooms+1", "pass" if v >= mh + 1 else "fail",
                          f"{mh} bedroom label(s) read, each plus the living room needs a window; answer {v}", "abstain"))
