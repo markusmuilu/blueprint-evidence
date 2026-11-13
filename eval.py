@@ -60,6 +60,8 @@ def main(argv=None):
     ap.add_argument("--prior", action="store_true",
                     help="answer raster questions without a CV detector with the dev-split majority value (labelled baseline)")
     ap.add_argument("--no-checks", action="store_true", help="turn the checking layer off (for before/after numbers)")
+    ap.add_argument("--pdf-only", action="store_true",
+                    help="ignore DXF/IFC twins of PDFs: answer from the PDF itself (pdf-text, pdf-vector, raster)")
     ap.add_argument("--out", default=str(REPO / "out"))
     args = ap.parse_args(argv)
 
@@ -70,6 +72,8 @@ def main(argv=None):
         from bpqa.routes.raster import fit_priors
         fit_priors(qs, parse, split_of)   # fitted on dev answers only
     qs = [q for q in qs if args.split == "all" or split_of(q.path) == args.split]
+    if args.pdf_only:
+        qs = [q for q in qs if q.ext == "pdf"]
     if args.sources:
         keep = set(args.sources.split(","))
         qs = [q for q in qs if q.source in keep]
@@ -84,7 +88,7 @@ def main(argv=None):
 
     out = Path(args.out)
     ev_dir = out / "evidence"
-    tag = args.split + ("-prior" if args.prior else "") + ("-nochecks" if args.no_checks else "")
+    tag = args.split + ("-prior" if args.prior else "") + ("-nochecks" if args.no_checks else "") + ("-pdfonly" if args.pdf_only else "")
     if args.data:
         tag += "-" + Path(args.data).name
     if args.objects:
@@ -99,7 +103,7 @@ def main(argv=None):
     with open(run_dir / "answers.jsonl", "w", encoding="utf-8") as f:
         for i, q in enumerate(qs):
             ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence, prior=args.prior,
-                          checks=not args.no_checks)
+                          checks=not args.no_checks, pdf_only=args.pdf_only)
             query, a = solve(ctx)
             ok = score(q, a)
             for key in [(q.source, q.type), (q.source, "ALL"), ("ALL", "ALL")]:

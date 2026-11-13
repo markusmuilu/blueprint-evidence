@@ -21,11 +21,12 @@ def main():
     ap.add_argument("path")
     ap.add_argument("question")
     ap.add_argument("--data")
+    ap.add_argument("--pdf-only", action="store_true", help="ignore DXF/IFC twins of a PDF")
     ap.add_argument("--out", default=str(REPO / "out" / "evidence"))
     args = ap.parse_args()
     root = data_root(args.data)
     q = Question(qid=-1, path=args.path.replace("\\", "/"), question=args.question)
-    ctx = Context(root=root, q=q, out_dir=Path(args.out), evidence=True)
+    ctx = Context(root=root, q=q, out_dir=Path(args.out), evidence=True, pdf_only=args.pdf_only)
     query, a = solve(ctx)
     print(json.dumps({"query": query.as_dict(), **a.as_dict()}, ensure_ascii=False, indent=1))
 

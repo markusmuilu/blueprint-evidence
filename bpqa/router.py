@@ -3,7 +3,8 @@
 Order of preference, cheapest and most verifiable first:
   1. structured CAD/BIM data for the same drawing (DXF layers, IFC entities and quantities)
   2. the PDF text layer and its tables
-  3. raster computer vision (classical, no model)
+  3. the PDF's own vector linework (pdf-vector), when no DXF/IFC twin exists or twins are ignored
+  4. raster computer vision (classical, no model)
   4. (future) a vision LLM, only when nothing above can answer
 
 A route returns an Answer or abstains with a reason; the router then tries the next route.
@@ -19,7 +20,7 @@ from . import checks as checking
 from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
-from .routes import dxf_swiss, ifc_route, pdf_text, raster
+from .routes import dxf_swiss, ifc_route, pdf_text, pdf_vector, raster
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -32,6 +33,7 @@ class Context:
     evidence: bool = True
     prior: bool = False          # allow the labelled dev-prior fallback on raster questions
     checks: bool = True          # run the checking layer on raster answers (bpqa/checks.py)
+    pdf_only: bool = False       # ignore DXF/IFC twins: answer from the file itself (eval.py --pdf-only)
     tried: list = field(default_factory=list)
 
     @property
@@ -75,12 +77,16 @@ def no_derivatives(ctx: Context) -> bool:
 
 def candidate_routes(ctx: Context):
     routes = []
-    if ctx.sibling("dxf") is not None:
+    twins = not ctx.pdf_only or ctx.q.ext != "pdf"
+    has_twin = ctx.sibling("dxf") is not None or ctx.model_ifc() is not None
+    if twins and ctx.sibling("dxf") is not None:
         routes.append(dxf_swiss.answer)
-    if ctx.model_ifc() is not None:
+    if twins and ctx.model_ifc() is not None:
         routes.append(ifc_route.answer)
     if ctx.q.ext == "pdf":
         routes.append(pdf_text.answer)
+        if ctx.pdf_only or not has_twin:
+            routes.append(pdf_vector.answer)
     if ctx.q.ext in RASTER_EXT or (ctx.q.ext == "pdf" and not routes):
         routes.append(raster.answer)
     return routes
