@@ -38,15 +38,16 @@ from .catalog import SOURCE_NAMES, Catalog, find_data_root
 REPO = Path(__file__).resolve().parent.parent
 STATIC = Path(__file__).resolve().parent / "static"
 APP_OUT = REPO / "out" / "app"
-EVIDENCE_DIR = APP_OUT / "evidence"
+EVIDENCE_DIR = APP_OUT / "evidence"     # one PNG per cached answer, named by the cache key
+RENDER_DIR = APP_OUT / "render"         # where the routes draw; copied to EVIDENCE_DIR after each solve
 ANSWER_CACHE = APP_OUT / "answers"
 PREVIEW_CACHE = APP_OUT / "preview"
 UPLOADS = Path(tempfile.gettempdir()) / "blueprint-evidence" / "uploads"
 UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff"}
 MAX_UPLOAD = 200 * 1024 * 1024
-CACHE_VERSION = "1"
+CACHE_VERSION = "2"
 
-for d in (EVIDENCE_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
+for d in (EVIDENCE_DIR, RENDER_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
     d.mkdir(parents=True, exist_ok=True)
 
 DATA_ROOT = find_data_root()
@@ -194,8 +195,8 @@ def scale_source(a: dict, query: dict, ext: str) -> str | None:
     if route == "ifc":
         return "IFC project units; NetFloorArea from quantity sets, else the space footprint."
     if route == "pdf-vector":
-        m = re.search(r"scale [^;]*", a.get("explanation") or "")
-        return (m.group(0) if m else "Scale found on the sheet") + ". Text that set the scale is boxed blue."
+        m = re.search(r"; (scale .*)$", a.get("explanation") or "")
+        return (m.group(1) if m else "Scale found on the sheet") + ". The text that set the scale is boxed blue on the evidence."
     return None
 
 
@@ -217,15 +218,18 @@ def why(a: dict, query: dict, ext: str) -> list[dict]:
     route = a.get("route") or ""
     out.append({"kind": "method", "text": ROUTES.get(route, (route, f"Route {route}."))[1]})
     q = {k: v for k, v in query.items() if k in ("measure", "obj", "scope", "level", "room", "apartment", "lang", "parser")}
-    if q:
+    if q and route != "parser":
         bits = [f"{q.get('measure', '?')} of {q.get('obj', '?')}"]
         if q.get("lang"):
             bits.append(f"language {q['lang']}")
         bits.append(f"parsed by {q.get('parser', 'rules')}")
         out.append({"kind": "query", "text": "Question read as " + ", ".join(bits) + "."})
-    if a.get("explanation"):
-        out.append({"kind": "derivation", "text": a["explanation"]})
+    expl = a.get("explanation") or ""
     sc = scale_source(a, query, ext)
+    if route == "pdf-vector" and "; scale" in expl:
+        expl = expl.split("; scale")[0]          # the scale gets its own line
+    if expl:
+        out.append({"kind": "derivation", "text": expl})
     if sc:
         out.append({"kind": "scale", "text": sc})
     for c in a.get("checks") or []:
@@ -293,7 +297,7 @@ def ask(body: AskBody):
             return rec
 
     q = Question(qid=-1, path=rel, question=question)
-    ctx = Context(root=root, q=q, out_dir=EVIDENCE_DIR, evidence=True, pdf_only=body.pdf_only)
+    ctx = Context(root=root, q=q, out_dir=RENDER_DIR, evidence=True, pdf_only=body.pdf_only)
     t0 = time.perf_counter()
     with SOLVE_LOCK:
         query, ans = solve(ctx)
@@ -303,9 +307,13 @@ def ask(body: AskBody):
 
     ev_id, geo = None, None
     if a.get("evidence"):
-        evp = Path(a["evidence"])
-        if evp.exists() and EVIDENCE_DIR.resolve() in evp.resolve().parents:
-            ev_id = evp.stem
+        drawn = Path(a["evidence"])
+        if drawn.exists() and RENDER_DIR.resolve() in drawn.resolve().parents:
+            # the routes name evidence by drawing and question only, so a re-run with other
+            # options would overwrite it; keep a copy per answer
+            ev_id = f"{drawn.stem[:60]}__{key[:10]}"
+            evp = EVIDENCE_DIR / f"{ev_id}.png"
+            shutil.copyfile(drawn, evp)
             try:
                 geo = _evidence_geometry(evp, root / rel)
             except Exception:

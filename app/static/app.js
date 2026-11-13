@@ -443,7 +443,7 @@ function fmtUnit(u) { return u === "count" ? "" : u === "m2" ? "m²" : u === "m3
 
 function itemLabel(it, obj) {
   if (typeof it !== "object" || it === null) return [String(it), ""];
-  let label = it.label || it.class || it.name || it.match || (it.panel != null ? `panel ${it.panel}` : "") || it.guid || "";
+  let label = (it.number && it.name ? `${it.number} ${it.name}` : "") || it.label || it.class || it.name || it.match || (it.panel != null ? `panel ${it.panel}` : "") || it.guid || "";
   if (!label && Array.isArray(it.bbox)) {
     const [x0, y0, x1, y1] = it.bbox;
     label = `${(obj || "item").replace(/_/g, " ")} at x ${((x0 + x1) / 2).toFixed(1)}, y ${((y0 + y1) / 2).toFixed(1)} m`;
@@ -453,6 +453,7 @@ function itemLabel(it, obj) {
   else if (it.ocr_conf != null) extra = "ocr " + Number(it.ocr_conf).toFixed(2);
   else if (it.value != null) extra = typeof it.value === "number" ? it.value.toFixed(2) : String(it.value);
   else if (it.area != null) extra = Number(it.area).toFixed(2) + " m²";
+  else if (it.area_m2 != null) extra = Number(it.area_m2).toFixed(2) + " m²";
   return [label || JSON.stringify(it).slice(0, 60), extra];
 }
 
