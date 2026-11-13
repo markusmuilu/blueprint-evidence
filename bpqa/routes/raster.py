@@ -121,11 +121,12 @@ def room_labels(ctx, q, img) -> Answer:
         for i, h in enumerate(hits):
             b = h["box"]
             cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=PALETTE[0], width=3)
-        tier = "   (ESTIMATE: " + ans.tier_reason + ")" if ans.tier == "estimate" else "   (proven)"
+        tier = "   ESTIMATE" if ans.tier == "estimate" else "   proven"
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {n}{tier}   route: {LABEL_ROUTE} (local OCR, cost $0)",
+                              f"Answer: {n}{tier}   ({LABEL_ROUTE}, local OCR, $0)",
                               note=f"red numbered boxes: labels read as {NAMES[q.obj]}: "
-                                   + ", ".join(h["text"] for h in hits) + "; grey boxes: other room labels read")
+                                   + ", ".join(h["text"] for h in hits) + "; grey boxes: other room labels read"
+                                   + (f". Estimate because: {ans.tier_reason}" if ans.tier == "estimate" else ""))
     return ans
 
 

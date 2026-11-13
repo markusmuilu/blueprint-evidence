@@ -201,7 +201,7 @@ def answer(ctx, q, img=None) -> Answer:
     t, band = c["conf"], c.get("band", 0.0)
     n, hits, unsure, spread = count_views(views, dets, q.obj, c)
     why = policy(hits, unsure, c, spread, n)
-    mode = ("tiles " if c["tile"] else "") + ("with rotations and mirrors " if c["tta"] else "")
+    mode = " ".join(m for m in ("on tiles" if c["tile"] else "", "over rotations and mirrors" if c["tta"] else "") if m)
     ans = Answer(value=n, unit="count", route=ROUTE, tier="proven",
                  confidence=round(c.get("precision_estimate" if why else "precision", c.get("precision", 0.5)), 2),
                  items=[{"n": i + 1, "class": d["cls"], "score": d["conf"], "xyxy": d["xyxy"]} for i, d in enumerate(hits)],
@@ -210,7 +210,7 @@ def answer(ctx, q, img=None) -> Answer:
                  explanation=(f"median count of {len(views)} rotated and mirrored views at score >= {t:.2f} "
                               f"(per-view counts differ by {spread}); "
                               if c.get("agg") == "median" and len(views) > 1 else
-                              f"{n} box(es) of {', '.join(OBJECTS[q.obj])} scored >= {t:.2f} by the detector {mode}; ")
+                              f"{n} box(es) of {', '.join(OBJECTS[q.obj])} scored >= {t:.2f} by the detector{' ' + mode if mode else ''}; ")
                              + f"{len(unsure)} box(es) within {band:.2f} of the threshold")
     for w in why:
         estimate(ans, w)
@@ -228,9 +228,9 @@ def answer(ctx, q, img=None) -> Answer:
         for d in unsure:
             if d["conf"] < t:
                 cv.box(d["xyxy"], color=AMBER, width=2)
-        head = f"Answer: {n}" + ("   (ESTIMATE: check the amber boxes)" if why else "   (proven)")
+        head = f"Answer: {n}" + ("   ESTIMATE: check the amber boxes" if why else "   proven")
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"{head}   route: {ROUTE} (local model, cost $0)",
+                              f"{head}   ({ROUTE}, local model, $0)",
                               note=f"numbered boxes: each counted {NAMES[q.obj]} with its detector score >= {t:.2f}; "
                                    f"amber: scored close to the threshold, numbered ones counted, plain ones not; "
                                    f"grey: lower-scored boxes, not counted"
