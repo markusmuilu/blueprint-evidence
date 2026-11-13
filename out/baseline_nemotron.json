@@ -1,0 +1,5433 @@
+{
+ "seed": 2026,
+ "plan": [
+  [
+   "cubicasa5k",
+   "count",
+   50
+  ],
+  [
+   "swiss_dwellings",
+   "count",
+   40
+  ],
+  [
+   "swiss_dwellings",
+   "area",
+   30
+  ],
+  [
+   "ifc_models",
+   "area",
+   30
+  ]
+ ],
+ "price_assumption_usd_per_mtok": [
+  3.0,
+  15.0
+ ],
+ "summary": [
+  {
+   "source": "cubicasa5k",
+   "type": "count",
+   "n": 50,
+   "nemo_answered": 46,
+   "nemo_correct": 33,
+   "nemo_accuracy": 0.66,
+   "ours_answered": 27,
+   "ours_correct": 23,
+   "ours_accuracy": 0.46,
+   "ours_pdfonly_n": 0,
+   "ours_pdfonly_correct": 0,
+   "ours_pdfonly_accuracy": null,
+   "nemo_prompt_tokens_mean": 922.1,
+   "nemo_completion_tokens_mean": 3272.94,
+   "nemo_latency_median_s": 9.62,
+   "nemo_latency_mean_s": 25.423599999999997,
+   "frontier_cost_per_q_measured_tokens": 0.0518604,
+   "frontier_cost_per_q_direct_answer": 0.0029163
+  },
+  {
+   "source": "ifc_models",
+   "type": "area",
+   "n": 30,
+   "nemo_answered": 17,
+   "nemo_correct": 1,
+   "nemo_accuracy": 0.03333333333333333,
+   "ours_answered": 30,
+   "ours_correct": 30,
+   "ours_accuracy": 1.0,
+   "ours_pdfonly_n": 30,
+   "ours_pdfonly_correct": 30,
+   "ours_pdfonly_accuracy": 1.0,
+   "nemo_prompt_tokens_mean": 2086.5333333333333,
+   "nemo_completion_tokens_mean": 9542.366666666667,
+   "nemo_latency_median_s": 60.68,
+   "nemo_latency_mean_s": 73.24333333333334,
+   "frontier_cost_per_q_measured_tokens": 0.1493951,
+   "frontier_cost_per_q_direct_answer": 0.0064096
+  },
+  {
+   "source": "swiss_dwellings",
+   "type": "area",
+   "n": 30,
+   "nemo_answered": 16,
+   "nemo_correct": 5,
+   "nemo_accuracy": 0.16666666666666666,
+   "ours_answered": 30,
+   "ours_correct": 30,
+   "ours_accuracy": 1.0,
+   "ours_pdfonly_n": 30,
+   "ours_pdfonly_correct": 30,
+   "ours_pdfonly_accuracy": 1.0,
+   "nemo_prompt_tokens_mean": 1880.0666666666666,
+   "nemo_completion_tokens_mean": 11012.4,
+   "nemo_latency_median_s": 102.39,
+   "nemo_latency_mean_s": 76.93,
+   "frontier_cost_per_q_measured_tokens": 0.1708262,
+   "frontier_cost_per_q_direct_answer": 0.0057902
+  },
+  {
+   "source": "swiss_dwellings",
+   "type": "count",
+   "n": 40,
+   "nemo_answered": 36,
+   "nemo_correct": 20,
+   "nemo_accuracy": 0.5,
+   "ours_answered": 40,
+   "ours_correct": 40,
+   "ours_accuracy": 1.0,
+   "ours_pdfonly_n": 40,
+   "ours_pdfonly_correct": 40,
+   "ours_pdfonly_accuracy": 1.0,
+   "nemo_prompt_tokens_mean": 1858.175,
+   "nemo_completion_tokens_mean": 4555.45,
+   "nemo_latency_median_s": 13.92,
+   "nemo_latency_mean_s": 34.1775,
+   "frontier_cost_per_q_measured_tokens": 0.073906275,
+   "frontier_cost_per_q_direct_answer": 0.005724524999999999
+  },
+  {
+   "source": "ALL",
+   "type": "ALL",
+   "n": 150,
+   "nemo_answered": 115,
+   "nemo_correct": 59,
+   "nemo_accuracy": 0.3933333333333333,
+   "ours_answered": 127,
+   "ours_correct": 123,
+   "ours_accuracy": 0.82,
+   "ours_pdfonly_n": 100,
+   "ours_pdfonly_correct": 100,
+   "ours_pdfonly_accuracy": 1.0,
+   "nemo_prompt_tokens_mean": 1596.2,
+   "nemo_completion_tokens_mean": 6416.72,
+   "nemo_latency_median_s": 24.83,
+   "nemo_latency_mean_s": 47.62319999999999,
+   "frontier_cost_per_q_measured_tokens": 0.1010394,
+   "frontier_cost_per_q_direct_answer": 0.0049386
+  }
+ ],
+ "records": [
+  {
+   "qid": 1261,
+   "path": "data/cubicasa5k/high_quality_architectural-10498.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta parveketta (myös lasitetut parvekkeet) pohjapiirustuksessa on?",
+   "gold": 0,
+   "obj": "balcony",
+   "nemotron": {
+    "qid": 1261,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 575,
+    "completion_tokens": 3822,
+    "latency_s": 29.98,
+    "finish": "stop",
+    "image": [
+     884,
+     561
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 0,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 579,
+   "path": "data/cubicasa5k/high_quality-1500.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta kylpy- tai pesuhuonetta (esim. KH, KPH, PH, PESUH, SH) pohjapiirustuksessa on, erillisiä WC-tiloja lukuun ottamatta?",
+   "gold": 1,
+   "obj": "bathroom",
+   "nemotron": {
+    "qid": 579,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 459,
+    "completion_tokens": 457,
+    "latency_s": 4.97,
+    "finish": "stop",
+    "image": [
+     568,
+     635
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2665,
+   "path": "data/cubicasa5k/high_quality_architectural-1886.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta makuuhuonetta (MH) pohjapiirustuksessa on?",
+   "gold": 1,
+   "obj": "bedroom",
+   "nemotron": {
+    "qid": 2665,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 2465,
+    "completion_tokens": 151,
+    "latency_s": 3.55,
+    "finish": "stop",
+    "image": [
+     1600,
+     1515
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: 0 bedroom label(s) read (); this count is not reliable for bedroom on dev, abstaining"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1866,
+   "path": "data/cubicasa5k/high_quality_architectural-1241.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "gold": 7,
+   "obj": "door",
+   "nemotron": {
+    "qid": 1866,
+    "pred": 5.0,
+    "raw": "5",
+    "error": null,
+    "prompt_tokens": 538,
+    "completion_tokens": 12445,
+    "latency_s": 104.01,
+    "finish": "stop",
+    "image": [
+     450,
+     963
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 7 door detected at score >= 0.35, but 2 box(es) scored within 0.10 of the threshold; count not provable"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3129,
+   "path": "data/cubicasa5k/high_quality_architectural-4517.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta keittiötä (myös keittokomerot, avo- ja tupakeittiöt sekä apukeittiöt) pohjapiirustuksessa on?",
+   "gold": 1,
+   "obj": "kitchen",
+   "nemotron": {
+    "qid": 3129,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 348,
+    "completion_tokens": 3107,
+    "latency_s": 20.17,
+    "finish": "stop",
+    "image": [
+     502,
+     381
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1206,
+   "path": "data/cubicasa5k/high_quality_architectural-10368.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many saunas are on this floor plan?",
+   "gold": 0,
+   "obj": "sauna",
+   "nemotron": {
+    "qid": 1206,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 579,
+    "completion_tokens": 627,
+    "latency_s": 6.36,
+    "finish": "stop",
+    "image": [
+     771,
+     643
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: 0 sauna label(s) read (); this count is not reliable for sauna on dev, abstaining"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3881,
+   "path": "data/cubicasa5k/high_quality_architectural-7787.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta suihkua ja kylpyammetta pohjapiirustukseen on piirretty yhteensä?",
+   "gold": 1,
+   "obj": "shower_or_bath",
+   "nemotron": {
+    "qid": 3881,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 772,
+    "completion_tokens": 1653,
+    "latency_s": 12.98,
+    "finish": "stop",
+    "image": [
+     820,
+     864
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: detector switched off for shower_or_bath: on held-out train-split images it was wrong more often than right (tools/tune_detector.py); raster-cv-fixtures: fixture model not trained (tools/train_mil.py final)"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2411,
+   "path": "data/cubicasa5k/high_quality_architectural-14533.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta pesu- ja tiskiallasta (keittiö ja kylpytilat yhteensä; kaksoisallas lasketaan yhdeksi) pohjapiirustukseen on piirretty?",
+   "gold": 2,
+   "obj": "sink",
+   "nemotron": {
+    "qid": 2411,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1792,
+    "completion_tokens": 798,
+    "latency_s": 7.24,
+    "finish": "stop",
+    "image": [
+     1082,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "raster-detector",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1489,
+   "path": "data/cubicasa5k/high_quality_architectural-11426.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta kerrosta pohjapiirustuksessa on esitetty?",
+   "gold": 2,
+   "obj": "storey",
+   "nemotron": {
+    "qid": 1489,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1209,
+    "completion_tokens": 650,
+    "latency_s": 7.64,
+    "finish": "stop",
+    "image": [
+     966,
+     1156
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "raster-cv",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2199,
+   "path": "data/cubicasa5k/high_quality_architectural-13607.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta WC-istuinta pohjapiirustukseen on piirretty?",
+   "gold": 1,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 2199,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 352,
+    "completion_tokens": 199,
+    "latency_s": 2.94,
+    "finish": "stop",
+    "image": [
+     363,
+     739
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-detector",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 840,
+   "path": "data/cubicasa5k/high_quality-7768.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many separate WC rooms (toilet rooms marked WC) are on this floor plan?",
+   "gold": 0,
+   "obj": "wc_room",
+   "nemotron": {
+    "qid": 840,
+    "pred": 0.0,
+    "raw": "0",
+    "error": null,
+    "prompt_tokens": 1962,
+    "completion_tokens": 822,
+    "latency_s": 7.57,
+    "finish": "stop",
+    "image": [
+     1600,
+     1200
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 0,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 640,
+   "path": "data/cubicasa5k/high_quality-1655.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many windows are shown on this floor plan?",
+   "gold": 8,
+   "obj": "window",
+   "nemotron": {
+    "qid": 640,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 704,
+    "completion_tokens": 16384,
+    "latency_s": 106.73,
+    "finish": "length",
+    "image": [
+     822,
+     779
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 8 window detected at score >= 0.45, but 3 box(es) scored within 0.20 of the threshold; count not provable"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2159,
+   "path": "data/cubicasa5k/high_quality_architectural-13388.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta parveketta (myös lasitetut parvekkeet) pohjapiirustuksessa on?",
+   "gold": 0,
+   "obj": "balcony",
+   "nemotron": {
+    "qid": 2159,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 337,
+    "completion_tokens": 2639,
+    "latency_s": 20.78,
+    "finish": "stop",
+    "image": [
+     298,
+     397
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: only 2 room labels readable; cannot prove absence"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3690,
+   "path": "data/cubicasa5k/high_quality_architectural-672.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many bathrooms or washrooms (e.g. KH, KPH, PH, PESUH, SH) are on this floor plan, not counting separate WC rooms?",
+   "gold": 1,
+   "obj": "bathroom",
+   "nemotron": {
+    "qid": 3690,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 836,
+    "completion_tokens": 578,
+    "latency_s": 6.39,
+    "finish": "stop",
+    "image": [
+     914,
+     807
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1044,
+   "path": "data/cubicasa5k/high_quality_architectural-10026.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many bedrooms (makuuhuone, usually marked MH) are on this floor plan?",
+   "gold": 2,
+   "obj": "bedroom",
+   "nemotron": {
+    "qid": 1044,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 564,
+    "completion_tokens": 301,
+    "latency_s": 3.42,
+    "finish": "stop",
+    "image": [
+     793,
+     615
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3550,
+   "path": "data/cubicasa5k/high_quality_architectural-6355.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "gold": 24,
+   "obj": "door",
+   "nemotron": {
+    "qid": 3550,
+    "pred": 18.0,
+    "raw": "18",
+    "error": null,
+    "prompt_tokens": 521,
+    "completion_tokens": 16102,
+    "latency_s": 106.27,
+    "finish": "stop",
+    "image": [
+     887,
+     485
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 18 door detected at score >= 0.35, but 4 box(es) scored within 0.10 of the threshold; count not provable"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 837,
+   "path": "data/cubicasa5k/high_quality-7768.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta keittiötä (myös keittokomerot, avo- ja tupakeittiöt sekä apukeittiöt) pohjapiirustuksessa on?",
+   "gold": 1,
+   "obj": "kitchen",
+   "nemotron": {
+    "qid": 837,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1982,
+    "completion_tokens": 459,
+    "latency_s": 4.23,
+    "finish": "stop",
+    "image": [
+     1600,
+     1200
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: 2 kitchen label(s) read (KEITTIO, K); this count is not reliable for kitchen on dev, abstaining"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2823,
+   "path": "data/cubicasa5k/high_quality_architectural-2145.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta saunaa pohjapiirustuksessa on?",
+   "gold": 1,
+   "obj": "sauna",
+   "nemotron": {
+    "qid": 2823,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 329,
+    "completion_tokens": 324,
+    "latency_s": 4.71,
+    "finish": "stop",
+    "image": [
+     426,
+     511
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: 0 sauna label(s) read (); this count is not reliable for sauna on dev, abstaining"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1519,
+   "path": "data/cubicasa5k/high_quality_architectural-1153.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta suihkua ja kylpyammetta pohjapiirustukseen on piirretty yhteensä?",
+   "gold": 2,
+   "obj": "shower_or_bath",
+   "nemotron": {
+    "qid": 1519,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 631,
+    "completion_tokens": 16384,
+    "latency_s": 107.56,
+    "finish": "length",
+    "image": [
+     1054,
+     536
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: detector switched off for shower_or_bath: on held-out train-split images it was wrong more often than right (tools/tune_detector.py); raster-cv-fixtures: fixture model not trained (tools/train_mil.py final)"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2432,
+   "path": "data/cubicasa5k/high_quality_architectural-14566.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "gold": 2,
+   "obj": "sink",
+   "nemotron": {
+    "qid": 2432,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 924,
+    "completion_tokens": 728,
+    "latency_s": 7.72,
+    "finish": "stop",
+    "image": [
+     1174,
+     722
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 3,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2437,
+   "path": "data/cubicasa5k/high_quality_architectural-14566.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta kerrosta pohjapiirustuksessa on esitetty?",
+   "gold": 1,
+   "obj": "storey",
+   "nemotron": {
+    "qid": 2437,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 913,
+    "completion_tokens": 556,
+    "latency_s": 5.65,
+    "finish": "stop",
+    "image": [
+     1174,
+     722
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-cv",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2844,
+   "path": "data/cubicasa5k/high_quality_architectural-2164.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many toilet bowls (WC seats) are drawn on this floor plan?",
+   "gold": 1,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 2844,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1364,
+    "completion_tokens": 438,
+    "latency_s": 9.62,
+    "finish": "stop",
+    "image": [
+     1436,
+     925
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-detector",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1256,
+   "path": "data/cubicasa5k/high_quality_architectural-10498.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many separate WC rooms (toilet rooms marked WC) are on this floor plan?",
+   "gold": 1,
+   "obj": "wc_room",
+   "nemotron": {
+    "qid": 1256,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 566,
+    "completion_tokens": 1637,
+    "latency_s": 13.74,
+    "finish": "stop",
+    "image": [
+     884,
+     561
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 214,
+   "path": "data/cubicasa5k/colorful-8759.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many windows are shown on this floor plan?",
+   "gold": 5,
+   "obj": "window",
+   "nemotron": {
+    "qid": 214,
+    "pred": 5.0,
+    "raw": "5",
+    "error": null,
+    "prompt_tokens": 1954,
+    "completion_tokens": 8921,
+    "latency_s": 79.44,
+    "finish": "stop",
+    "image": [
+     1600,
+     1200
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 5 window detected at score >= 0.45, but 2 box(es) scored within 0.20 of the threshold; count not provable"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 584,
+   "path": "data/cubicasa5k/high_quality-1500.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many balconies (parveke, including glazed balconies) are on this floor plan?",
+   "gold": 1,
+   "obj": "balcony",
+   "nemotron": {
+    "qid": 584,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 425,
+    "completion_tokens": 733,
+    "latency_s": 6.63,
+    "finish": "stop",
+    "image": [
+     568,
+     635
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1371,
+   "path": "data/cubicasa5k/high_quality_architectural-11059.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta kylpy- tai pesuhuonetta (esim. KH, KPH, PH, PESUH, SH) pohjapiirustuksessa on, erillisiä WC-tiloja lukuun ottamatta?",
+   "gold": 2,
+   "obj": "bathroom",
+   "nemotron": {
+    "qid": 1371,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 960,
+    "completion_tokens": 4929,
+    "latency_s": 44.58,
+    "finish": "stop",
+    "image": [
+     1286,
+     659
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 550,
+   "path": "data/cubicasa5k/high_quality-1391.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many bedrooms (makuuhuone, usually marked MH) are on this floor plan?",
+   "gold": 1,
+   "obj": "bedroom",
+   "nemotron": {
+    "qid": 550,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 442,
+    "completion_tokens": 221,
+    "latency_s": 2.42,
+    "finish": "stop",
+    "image": [
+     661,
+     555
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1363,
+   "path": "data/cubicasa5k/high_quality_architectural-11059.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta ovea pohjapiirustuksessa on? Laske oviaukot, joissa on ovi; pelkkiä oviaukkoja ilman ovilehteä ei lasketa.",
+   "gold": 15,
+   "obj": "door",
+   "nemotron": {
+    "qid": 1363,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 951,
+    "completion_tokens": 16384,
+    "latency_s": 133.6,
+    "finish": "length",
+    "image": [
+     1286,
+     659
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 12 door detected at score >= 0.35, but 5 box(es) scored within 0.10 of the threshold; count not provable"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1508,
+   "path": "data/cubicasa5k/high_quality_architectural-1153.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many kitchens (including kitchenettes, open kitchens and utility kitchens) are on this floor plan?",
+   "gold": 1,
+   "obj": "kitchen",
+   "nemotron": {
+    "qid": 1508,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 631,
+    "completion_tokens": 2804,
+    "latency_s": 27.65,
+    "finish": "stop",
+    "image": [
+     1054,
+     536
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 418,
+   "path": "data/cubicasa5k/high_quality-12126.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many saunas are on this floor plan?",
+   "gold": 0,
+   "obj": "sauna",
+   "nemotron": {
+    "qid": 418,
+    "pred": 0.0,
+    "raw": "0",
+    "error": null,
+    "prompt_tokens": 450,
+    "completion_tokens": 384,
+    "latency_s": 4.73,
+    "finish": "stop",
+    "image": [
+     704,
+     576
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: only 1 room labels readable; cannot prove absence"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1335,
+   "path": "data/cubicasa5k/high_quality_architectural-11007.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta suihkua ja kylpyammetta pohjapiirustukseen on piirretty yhteensä?",
+   "gold": 1,
+   "obj": "shower_or_bath",
+   "nemotron": {
+    "qid": 1335,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 2220,
+    "completion_tokens": 2339,
+    "latency_s": 19.8,
+    "finish": "stop",
+    "image": [
+     1345,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: detector switched off for shower_or_bath: on held-out train-split images it was wrong more often than right (tools/tune_detector.py); raster-cv-fixtures: fixture model not trained (tools/train_mil.py final)"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3414,
+   "path": "data/cubicasa5k/high_quality_architectural-5906.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "gold": 3,
+   "obj": "sink",
+   "nemotron": {
+    "qid": 3414,
+    "pred": 4.0,
+    "raw": "4",
+    "error": null,
+    "prompt_tokens": 1126,
+    "completion_tokens": 7779,
+    "latency_s": 59.84,
+    "finish": "stop",
+    "image": [
+     1227,
+     847
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 4 sink detected at score >= 0.30, but 6 box(es) scored within 0.20 of the threshold; count not provable; raster-cv-fixtures: fixture model not trained (tools/train_mil.py final)"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 568,
+   "path": "data/cubicasa5k/high_quality-1391.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many floors (storeys) does this floor plan show?",
+   "gold": 1,
+   "obj": "storey",
+   "nemotron": {
+    "qid": 568,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 435,
+    "completion_tokens": 200,
+    "latency_s": 2.26,
+    "finish": "stop",
+    "image": [
+     661,
+     555
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-cv",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 716,
+   "path": "data/cubicasa5k/high_quality-5080.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many toilet bowls (WC seats) are drawn on this floor plan?",
+   "gold": 1,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 716,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1073,
+    "completion_tokens": 591,
+    "latency_s": 5.91,
+    "finish": "stop",
+    "image": [
+     1220,
+     808
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2516,
+   "path": "data/cubicasa5k/high_quality_architectural-14812.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many separate WC rooms (toilet rooms marked WC) are on this floor plan?",
+   "gold": 1,
+   "obj": "wc_room",
+   "nemotron": {
+    "qid": 2516,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 398,
+    "completion_tokens": 837,
+    "latency_s": 7.48,
+    "finish": "stop",
+    "image": [
+     506,
+     653
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 573,
+   "path": "data/cubicasa5k/high_quality-1500.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta ikkunaa pohjapiirustuksessa on?",
+   "gold": 2,
+   "obj": "window",
+   "nemotron": {
+    "qid": 573,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 419,
+    "completion_tokens": 3180,
+    "latency_s": 24.83,
+    "finish": "stop",
+    "image": [
+     568,
+     635
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 2 window detected at score >= 0.45, but 2 box(es) scored within 0.20 of the threshold; count not provable"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3655,
+   "path": "data/cubicasa5k/high_quality_architectural-6581.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta parveketta (myös lasitetut parvekkeet) pohjapiirustuksessa on?",
+   "gold": 1,
+   "obj": "balcony",
+   "nemotron": {
+    "qid": 3655,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 337,
+    "completion_tokens": 1684,
+    "latency_s": 13.91,
+    "finish": "stop",
+    "image": [
+     463,
+     335
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2819,
+   "path": "data/cubicasa5k/high_quality_architectural-2145.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta kylpy- tai pesuhuonetta (esim. KH, KPH, PH, PESUH, SH) pohjapiirustuksessa on, erillisiä WC-tiloja lukuun ottamatta?",
+   "gold": 1,
+   "obj": "bathroom",
+   "nemotron": {
+    "qid": 2819,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 369,
+    "completion_tokens": 532,
+    "latency_s": 6.01,
+    "finish": "stop",
+    "image": [
+     426,
+     511
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: 0 bathroom label(s) read (); this count is not reliable for bathroom on dev, abstaining"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2483,
+   "path": "data/cubicasa5k/high_quality_architectural-14762.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta makuuhuonetta (MH) pohjapiirustuksessa on?",
+   "gold": 0,
+   "obj": "bedroom",
+   "nemotron": {
+    "qid": 2483,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 725,
+    "completion_tokens": 1523,
+    "latency_s": 12.02,
+    "finish": "stop",
+    "image": [
+     629,
+     1042
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: only 2 room labels readable; cannot prove absence"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2506,
+   "path": "data/cubicasa5k/high_quality_architectural-14812.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "gold": 8,
+   "obj": "door",
+   "nemotron": {
+    "qid": 2506,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 409,
+    "completion_tokens": 16384,
+    "latency_s": 101.6,
+    "finish": "length",
+    "image": [
+     506,
+     653
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 10 door detected at score >= 0.35, but 1 box(es) scored within 0.10 of the threshold; count not provable"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1475,
+   "path": "data/cubicasa5k/high_quality_architectural-11426.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta keittiötä (myös keittokomerot, avo- ja tupakeittiöt sekä apukeittiöt) pohjapiirustuksessa on?",
+   "gold": 1,
+   "obj": "kitchen",
+   "nemotron": {
+    "qid": 1475,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1229,
+    "completion_tokens": 730,
+    "latency_s": 8.22,
+    "finish": "stop",
+    "image": [
+     966,
+     1156
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3411,
+   "path": "data/cubicasa5k/high_quality_architectural-5906.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta saunaa pohjapiirustuksessa on?",
+   "gold": 1,
+   "obj": "sauna",
+   "nemotron": {
+    "qid": 3411,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1112,
+    "completion_tokens": 774,
+    "latency_s": 7.29,
+    "finish": "stop",
+    "image": [
+     1227,
+     847
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: only 0 room labels readable; cannot prove absence"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 220,
+   "path": "data/cubicasa5k/colorful-8759.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many showers and bathtubs are drawn on this floor plan in total?",
+   "gold": 1,
+   "obj": "shower_or_bath",
+   "nemotron": {
+    "qid": 220,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1961,
+    "completion_tokens": 1472,
+    "latency_s": 11.68,
+    "finish": "stop",
+    "image": [
+     1600,
+     1200
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: detector switched off for shower_or_bath: on held-out train-split images it was wrong more often than right (tools/tune_detector.py); raster-cv-fixtures: fixture model not trained (tools/train_mil.py final)"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1332,
+   "path": "data/cubicasa5k/high_quality_architectural-11007.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "gold": 2,
+   "obj": "sink",
+   "nemotron": {
+    "qid": 1332,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 2223,
+    "completion_tokens": 1631,
+    "latency_s": 14.84,
+    "finish": "stop",
+    "image": [
+     1345,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": "raster-detector: 2 sink detected at score >= 0.30, but 3 box(es) scored within 0.20 of the threshold; count not provable; raster-cv-fixtures: fixture model not trained (tools/train_mil.py final)"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 887,
+   "path": "data/cubicasa5k/high_quality-8026.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta kerrosta pohjapiirustuksessa on esitetty?",
+   "gold": 1,
+   "obj": "storey",
+   "nemotron": {
+    "qid": 887,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 522,
+    "completion_tokens": 354,
+    "latency_s": 4.02,
+    "finish": "stop",
+    "image": [
+     618,
+     724
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-cv",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1330,
+   "path": "data/cubicasa5k/high_quality_architectural-11007.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many toilet bowls (WC seats) are drawn on this floor plan?",
+   "gold": 1,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 1330,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 2209,
+    "completion_tokens": 271,
+    "latency_s": 4.1,
+    "finish": "stop",
+    "image": [
+     1345,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-detector",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 3132,
+   "path": "data/cubicasa5k/high_quality_architectural-4517.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many separate WC rooms (toilet rooms marked WC) are on this floor plan?",
+   "gold": 0,
+   "obj": "wc_room",
+   "nemotron": {
+    "qid": 3132,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 328,
+    "completion_tokens": 2441,
+    "latency_s": 19.69,
+    "finish": "stop",
+    "image": [
+     502,
+     381
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 0,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 1795,
+   "path": "data/cubicasa5k/high_quality_architectural-12166.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "Kuinka monta ikkunaa pohjapiirustuksessa on?",
+   "gold": 4,
+   "obj": "window",
+   "nemotron": {
+    "qid": 1795,
+    "pred": 4.0,
+    "raw": "4",
+    "error": null,
+    "prompt_tokens": 1034,
+    "completion_tokens": 1178,
+    "latency_s": 11.37,
+    "finish": "stop",
+    "image": [
+     1243,
+     797
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": 5,
+    "route": "raster-detector",
+    "ok": false,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 2708,
+   "path": "data/cubicasa5k/high_quality_architectural-1933.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many balconies (parveke, including glazed balconies) are on this floor plan?",
+   "gold": 0,
+   "obj": "balcony",
+   "nemotron": {
+    "qid": 2708,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 345,
+    "completion_tokens": 3236,
+    "latency_s": 24.74,
+    "finish": "stop",
+    "image": [
+     628,
+     421
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": null,
+    "route": "raster-ocr-labels",
+    "ok": false,
+    "abstain": "raster-ocr-labels: only 2 room labels readable; cannot prove absence"
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 712,
+   "path": "data/cubicasa5k/high_quality-5080.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many bathrooms or washrooms (e.g. KH, KPH, PH, PESUH, SH) are on this floor plan, not counting separate WC rooms?",
+   "gold": 1,
+   "obj": "bathroom",
+   "nemotron": {
+    "qid": 712,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1096,
+    "completion_tokens": 874,
+    "latency_s": 8.29,
+    "finish": "stop",
+    "image": [
+     1220,
+     808
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "raster-ocr-labels",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": null
+  },
+  {
+   "qid": 6819,
+   "path": "data/swiss_dwellings/site11704_bldg18258_floor48967.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Wohnungen sind auf diesem Grundriss dargestellt?",
+   "gold": 2,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 6819,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1855,
+    "completion_tokens": 230,
+    "latency_s": 3.84,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5917,
+   "path": "data/swiss_dwellings/site3421_bldg5295_floor23605.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Badewannen sind auf diesem Grundriss eingezeichnet?",
+   "gold": 2,
+   "obj": "bathtub",
+   "nemotron": {
+    "qid": 5917,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1857,
+    "completion_tokens": 553,
+    "latency_s": 5.72,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5944,
+   "path": "data/swiss_dwellings/site644_bldg1390_floor6077.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many doors (interior doors and entrance doors together) are drawn on this floor plan?",
+   "gold": 36,
+   "obj": "door",
+   "nemotron": {
+    "qid": 5944,
+    "pred": 28.0,
+    "raw": "28",
+    "error": null,
+    "prompt_tokens": 1863,
+    "completion_tokens": 11782,
+    "latency_s": 78.06,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 36,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 36,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5667,
+   "path": "data/swiss_dwellings/site11692_bldg18240_floor48820.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Räume mit der Bezeichnung «Schlafzimmer» gibt es in diesem Geschoss?",
+   "gold": 3,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5667,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 1863,
+    "completion_tokens": 233,
+    "latency_s": 2.84,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 3,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6627,
+   "path": "data/swiss_dwellings/site2293_bldg3380_floor15055.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Duschen sind auf diesem Grundriss eingezeichnet?",
+   "gold": 4,
+   "obj": "shower",
+   "nemotron": {
+    "qid": 6627,
+    "pred": 4.0,
+    "raw": "4",
+    "error": null,
+    "prompt_tokens": 1857,
+    "completion_tokens": 6987,
+    "latency_s": 47.63,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": 4,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 4,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6232,
+   "path": "data/swiss_dwellings/site248_bldg456_floor1800.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many toilets (WC) are drawn on this floor plan?",
+   "gold": 6,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 6232,
+    "pred": 5.0,
+    "raw": "5",
+    "error": null,
+    "prompt_tokens": 1858,
+    "completion_tokens": 3145,
+    "latency_s": 20.56,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 6,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 6,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7600,
+   "path": "data/swiss_dwellings/site604_bldg1319_floor5779.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many washbasins are drawn on this floor plan?",
+   "gold": 0,
+   "obj": "washbasin",
+   "nemotron": {
+    "qid": 7600,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 6299,
+    "latency_s": 40.93,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 0,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 0,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6267,
+   "path": "data/swiss_dwellings/site897_bldg1970_floor8690.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Fenster sind auf diesem Grundriss eingezeichnet?",
+   "gold": 16,
+   "obj": "window",
+   "nemotron": {
+    "qid": 6267,
+    "pred": 16.0,
+    "raw": "16",
+    "error": null,
+    "prompt_tokens": 1855,
+    "completion_tokens": 3472,
+    "latency_s": 31.05,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 16,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 16,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7678,
+   "path": "data/swiss_dwellings/site418_bldg1080_floor4724.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many apartments (residential units) are shown on this floor plan?",
+   "gold": 3,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 7678,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 1859,
+    "completion_tokens": 484,
+    "latency_s": 5.68,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 3,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7602,
+   "path": "data/swiss_dwellings/site604_bldg1319_floor5779.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many bathtubs are drawn on this floor plan?",
+   "gold": 1,
+   "obj": "bathtub",
+   "nemotron": {
+    "qid": 7602,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 491,
+    "latency_s": 5.75,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 1,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6404,
+   "path": "data/swiss_dwellings/site3238_bldg4922_floor22515.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many doors (interior doors and entrance doors together) are drawn on this floor plan?",
+   "gold": 12,
+   "obj": "door",
+   "nemotron": {
+    "qid": 6404,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1863,
+    "completion_tokens": 16384,
+    "latency_s": 128.45,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 12,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 12,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6827,
+   "path": "data/swiss_dwellings/site11704_bldg18258_floor48967.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Räume mit der Bezeichnung «Küche» gibt es in diesem Geschoss?",
+   "gold": 2,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6827,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1863,
+    "completion_tokens": 393,
+    "latency_s": 4.79,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7706,
+   "path": "data/swiss_dwellings/site418_bldg1080_floor4724.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many showers are drawn on this floor plan?",
+   "gold": 2,
+   "obj": "shower",
+   "nemotron": {
+    "qid": 7706,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1855,
+    "completion_tokens": 3597,
+    "latency_s": 27.03,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6840,
+   "path": "data/swiss_dwellings/site11704_bldg18258_floor48967.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many toilets (WC) are drawn on this floor plan?",
+   "gold": 3,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 6840,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 1858,
+    "completion_tokens": 1055,
+    "latency_s": 9.73,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 3,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6410,
+   "path": "data/swiss_dwellings/site3238_bldg4922_floor22515.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many washbasins are drawn on this floor plan?",
+   "gold": 3,
+   "obj": "washbasin",
+   "nemotron": {
+    "qid": 6410,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 2463,
+    "latency_s": 19.38,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 3,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5975,
+   "path": "data/swiss_dwellings/site1138_bldg2292_floor10584.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Quante finestre sono disegnate in questa pianta?",
+   "gold": 69,
+   "obj": "window",
+   "nemotron": {
+    "qid": 5975,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1857,
+    "completion_tokens": 16384,
+    "latency_s": 108.39,
+    "finish": "length",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 69,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 69,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6288,
+   "path": "data/swiss_dwellings/site610_bldg1324_floor50793.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many apartments (residential units) are shown on this floor plan?",
+   "gold": 1,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 6288,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1859,
+    "completion_tokens": 4061,
+    "latency_s": 31.8,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 1,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7019,
+   "path": "data/swiss_dwellings/site936_bldg1976_floor8706.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Badewannen sind auf diesem Grundriss eingezeichnet?",
+   "gold": 2,
+   "obj": "bathtub",
+   "nemotron": {
+    "qid": 7019,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1857,
+    "completion_tokens": 275,
+    "latency_s": 3.86,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5945,
+   "path": "data/swiss_dwellings/site644_bldg1390_floor6077.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Quante porte (porte interne e porte d'ingresso insieme) sono disegnate in questa pianta?",
+   "gold": 36,
+   "obj": "door",
+   "nemotron": {
+    "qid": 5945,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1866,
+    "completion_tokens": 16384,
+    "latency_s": 105.13,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 36,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 36,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6398,
+   "path": "data/swiss_dwellings/site3238_bldg4922_floor22515.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many rooms labelled 'Cucina' are there on this floor?",
+   "gold": 1,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6398,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1859,
+    "completion_tokens": 319,
+    "latency_s": 4.03,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 1,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5983,
+   "path": "data/swiss_dwellings/site1138_bldg2292_floor10584.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Quante docce sono disegnate in questa pianta?",
+   "gold": 7,
+   "obj": "shower",
+   "nemotron": {
+    "qid": 5983,
+    "pred": 8.0,
+    "raw": "8",
+    "error": null,
+    "prompt_tokens": 1857,
+    "completion_tokens": 3065,
+    "latency_s": 23.79,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 7,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 7,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5685,
+   "path": "data/swiss_dwellings/site11692_bldg18240_floor48820.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele WCs sind auf diesem Grundriss eingezeichnet?",
+   "gold": 2,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 5685,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 1947,
+    "latency_s": 13.86,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6234,
+   "path": "data/swiss_dwellings/site248_bldg456_floor1800.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many washbasins are drawn on this floor plan?",
+   "gold": 3,
+   "obj": "washbasin",
+   "nemotron": {
+    "qid": 6234,
+    "pred": 5.0,
+    "raw": "5",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 1745,
+    "latency_s": 12.85,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 3,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6231,
+   "path": "data/swiss_dwellings/site248_bldg456_floor1800.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Fenster sind auf diesem Grundriss eingezeichnet?",
+   "gold": 20,
+   "obj": "window",
+   "nemotron": {
+    "qid": 6231,
+    "pred": 9.0,
+    "raw": "9",
+    "error": null,
+    "prompt_tokens": 1855,
+    "completion_tokens": 9208,
+    "latency_s": 60.23,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 20,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 20,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7956,
+   "path": "data/swiss_dwellings/site303_bldg598_floor2434.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many apartments (residential units) are shown on this floor plan?",
+   "gold": 2,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 7956,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1859,
+    "completion_tokens": 174,
+    "latency_s": 2.47,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6122,
+   "path": "data/swiss_dwellings/site279_bldg514_floor2041.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many bathtubs are drawn on this floor plan?",
+   "gold": 3,
+   "obj": "bathtub",
+   "nemotron": {
+    "qid": 6122,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 1111,
+    "latency_s": 9.3,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 3,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5870,
+   "path": "data/swiss_dwellings/site294_bldg554_floor2233.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many doors (interior doors and entrance doors together) are drawn on this floor plan?",
+   "gold": 25,
+   "obj": "door",
+   "nemotron": {
+    "qid": 5870,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1863,
+    "completion_tokens": 16384,
+    "latency_s": 106.14,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7002,
+   "path": "data/swiss_dwellings/site936_bldg1976_floor8706.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many rooms labelled 'Küche' are there on this floor?",
+   "gold": 2,
+   "obj": "room",
+   "nemotron": {
+    "qid": 7002,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1859,
+    "completion_tokens": 198,
+    "latency_s": 2.68,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5982,
+   "path": "data/swiss_dwellings/site1138_bldg2292_floor10584.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many showers are drawn on this floor plan?",
+   "gold": 7,
+   "obj": "shower",
+   "nemotron": {
+    "qid": 5982,
+    "pred": 4.0,
+    "raw": "4",
+    "error": null,
+    "prompt_tokens": 1855,
+    "completion_tokens": 10708,
+    "latency_s": 84.06,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 7,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 7,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5684,
+   "path": "data/swiss_dwellings/site11692_bldg18240_floor48820.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many toilets (WC) are drawn on this floor plan?",
+   "gold": 2,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 5684,
+    "pred": 3.0,
+    "raw": "3",
+    "error": null,
+    "prompt_tokens": 1858,
+    "completion_tokens": 1026,
+    "latency_s": 12.49,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6656,
+   "path": "data/swiss_dwellings/site424_bldg1074_floor4711.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many washbasins are drawn on this floor plan?",
+   "gold": 6,
+   "obj": "washbasin",
+   "nemotron": {
+    "qid": 6656,
+    "pred": 4.0,
+    "raw": "4",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 1053,
+    "latency_s": 10.86,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 6,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 6,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5946,
+   "path": "data/swiss_dwellings/site644_bldg1390_floor6077.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many windows are drawn on this floor plan?",
+   "gold": 29,
+   "obj": "window",
+   "nemotron": {
+    "qid": 5946,
+    "pred": 13.0,
+    "raw": "13",
+    "error": null,
+    "prompt_tokens": 1854,
+    "completion_tokens": 14030,
+    "latency_s": 117.94,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 29,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 29,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7584,
+   "path": "data/swiss_dwellings/site604_bldg1319_floor5779.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many apartments (residential units) are shown on this floor plan?",
+   "gold": 1,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 7584,
+    "pred": 1.0,
+    "raw": "1",
+    "error": null,
+    "prompt_tokens": 1859,
+    "completion_tokens": 707,
+    "latency_s": 8.87,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 1,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 1,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7976,
+   "path": "data/swiss_dwellings/site303_bldg598_floor2434.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many bathtubs are drawn on this floor plan?",
+   "gold": 2,
+   "obj": "bathtub",
+   "nemotron": {
+    "qid": 7976,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1856,
+    "completion_tokens": 506,
+    "latency_s": 4.5,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5909,
+   "path": "data/swiss_dwellings/site3421_bldg5295_floor23605.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Türen (Innentüren und Eingangstüren zusammen) sind auf diesem Grundriss eingezeichnet?",
+   "gold": 14,
+   "obj": "door",
+   "nemotron": {
+    "qid": 5909,
+    "pred": 10.0,
+    "raw": "10",
+    "error": null,
+    "prompt_tokens": 1866,
+    "completion_tokens": 13187,
+    "latency_s": 92.51,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 14,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 14,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5899,
+   "path": "data/swiss_dwellings/site3421_bldg5295_floor23605.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Wie viele Räume mit der Bezeichnung «Küche» gibt es in diesem Geschoss?",
+   "gold": 2,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5899,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1863,
+    "completion_tokens": 393,
+    "latency_s": 4.57,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6626,
+   "path": "data/swiss_dwellings/site2293_bldg3380_floor15055.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many showers are drawn on this floor plan?",
+   "gold": 4,
+   "obj": "shower",
+   "nemotron": {
+    "qid": 6626,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1855,
+    "completion_tokens": 1238,
+    "latency_s": 14.58,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 4,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 4,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6654,
+   "path": "data/swiss_dwellings/site424_bldg1074_floor4711.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many toilets (WC) are drawn on this floor plan?",
+   "gold": 4,
+   "obj": "toilet",
+   "nemotron": {
+    "qid": 6654,
+    "pred": 4.0,
+    "raw": "4",
+    "error": null,
+    "prompt_tokens": 1858,
+    "completion_tokens": 419,
+    "latency_s": 10.45,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 4,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 4,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6311,
+   "path": "data/swiss_dwellings/site610_bldg1324_floor50793.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Combien de lavabos sont dessinés sur ce plan ?",
+   "gold": 2,
+   "obj": "washbasin",
+   "nemotron": {
+    "qid": 6311,
+    "pred": 2.0,
+    "raw": "2",
+    "error": null,
+    "prompt_tokens": 1857,
+    "completion_tokens": 2217,
+    "latency_s": 13.92,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 2,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5873,
+   "path": "data/swiss_dwellings/site294_bldg554_floor2233.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "Quante finestre sono disegnate in questa pianta?",
+   "gold": 18,
+   "obj": "window",
+   "nemotron": {
+    "qid": 5873,
+    "pred": 10.0,
+    "raw": "10",
+    "error": null,
+    "prompt_tokens": 1857,
+    "completion_tokens": 7911,
+    "latency_s": 76.38,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 18,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 18,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5924,
+   "path": "data/swiss_dwellings/site3421_bldg5295_floor23605.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment B in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 65.51,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 5924,
+    "pred": 15.5,
+    "raw": "15.5",
+    "error": null,
+    "prompt_tokens": 1883,
+    "completion_tokens": 14657,
+    "latency_s": 127.5,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 65.51,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 65.51,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7580,
+   "path": "data/swiss_dwellings/site3863_bldg6018_floor25218.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the total net area in m² of all rooms labelled 'Chambre à coucher' on this floor?",
+   "gold": 60.62,
+   "obj": "room",
+   "nemotron": {
+    "qid": 7580,
+    "pred": 42.0,
+    "raw": "42",
+    "error": null,
+    "prompt_tokens": 1875,
+    "completion_tokens": 12867,
+    "latency_s": 79.96,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 60.62,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 60.62,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7715,
+   "path": "data/swiss_dwellings/site418_bldg1080_floor4724.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Wie gross ist die Nettowohnfläche von Wohnung B in m² (Summe aller Räume ohne Balkone, Loggien, Terrassen und andere Aussenräume)?",
+   "gold": 50.15,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 7715,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1890,
+    "completion_tokens": 16384,
+    "latency_s": 126.25,
+    "finish": "length",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 50.15,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 50.15,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7020,
+   "path": "data/swiss_dwellings/site936_bldg1976_floor8706.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of room 4.02 ('Wohnen/Essen') in m²?",
+   "gold": 33.71,
+   "obj": "room",
+   "nemotron": {
+    "qid": 7020,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1875,
+    "completion_tokens": 16384,
+    "latency_s": 118.92,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 33.71,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 33.71,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5990,
+   "path": "data/swiss_dwellings/site1138_bldg2292_floor10584.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment G in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 33.42,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 5990,
+    "pred": 6.9,
+    "raw": "6.9",
+    "error": null,
+    "prompt_tokens": 1883,
+    "completion_tokens": 1464,
+    "latency_s": 10.67,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 33.41,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 33.41,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6663,
+   "path": "data/swiss_dwellings/site424_bldg1074_floor4711.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Wie gross ist die Nettofläche von Raum 3.06 («Zimmer») in m²?",
+   "gold": 12.93,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6663,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1873,
+    "completion_tokens": 16384,
+    "latency_s": 112.98,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 12.93,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 12.93,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7984,
+   "path": "data/swiss_dwellings/site303_bldg598_floor2434.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment B in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 55.21,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 7984,
+    "pred": 55.21,
+    "raw": "55.21",
+    "error": null,
+    "prompt_tokens": 1883,
+    "completion_tokens": 2252,
+    "latency_s": 15.93,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 55.21,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 55.21,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7023,
+   "path": "data/swiss_dwellings/site936_bldg1976_floor8706.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Wie gross ist die Nettofläche von Raum 4.12 («Korridor») in m²?",
+   "gold": 11.0,
+   "obj": "room",
+   "nemotron": {
+    "qid": 7023,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1874,
+    "completion_tokens": 16384,
+    "latency_s": 116.41,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 11.0,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 11.0,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6635,
+   "path": "data/swiss_dwellings/site2293_bldg3380_floor15055.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Wie gross ist die Nettowohnfläche von Wohnung B in m² (Summe aller Räume ohne Balkone, Loggien, Terrassen und andere Aussenräume)?",
+   "gold": 57.98,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 6635,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1890,
+    "completion_tokens": 16384,
+    "latency_s": 109.94,
+    "finish": "length",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 57.98,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 57.98,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6276,
+   "path": "data/swiss_dwellings/site897_bldg1970_floor8690.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of room U1.15 ('Korridor') in m²?",
+   "gold": 15.36,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6276,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1873,
+    "completion_tokens": 16384,
+    "latency_s": 106.92,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 15.36,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 15.36,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5960,
+   "path": "data/swiss_dwellings/site644_bldg1390_floor6077.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment D in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 112.92,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 5960,
+    "pred": 79.81,
+    "raw": "79.81",
+    "error": null,
+    "prompt_tokens": 1883,
+    "completion_tokens": 15158,
+    "latency_s": 102.39,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 112.92,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 112.92,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6246,
+   "path": "data/swiss_dwellings/site248_bldg456_floor1800.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the total net area in m² of all rooms labelled 'Zimmer' on this floor?",
+   "gold": 89.16,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6246,
+    "pred": 25.09,
+    "raw": "25.09",
+    "error": null,
+    "prompt_tokens": 1872,
+    "completion_tokens": 3109,
+    "latency_s": 22.4,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 89.17,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 89.17,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6130,
+   "path": "data/swiss_dwellings/site279_bldg514_floor2041.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment C in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 66.14,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 6130,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1883,
+    "completion_tokens": 16384,
+    "latency_s": 100.79,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 66.15,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 66.15,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6132,
+   "path": "data/swiss_dwellings/site279_bldg514_floor2041.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the total net area in m² of all rooms labelled 'Pièce' on this floor?",
+   "gold": 135.22,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6132,
+    "pred": 76.7,
+    "raw": "76.7",
+    "error": null,
+    "prompt_tokens": 1872,
+    "completion_tokens": 5841,
+    "latency_s": 38.09,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 135.23,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 135.23,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6242,
+   "path": "data/swiss_dwellings/site248_bldg456_floor1800.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment A in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 70.86,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 6242,
+    "pred": 36.61,
+    "raw": "36.61",
+    "error": null,
+    "prompt_tokens": 1883,
+    "completion_tokens": 6399,
+    "latency_s": 41.63,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 70.31,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 70.31,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7978,
+   "path": "data/swiss_dwellings/site303_bldg598_floor2434.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of room 0.17 ('Pièce') in m²?",
+   "gold": 14.44,
+   "obj": "room",
+   "nemotron": {
+    "qid": 7978,
+    "pred": 14.44,
+    "raw": "14.44",
+    "error": null,
+    "prompt_tokens": 1872,
+    "completion_tokens": 220,
+    "latency_s": 3.81,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 14.44,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 14.44,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6633,
+   "path": "data/swiss_dwellings/site2293_bldg3380_floor15055.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Wie gross ist die Nettowohnfläche von Wohnung A in m² (Summe aller Räume ohne Balkone, Loggien, Terrassen und andere Aussenräume)?",
+   "gold": 72.17,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 6633,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1890,
+    "completion_tokens": 16384,
+    "latency_s": 118.17,
+    "finish": "length",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 72.17,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 72.17,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6125,
+   "path": "data/swiss_dwellings/site279_bldg514_floor2041.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Quelle est la surface nette de la pièce 0.09 (« Bain ») en m² ?",
+   "gold": 3.52,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6125,
+    "pred": 3.52,
+    "raw": "3.52",
+    "error": null,
+    "prompt_tokens": 1872,
+    "completion_tokens": 190,
+    "latency_s": 2.67,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": true
+   },
+   "ours": {
+    "pred": 3.52,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3.52,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5925,
+   "path": "data/swiss_dwellings/site3421_bldg5295_floor23605.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Wie gross ist die Nettowohnfläche von Wohnung B in m² (Summe aller Räume ohne Balkone, Loggien, Terrassen und andere Aussenräume)?",
+   "gold": 65.51,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 5925,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1890,
+    "completion_tokens": 16384,
+    "latency_s": 112.33,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 65.51,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 65.51,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6278,
+   "path": "data/swiss_dwellings/site897_bldg1970_floor8690.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of room U1.09 ('Küche') in m²?",
+   "gold": 6.08,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6278,
+    "pred": 5.0,
+    "raw": "5",
+    "error": null,
+    "prompt_tokens": 1873,
+    "completion_tokens": 9806,
+    "latency_s": 63.27,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 6.08,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 6.08,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6317,
+   "path": "data/swiss_dwellings/site610_bldg1324_floor50793.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Quelle est la surface nette de l'appartement A en m² (somme de toutes ses pièces, hors balcons, loggias, terrasses et autres espaces extérieurs) ?",
+   "gold": 96.43,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 6317,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1890,
+    "completion_tokens": 16384,
+    "latency_s": 114.44,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 96.44,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 96.44,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7611,
+   "path": "data/swiss_dwellings/site604_bldg1319_floor5779.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Quelle est la surface nette totale en m² de toutes les pièces désignées « Pièce » à cet étage ?",
+   "gold": 51.91,
+   "obj": "room",
+   "nemotron": {
+    "qid": 7611,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1876,
+    "completion_tokens": 16384,
+    "latency_s": 125.52,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 51.92,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 51.92,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7609,
+   "path": "data/swiss_dwellings/site604_bldg1319_floor5779.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Quelle est la surface nette de l'appartement A en m² (somme de toutes ses pièces, hors balcons, loggias, terrasses et autres espaces extérieurs) ?",
+   "gold": 71.33,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 7609,
+    "pred": 20.15,
+    "raw": "20.15",
+    "error": null,
+    "prompt_tokens": 1890,
+    "completion_tokens": 3234,
+    "latency_s": 23.43,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 71.34,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 71.34,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5984,
+   "path": "data/swiss_dwellings/site1138_bldg2292_floor10584.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of room 3.71 ('Ripostiglio') in m²?",
+   "gold": 16.56,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5984,
+    "pred": 3.71,
+    "raw": "3.71",
+    "error": null,
+    "prompt_tokens": 1874,
+    "completion_tokens": 3652,
+    "latency_s": 27.96,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 16.56,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 16.56,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5887,
+   "path": "data/swiss_dwellings/site294_bldg554_floor2233.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Qual è la superficie netta dell'appartamento A in m² (somma di tutti i locali, esclusi balconi, logge, terrazze e altri spazi esterni)?",
+   "gold": 61.49,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 5887,
+    "pred": 61.46,
+    "raw": "61.46",
+    "error": null,
+    "prompt_tokens": 1892,
+    "completion_tokens": 4379,
+    "latency_s": 32.08,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": 61.48,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 61.48,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6284,
+   "path": "data/swiss_dwellings/site897_bldg1970_floor8690.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the total net area in m² of all rooms labelled 'Zimmer' on this floor?",
+   "gold": 62.84,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6284,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1872,
+    "completion_tokens": 16384,
+    "latency_s": 110.55,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 62.84,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 62.84,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 7712,
+   "path": "data/swiss_dwellings/site418_bldg1080_floor4724.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment C in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 97.23,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 7712,
+    "pred": 129.0,
+    "raw": "129",
+    "error": null,
+    "prompt_tokens": 1883,
+    "completion_tokens": 14736,
+    "latency_s": 94.7,
+    "finish": "stop",
+    "image": [
+     1131,
+     1600
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 97.23,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 97.23,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 6422,
+   "path": "data/swiss_dwellings/site3238_bldg4922_floor22515.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the total net area in m² of all rooms labelled 'Stanza' on this floor?",
+   "gold": 105.29,
+   "obj": "room",
+   "nemotron": {
+    "qid": 6422,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1872,
+    "completion_tokens": 16384,
+    "latency_s": 116.21,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 105.28,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 105.28,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5961,
+   "path": "data/swiss_dwellings/site644_bldg1390_floor6077.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "Qual è la superficie netta dell'appartamento D in m² (somma di tutti i locali, esclusi balconi, logge, terrazze e altri spazi esterni)?",
+   "gold": 112.92,
+   "obj": "apartment",
+   "nemotron": {
+    "qid": 5961,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 1892,
+    "completion_tokens": 16384,
+    "latency_s": 107.9,
+    "finish": "length",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 112.92,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 112.92,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5956,
+   "path": "data/swiss_dwellings/site644_bldg1390_floor6077.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of room 3.22 ('Stanza') in m²?",
+   "gold": 22.0,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5956,
+    "pred": 22.0,
+    "raw": "22.00",
+    "error": null,
+    "prompt_tokens": 1872,
+    "completion_tokens": 3032,
+    "latency_s": 24.08,
+    "finish": "stop",
+    "image": [
+     1600,
+     1131
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": 22.0,
+    "route": "dxf-geometry",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 22.0,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5023,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „ELUTUBA+KÖÖK (61-1)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 25.25,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5023,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2093,
+    "completion_tokens": 16384,
+    "latency_s": 131.73,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.25,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5031,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „TUALETTRUUM (63-3)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 5.58,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5031,
+    "pred": 4.2,
+    "raw": "4.2",
+    "error": null,
+    "prompt_tokens": 2090,
+    "completion_tokens": 3749,
+    "latency_s": 31.19,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.579,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.58,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4984,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ELUTUBA+KÖÖK (60-1)' on '4.korrus', in m²?",
+   "gold": 25.25,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4984,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2087,
+    "completion_tokens": 16384,
+    "latency_s": 134.06,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.25,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4947,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „ELUTUBA+KÖÖK (55-1)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 22.05,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4947,
+    "pred": 39.2,
+    "raw": "39.2",
+    "error": null,
+    "prompt_tokens": 2093,
+    "completion_tokens": 2604,
+    "latency_s": 24.51,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 22.052,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 22.05,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5029,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „ELUTUBA+KÖÖK (63-1)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 25.25,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5029,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2093,
+    "completion_tokens": 16384,
+    "latency_s": 141.31,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.25,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4921,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „ELUTUBA+KÖÖK (56-1)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 20.3,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4921,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2093,
+    "completion_tokens": 16384,
+    "latency_s": 133.13,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 20.302,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 20.3,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4926,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TUALETTRUUM (58-3)' on '4.korrus', in m²?",
+   "gold": 6.24,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4926,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 16384,
+    "latency_s": 131.19,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 6.244,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 6.24,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4966,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TREPIKODA (401)' on '4.korrus', in m²?",
+   "gold": 45.5,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4966,
+    "pred": 40.1,
+    "raw": "40.1",
+    "error": null,
+    "prompt_tokens": 2083,
+    "completion_tokens": 7820,
+    "latency_s": 68.24,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 45.498,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 45.5,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4943,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „KORIDOR (405)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 63.84,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4943,
+    "pred": 28.2,
+    "raw": "28.2",
+    "error": null,
+    "prompt_tokens": 2086,
+    "completion_tokens": 2767,
+    "latency_s": 29.37,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 63.841,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 63.84,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5010,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ESIK (52-2)' on '4.korrus', in m²?",
+   "gold": 5.1,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5010,
+    "pred": 3.2,
+    "raw": "3.2",
+    "error": null,
+    "prompt_tokens": 2080,
+    "completion_tokens": 3607,
+    "latency_s": 23.73,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.096,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.1,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5008,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ELUTUBA+KÖÖK (50-1)' on '4.korrus', in m²?",
+   "gold": 25.25,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5008,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2087,
+    "completion_tokens": 16384,
+    "latency_s": 125.12,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.25,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4973,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „TUALETTRUUM (48-3)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 5.58,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4973,
+    "pred": 5.9,
+    "raw": "5.9",
+    "error": null,
+    "prompt_tokens": 2090,
+    "completion_tokens": 3807,
+    "latency_s": 28.05,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.579,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.58,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4933,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „TUALETTRUUM (59-4)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 5.52,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4933,
+    "pred": 4.2,
+    "raw": "4.2",
+    "error": null,
+    "prompt_tokens": 2090,
+    "completion_tokens": 3408,
+    "latency_s": 28.74,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.518,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.52,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5033,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on kõigi ruumide netopõrandapind kokku korrusel „4.korrus“ (m²)?",
+   "gold": 857.18,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5033,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2081,
+    "completion_tokens": 16384,
+    "latency_s": 123.41,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 857.175,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 857.24,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4928,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ESIK (58-2)' on '4.korrus', in m²?",
+   "gold": 4.78,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4928,
+    "pred": 2.5,
+    "raw": "2.5",
+    "error": null,
+    "prompt_tokens": 2080,
+    "completion_tokens": 3824,
+    "latency_s": 36.88,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 4.776,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 4.78,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4970,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ELUTUBA+KÖÖK (47-1)' on '4.korrus', in m²?",
+   "gold": 25.25,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4970,
+    "pred": 47.2,
+    "raw": "47.2",
+    "error": null,
+    "prompt_tokens": 2087,
+    "completion_tokens": 4867,
+    "latency_s": 37.21,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.25,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4997,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „ELUTUBA+KÖÖK (48-1)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 25.25,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4997,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2093,
+    "completion_tokens": 16384,
+    "latency_s": 109.17,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.25,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4977,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „ESIK (64-2)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 5.1,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4977,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2086,
+    "completion_tokens": 16384,
+    "latency_s": 122.2,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.096,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.1,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4938,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ELUTUBA+KÖÖK (59-1)' on '4.korrus', in m²?",
+   "gold": 25.59,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4938,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2087,
+    "completion_tokens": 16384,
+    "latency_s": 116.05,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.594,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.59,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4922,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TUALETTRUUM (56-3)' on '4.korrus', in m²?",
+   "gold": 4.2,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4922,
+    "pred": 4.2,
+    "raw": "4.2",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 4901,
+    "latency_s": 39.43,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": true
+   },
+   "ours": {
+    "pred": 4.2,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 4.2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5016,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TUALETTRUUM (62-3)' on '4.korrus', in m²?",
+   "gold": 5.58,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5016,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 16384,
+    "latency_s": 110.27,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.579,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.58,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4936,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'MAGAMISTUBA (59-2)' on '4.korrus', in m²?",
+   "gold": 18.5,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4936,
+    "pred": 13.9,
+    "raw": "13.9",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 2560,
+    "latency_s": 21.8,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 18.5,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 18.5,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5030,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TUALETTRUUM (63-3)' on '4.korrus', in m²?",
+   "gold": 5.58,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5030,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 16384,
+    "latency_s": 112.28,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.579,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.58,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4946,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ELUTUBA+KÖÖK (55-1)' on '4.korrus', in m²?",
+   "gold": 22.05,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4946,
+    "pred": 42.2,
+    "raw": "42.2",
+    "error": null,
+    "prompt_tokens": 2087,
+    "completion_tokens": 6729,
+    "latency_s": 46.89,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 22.052,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 22.05,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4948,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TUALETTRUUM (55-3)' on '4.korrus', in m²?",
+   "gold": 4.35,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4948,
+    "pred": 4.9,
+    "raw": "4.9",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 8493,
+    "latency_s": 60.68,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 4.351,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 4.35,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5012,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ELUTUBA+KÖÖK (62-1)' on '4.korrus', in m²?",
+   "gold": 25.25,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5012,
+    "pred": null,
+    "raw": "",
+    "error": null,
+    "prompt_tokens": 2087,
+    "completion_tokens": 16384,
+    "latency_s": 110.32,
+    "finish": "length",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 25.25,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 25.25,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4957,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „HUMANITAARRUUM (403)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 22.4,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4957,
+    "pred": 24.6,
+    "raw": "24,6",
+    "error": null,
+    "prompt_tokens": 2091,
+    "completion_tokens": 5775,
+    "latency_s": 48.37,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 22.405,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 22.4,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4916,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TUALETTRUUM (57-3)' on '4.korrus', in m²?",
+   "gold": 4.2,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4916,
+    "pred": 5.2,
+    "raw": "5.2",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 2123,
+    "latency_s": 20.95,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": true,
+    "correct": false
+   },
+   "ours": {
+    "pred": 4.2,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 4.2,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 5020,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'TUALETTRUUM (61-3)' on '4.korrus', in m²?",
+   "gold": 5.58,
+   "obj": "room",
+   "nemotron": {
+    "qid": 5020,
+    "pred": 5.2,
+    "raw": "5.2",
+    "error": null,
+    "prompt_tokens": 2084,
+    "completion_tokens": 2914,
+    "latency_s": 23.68,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 5.579,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 5.58,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  },
+  {
+   "qid": 4912,
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "What is the net floor area of the room 'ESIK (57-2)' on '4.korrus', in m²?",
+   "gold": 3.67,
+   "obj": "room",
+   "nemotron": {
+    "qid": 4912,
+    "pred": 4.2,
+    "raw": "4.2",
+    "error": null,
+    "prompt_tokens": 2080,
+    "completion_tokens": 3331,
+    "latency_s": 27.34,
+    "finish": "stop",
+    "image": [
+     1600,
+     1267
+    ],
+    "retried_16k": false,
+    "correct": false
+   },
+   "ours": {
+    "pred": 3.665,
+    "route": "ifc",
+    "ok": true,
+    "abstain": null
+   },
+   "ours_pdf_only": {
+    "pred": 3.67,
+    "route": "pdf-vector",
+    "ok": true,
+    "abstain": null
+   }
+  }
+ ]
+}
