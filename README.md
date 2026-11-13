@@ -99,6 +99,13 @@ RESULTS_PLACEHOLDER
   on scans abstains. `--prior` answers those with the most common dev answer per object type, as a
   labelled baseline (route `raster-prior`, evidence says "PRIOR, not visual proof"). It is in the table
   so a real detector has a number to beat, not because it is a method.
+- One raster detector was tried and not shipped: counting ellipse-like inner contours as toilets and
+  sinks. On dev it matched the exact toilet count on 2 of 164 plans (correlation 0.34), far below the
+  65% a constant answer gets. Text glyphs and door swings produce too many ellipses.
+- The test split holds few drawings for some sources: ifc_models test is a single model (Esplanades,
+  630 questions), so its 100% says the rules transfer to one unseen model, not to IFC in general.
+- Compound and breakdown questions ("which types and how many of each", "on level 1" without quotes)
+  abstain on purpose. Answering them with one number for the whole building was wrong every time.
 - Text answers (ifc_bench, some opening_design) are free-form; `eval.py` scores them approximately (all
   numbers in the gold answer present within 2%, else 60% token overlap). That scorer is lenient: "B3" is
   scored correct against "B3 (aluminium sliding door)".
