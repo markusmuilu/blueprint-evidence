@@ -5,10 +5,11 @@ Order of preference, cheapest and most verifiable first:
   2. the PDF text layer and its tables
   3. the PDF's own vector linework (pdf-vector), when no DXF/IFC twin exists or twins are ignored
   4. raster computer vision (classical, no model)
-  4. (future) a vision LLM, only when nothing above can answer
+  5. nemotron (bpqa/routes/nemotron.py): a vision-language model, only when nothing above can answer;
+     its answer must carry boxes of what it relied on, is validated and marked tier "estimate"
 
 A route returns an Answer or abstains with a reason; the router then tries the next route.
-Every route here costs $0 in model calls.
+Routes 1 to 4 cost $0 in model calls; route 5 is the only one that calls a model.
 """
 from __future__ import annotations
 
