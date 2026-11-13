@@ -5,6 +5,10 @@ Implemented:
              as its own scan onto a pure-white canvas, so panels are the large connected
              components of non-white pixels after a morphological close.
 
+  rooms    = bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies: room labels read with a
+             local OCR model (RapidOCR) and matched against the Finnish abbreviations (MH, K, KK,
+             S, WC, KH, PH, PARVEKE ...). Each matched label is boxed and numbered.
+
 Everything else abstains by default. With `prior=True` (eval.py --prior) the route instead
 answers with the most common dev-split value for that object type, labelled route
 "raster-prior", low confidence and an evidence image that says plainly it is not visual proof.
@@ -23,6 +27,9 @@ from PIL import Image
 
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
+from .labels import ROOM_PATTERNS, dedupe, find_rooms, is_word, quad_box
+from .ocr import ocr_image
+from . import fixtures as fx
 
 ROUTE = "raster-cv"
 PRIOR_FILE = Path(__file__).resolve().parents[2] / "out" / "priors.json"
@@ -84,6 +91,11 @@ def answer(ctx, q) -> Answer:
                                   note="each numbered box is one separately scanned floor panel")
         return ans
 
+    if q.obj in ROOM_PATTERNS:
+        return room_labels(ctx, q, img)
+    if q.obj in FIXTURE_HEADS:
+        return fixture_count(ctx, q, img)
+
     if getattr(ctx, "prior", False):
         pr = priors().get(f"{ctx.q.source}/{q.obj}")
         if pr:
@@ -96,3 +108,90 @@ def answer(ctx, q) -> Answer:
                                       note=ans.explanation)
             return ans
     return abstain(ROUTE, f"no classical-CV detector for {q.obj} yet")
+
+
+LABEL_ROUTE = "raster-ocr-labels"
+NAMES = {"bedroom": "bedroom (MH)", "kitchen": "kitchen (K, KK, KEITTIO, AVOK, TUPAK)", "sauna": "sauna (S, SAUNA, LH)",
+         "wc_room": "WC room (WC)", "bathroom": "bathroom (KH, KPH, PH, PESUH, SH)", "balcony": "balcony (PARVEKE)"}
+MIN_WORDS_FOR_ZERO = 3      # a zero answer needs proof that the plan's labels were readable
+# Which label counts are answered, per room type (set on the dev split, see CHANGELOG.md). Elsewhere
+# the route abstains: kitchens and bathrooms are often unlabelled (an open kitchen inside "OH"), so a
+# zero is not proof; two or more kitchen, bathroom or sauna labels usually means the scan also shows
+# part of a neighbouring flat, or a stray "S"/"K" was read.
+ANSWER_COUNTS = {"kitchen": {1}, "bathroom": {1}, "sauna": {1}, "bedroom": "positive",
+                 "wc_room": "all", "balcony": {0, 1}}
+
+
+def room_labels(ctx, q, img) -> Answer:
+    toks = ocr_image(ctx.file)
+    hits = find_rooms(toks, q.obj)
+    words = [t for t in dedupe(toks) if is_word(t["text"])]
+    if not hits and len(words) < MIN_WORDS_FOR_ZERO:
+        return abstain(LABEL_ROUTE, f"only {len(words)} room labels readable; cannot prove absence")
+    n = len(hits)
+    rule = ANSWER_COUNTS[q.obj]
+    if not (rule == "all" or (rule == "positive" and n > 0) or (isinstance(rule, set) and n in rule)):
+        return abstain(LABEL_ROUTE, f"{n} {q.obj} label(s) read ({', '.join(h['text'] for h in hits)}); "
+                                    f"this count is not reliable for {q.obj} on dev, abstaining")
+    ans = Answer(value=n, unit="count", route=LABEL_ROUTE, confidence=0.7,
+                 items=[{"n": i + 1, "label": h["text"], "match": h["part"], "ocr_conf": h["conf"],
+                         "xyxy": [round(v) for v in h["box"]]} for i, h in enumerate(hits)],
+                 explanation=f"{n} room label(s) read as {NAMES[q.obj]}"
+                             + (f"; {len(words)} room labels read in total, none of this type" if not n else ""))
+    if ctx.evidence:
+        cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+        hit_boxes = {tuple(h["box"]) for h in hits}
+        for t in words:                      # every other label that was read, thin grey, so absence is checkable
+            b = quad_box(t["quad"])
+            if tuple(b) not in hit_boxes:
+                cv.box((b[0] - 2, b[1] - 2, b[2] + 2, b[3] + 2), color=(150, 150, 150), width=1)
+        for i, h in enumerate(hits):
+            b = h["box"]
+            cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=PALETTE[0], width=3)
+        ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
+                              f"Answer: {n}   route: {LABEL_ROUTE} (local OCR, cost $0)",
+                              note=f"red numbered boxes: labels read as {NAMES[q.obj]}: "
+                                   + ", ".join(h["text"] for h in hits) + "; grey boxes: other room labels read")
+    return ans
+
+
+FIXTURE_ROUTE = "raster-cv-fixtures"
+FIXTURE_MODEL = "fixtures_mil_toilet_sink_shower_or_bath.npz"
+FIXTURE_HEADS = {"toilet": 0, "sink": 1, "shower_or_bath": 2}
+FIXTURE_NAMES = {"toilet": "toilet bowl", "sink": "sink or wash basin", "shower_or_bath": "shower or bathtub"}
+UNSURE = (0.3, 0.7)          # a candidate scored inside this band makes the count unprovable
+MAX_ANSWER = {"toilet": 3, "sink": 4, "shower_or_bath": 2}
+
+
+def fixture_count(ctx, q, img) -> Answer:
+    model = fx.load_model(FIXTURE_MODEL)
+    if model is None:
+        return abstain(FIXTURE_ROUTE, "fixture model not trained (tools/train_mil.py final)")
+    if q.obj not in [str(h) for h in model["heads"]]:
+        return abstain(FIXTURE_ROUTE, f"no {q.obj} head in the fixture model")
+    j = [str(h) for h in model["heads"]].index(q.obj)
+    cands = fx.candidates(img)
+    if not cands:
+        return abstain(FIXTURE_ROUTE, "no closed outlines found")
+    sc = fx.score(model, fx.features(img, cands))[:, j]
+    pos = [i for i in np.argsort(-sc) if sc[i] > 0.5]
+    unsure = [i for i in range(len(sc)) if UNSURE[0] < sc[i] < UNSURE[1]]
+    n = len(pos)
+    if unsure:
+        return abstain(FIXTURE_ROUTE, f"{n} {q.obj} found but {len(unsure)} candidate(s) scored between "
+                                      f"{UNSURE[0]} and {UNSURE[1]}; count not provable")
+    if n == 0 or n > MAX_ANSWER[q.obj]:
+        return abstain(FIXTURE_ROUTE, f"{n} {q.obj} found; outside the range the detector is reliable for")
+    items = [{"n": k + 1, "xywh": list(cands[i]["xywh"]), "score": round(float(sc[i]), 2)} for k, i in enumerate(pos)]
+    ans = Answer(value=n, unit="count", route=FIXTURE_ROUTE, confidence=0.6, items=items,
+                 explanation=f"{n} closed outline(s) classified as {FIXTURE_NAMES[q.obj]} "
+                             f"(classifier trained from dev image counts; every other candidate scored < {UNSURE[0]})")
+    if ctx.evidence:
+        cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+        for it in items:
+            x, y, w, h = it["xywh"]
+            cv.box((x - 4, y - 4, x + w + 4, y + h + 4), n=it["n"], color=PALETTE[1], width=3)
+        ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
+                              f"Answer: {n}   route: {FIXTURE_ROUTE} (cost $0)",
+                              note=f"each numbered box is the inside of one drawn {FIXTURE_NAMES[q.obj]} outline")
+    return ans

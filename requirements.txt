@@ -9,3 +9,4 @@ pymupdf==2.1
 pymupdf4llm==2.1
 pymupdf_layout==2.1
 shapely==2.2.0
+rapidocr-onnxruntime==1.4.4
