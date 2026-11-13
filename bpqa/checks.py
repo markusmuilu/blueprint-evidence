@@ -227,7 +227,8 @@ LOWER_FACTOR = 0.5
 # Checks whose implied value replaces the route's count when the check fails (the answer then becomes
 # an estimate either way). Chosen on the dev split (tools/check_eval.py --tiers): only where the
 # implied value was right more often than the route's own count on dev answers that failed the check.
-ADOPT: set[str] = set()
+ADOPT = {"numbered-labels", "summary-kitchen", "summary-sauna", "utility-kitchen", "floor-names", "stairs-label",
+         "showers>=bathrooms"}
 TIERS = True     # False: the pre-tier behaviour (a failed "abstain" check withdraws the answer)
 
 
