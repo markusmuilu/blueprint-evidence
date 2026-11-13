@@ -182,7 +182,7 @@ Takeoff results (every number against a stated reference; dev was used for devel
 | Swiss bathroom, kitchen sums, where Stoa asks about every such room on the floor | sum of Stoa's per-room areas | 18/18 | 19/20 |
 | IFC bathroom, WC, kitchen, bedroom sums (models and plan sheets) | sum of Stoa's per-room areas, same completeness rule | 56/56 (60 type sets: 2 abstain, 2 answered with a room list that differs from the asked rooms) | 18/18 (19 sets: 1 differs) |
 | IFC rooms in the sums | Stoa's per-room areas | 204/204 | 184/184 |
-| CubiCasa measured room area, leave-one-out | the area printed on the plan, held out of the scale | 18.7% within 2%, 36.8% within 5%, median error 9.3% (193 of 1471 printed rooms measurable, 52 of 197 plans) | TEST_RASTER |
+| CubiCasa measured room area, leave-one-out | the area printed on the plan, held out of the scale | 18.7% within 2%, 36.8% within 5%, median error 9.3% (193 of 1471 printed rooms measurable, 52 of 197 plans) | 4.8% within 2%, 21.4% within 5%, median error 12.3% (42 of 303 printed rooms measurable, 12 of 45 plans; 635 test images OCRed) |
 
 Baselines: before this branch every takeoff question was a parser abstention (0% coverage). The
 existing area answers did not change: `eval.py` on the preview dev split gives the same Swiss, IFC

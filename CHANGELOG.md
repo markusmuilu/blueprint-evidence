@@ -38,7 +38,7 @@ Morphology sizes tried (close 3-9 px, open 4-8 px): close 5 / open 4 kept the mo
 openings lose thin partitions. Gating by rectangularity and by 4+ agreeing scale rooms reached at best
 57.6% within 5% on 33 rooms. That is not Stoa's 2%, so measured areas are not answered: a CubiCasa
 takeoff uses printed areas only and abstains, with the measured estimate in the reason, when a room
-has none. Test split, once, same settings: TEST_RASTER_CL.
+has none. Test split, once, same settings (635 test images, 45 plans, 303 printed rooms): 42 measured, 4.8% within 2%, 21.4% within 5%, median error 12.3%.
 
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
