@@ -128,7 +128,7 @@ class PdfFloor:
         # -- rooms: closed fills grouped by stroke style; the group holding most labels wins
         groups = {}
         for p in vp.paths:
-            if p.fill is None or not p.closed or len(p.pts) < 4:
+            if p.fill is None or not p.closed or len(p.pts) < 4 or _lum(p.fill) < 0.75:   # walls are dark
                 continue
             poly = _poly(p.pts)
             if poly is None or poly.area < 4 or poly.area > 0.5 * page_area:
@@ -221,7 +221,14 @@ class PdfFloor:
 
         # -- objects ---------------------------------------------------------------------
         room_paths = {id(r["path"]) for r in self.rooms}
-        objs = [p for p in vp.paths if id(p) not in room_paths and inreg(p.rect)]
+        # objects must sit within 0.8 m of a room shape (windows sit in the walls around rooms);
+        # legend symbols next to the plan are further away
+        from shapely.ops import unary_union
+        from shapely.prepared import prep
+        near_rooms = prep(unary_union([r["poly"] for r in self.rooms]).buffer(m(0.8))) if self.rooms else None
+        self.near_rooms = near_rooms
+        objs = [p for p in vp.paths if id(p) not in room_paths and inreg(p.rect)
+                and (near_rooms is None or near_rooms.contains(Point((p.rect[0] + p.rect[2]) / 2, (p.rect[1] + p.rect[3]) / 2)))]
         circles = []
         for p in objs:
             if p.ops and set(p.ops) == {"c"} and len(p.ops) in (4, 8) and len(p.subpaths) == 1:
@@ -243,12 +250,15 @@ class PdfFloor:
                 L, S, ang = _rect_dims(q4)
                 Lm, Sm = L * mpp, S * mpp
                 if p.fill is None and p.kind == "s":
-                    if 0.5 <= Lm <= 3.2 and 0.02 <= Sm <= 0.6 and L >= 2 * S:
+                    if 0.3 <= Lm <= 6.0 and 0.02 <= Sm <= 0.6 and L >= 2 * S:
                         door_c.append((p, q4))
-                    elif 0.6 <= Sm and Lm <= 1.8 and L <= 1.6 * S:
+                    elif 0.6 <= Sm and Lm <= 1.8 and L <= 2.0 * S:
                         shower_c.append((p, q4))
-                elif p.fill is not None and _lum(p.fill) > 0.9 and 0.2 <= Lm <= 8 and Sm <= 0.7 and L >= 1.5 * S:
-                    frames.append((p, q4, L, S, ang))
+                elif p.fill is not None and _lum(p.fill) > 0.9 and 0.15 <= Lm <= 15 and Sm <= 1.5:
+                    c4 = Polygon(q4).centroid
+                    if not any(r["poly"].contains(c4) for r in self.rooms if r["poly"].distance(c4) == 0
+                               and r["poly"].exterior.distance(c4) > m(0.05)):
+                        frames.append((p, q4, L, S, ang))   # windows sit in walls, outside room shapes
             if p.kind == "s" and not p.closed:
                 for sp in p.subpaths:
                     if len(sp) == 2:
@@ -266,28 +276,38 @@ class PdfFloor:
             sig_score = {s: sum(touches(q) for _, q in v) for s, v in by_sig.items()}
             best = max(sig_score, key=lambda s: (sig_score[s], len(by_sig[s])))
             if sig_score[best] > 0 or len(by_sig) == 1:
-                self.doors = [_bb(q) for _, q in by_sig[best]]
+                # the style is chosen from thin quads; then every unfilled four-corner shape in that
+                # style counts (doors in thick or skewed walls are not thin)
                 self.door_style = best
+                for p in objs:
+                    q4 = _four_corner(p) if (p.closed and p.fill is None and p.kind == "s") else None
+                    if q4 is None or (_round_c(p.stroke), round(p.width, 2)) != best:
+                        continue
+                    L, S, _ = _rect_dims(q4)
+                    if 0.3 <= L * mpp <= 6.0 and S * mpp <= 1.5:
+                        self.doors.append(_bb(q4))
 
         # windows: frame rectangle + two glazing lines along it; else three parallel strips
         seg_tree = STRtree(segs) if segs else None
         strips = []
         for p, q4, L, S, ang in frames:
             fp = Polygon(q4).buffer(0.6)
-            n = 0
+            n_long = n_short = 0
             if seg_tree is not None:
                 for i in seg_tree.query(fp, predicate="contains"):
                     sgm = segs[i]
                     (x0, y0), (x1, y1) = sgm.coords
                     la = math.atan2(y1 - y0, x1 - x0)
-                    par = abs(math.sin(la - ang)) < 0.05
-                    if par and sgm.length >= 0.7 * L:
-                        n += 1
-            if n >= 2:
+                    if abs(math.sin(la - ang)) < 0.05 and sgm.length >= 0.7 * L:
+                        n_long += 1
+                    elif abs(math.cos(la - ang)) < 0.05 and sgm.length >= 0.7 * S and S >= 0.8 * L:
+                        n_short += 1      # square frame: glazing may run along either side
+            if n_long >= 2 or n_short >= 2:
                 self.windows.append(_bb(q4))
-            else:
+            elif L >= 2 * S and S * mpp <= 0.7:
                 strips.append(_bb(q4))
-        if strips:
+        # three-strip windows only on drawings that draw no framed window at all
+        if strips and not self.windows:
             groups3 = _strip_groups(strips, cross=m(0.6))
             self.windows += [g for g, k in groups3 if k >= 3]
 
@@ -305,14 +325,17 @@ class PdfFloor:
             w, h = (x1 - x0) * mpp, (y1 - y0) * mpp
             fillr = poly.area / max((x1 - x0) * (y1 - y0), 1e-9)
             Lm, Sm = max(w, h), min(w, h)
-            if 0.70 <= fillr <= 0.82 and 0.15 <= Sm and Lm <= 0.95:
+            if 0.70 <= fillr <= 0.82 and 0.1 <= Sm and Lm <= 1.3:
                 drain = any(r * mpp < 0.06 and poly.contains(Point(cx, cy)) for cx, cy, r in circles)
                 (self.washbasins if drain else self.toilets).append(poly.bounds)
                 self.fixture_centroids.append(poly.centroid.coords[0])
-            elif fillr > 0.85 and 1.2 <= Lm <= 2.3 and 0.5 <= Sm <= 1.2:
+            elif fillr > 0.85 and 0.3 <= Lm <= 2.5 and 0.3 <= Sm <= 1.3:
                 self.bathtubs.append(poly.bounds)
                 self.fixture_centroids.append(poly.centroid.coords[0])
-        for p, q4 in shower_c:
+        for p, q4 in shower_c:      # a shower tray has its drain drawn as a small circle
+            sp_ = Polygon(q4)
+            if not any(r * mpp < 0.08 and sp_.contains(Point(cx, cy)) for cx, cy, r in circles):
+                continue
             self.showers.append(_bb(q4))
             self.fixture_centroids.append(Polygon(q4).centroid.coords[0])
 
