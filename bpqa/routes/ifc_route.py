@@ -166,29 +166,38 @@ def space_label_variants(sp):
 
 
 def storey_of_sheet(M, pdf_path):
-    """The storey whose space labels appear most often in the sheet's text layer. Needs at least two
-    hits and a clear winner; returns (storey or None, how it was decided)."""
+    """The storey a plan sheet shows, from its text layer: the storey's own name printed on the sheet
+    (title block) counts 3, and each space label printed on it counts 1 / (number of storeys that
+    have a space with that label), so labels repeated on every floor ('Bad', 'Gang') do not decide.
+    Needs a clear winner; returns (storey or None, how it was decided)."""
     import pymupdf
     with pymupdf.open(str(pdf_path)) as doc:
         text = " ".join(page.get_text() for page in doc)
     words = set(norm(w) for w in re.split(r"[\s()]+", text) if w)
     full = norm(text)
-    hits = {}
+
+    def printed(s):
+        s = norm(s)
+        return bool(s) and (s in words or (len(s) > 3 and s in full))
+
+    by_name = {}
+    for sp in M.entities("room"):
+        st = M.storey_of(sp)
+        for nm in {norm(sp.Name), norm(getattr(sp, "LongName", None) or "")} - {""}:
+            by_name.setdefault(nm, set()).add(st)
+    score = {}
     for st in M.storeys:
-        n = 0
-        for sp in M.entities("room"):
-            if M.storey_of(sp) != st:
-                continue
-            nm = norm(sp.Name)
-            if nm and (nm in words or (len(nm) > 3 and nm in full)):
-                n += 1
-        hits[st] = n
-    ranked = sorted(hits.items(), key=lambda kv: -kv[1])
-    if not ranked or ranked[0][1] < 2 or (len(ranked) > 1 and ranked[1][1] >= 0.8 * ranked[0][1]):
-        return None, "space labels on the sheet do not single out one storey: " + ", ".join(
-            f"{st.Name} {n}" for st, n in ranked[:3])
-    st, n = ranked[0]
-    return st, f"sheet shows storey {st.Name} ({n} of its space labels printed on the sheet)"
+        sc = 3.0 if (printed(st.Name or "") and len(norm(st.Name)) > 1) else 0.0
+        for nm, sts in by_name.items():
+            if st in sts and printed(nm):
+                sc += 1.0 / len(sts)
+        score[st] = sc
+    ranked = sorted(score.items(), key=lambda kv: -kv[1])
+    desc = ", ".join(f"{st.Name} {v:.1f}" for st, v in ranked[:3])
+    if not ranked or ranked[0][1] < 2 or (len(ranked) > 1 and ranked[1][1] >= 0.7 * ranked[0][1]):
+        return None, "storey names and space labels on the sheet do not single out one storey: " + desc
+    st = ranked[0][0]
+    return st, f"sheet shows storey {st.Name} (score {desc})"
 
 
 def space_type_label(sp) -> str:
