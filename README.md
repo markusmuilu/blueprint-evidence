@@ -154,9 +154,11 @@ set STOA_DATA=C:\path\to\junction-dataset-preview
 ```
 
 `eval.py` options: `--split dev|test|all`, `--sources swiss_dwellings,ifc_models`, `--limit N`,
-`--evidence` (render overlays into `out/evidence/`), `--prior` (see below), `--pdf-only` (PDF questions
-only, DXF/IFC twins ignored; `ask.py` takes it too). Results go to
-`out/<split>/answers.jsonl`, `summary.txt` and `summary.json`.
+`--evidence` (render overlays into `out/evidence/`), `--prior` (also report the dev-majority baseline per
+object; it is never used as an answer), `--no-tiers` (withdraw estimates, the behaviour before tiers),
+`--no-checks`, `--pdf-only` (PDF questions only, DXF/IFC twins ignored; `ask.py` takes it too). Results go
+to `out/<split>/answers.jsonl`, `summary.txt` and `summary.json`; the summary has accuracy, coverage,
+precision, and the number and precision of answers in each tier.
 
 One question:
 
@@ -180,7 +182,24 @@ land in `models/`, which is not committed):
 .venv\Scripts\python tools/tune_detector.py --stoa ../data/stoa-full/junction-dataset --images ../data/detector/ds_cubi/tune_images.txt --imgsz 1280
 ```
 
-Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG) and
+Test-time augmentation and the tiled pretrained detector (each policy is tuned on the same 624 held-out
+train-split images; `pick_detector.py` keeps the better one per object by cross-validated exact-count
+accuracy and writes `models/detector_thresholds.json`, which names the model and mode per object):
+
+```
+set T=--stoa ../data/stoa-full/junction-dataset --images ../data/detector/ds_cubi/tune_images.txt
+.venv\Scripts\python tools/tune_detector.py %T% --out models/th_base.json
+.venv\Scripts\python tools/tune_detector.py %T% --tta --out models/th_tta.json
+.venv\Scripts\python tools/build_tile_dataset.py --ds ../data/detector/ds_cubi --public ../data/cubicasa5k-public/cubicasa5k --overlap out/overlap --out ../data/detector/ds_tiles
+.venv\Scripts\python -c "from ultralytics.utils.downloads import attempt_download_asset as d; d('yolo26s.pt')"
+.venv\Scripts\python tools/train_detector.py --data ../data/detector/ds_tiles/data.yaml --name tiles_s --weights yolo26s.pt --imgsz 1024 --batch 8 --time 4.5 --copy-as detector_tiles.pt
+.venv\Scripts\python tools/tune_detector.py %T% --model models/detector_tiles.pt --tile 1024 --tile-scale 2 --out models/th_tiles.json
+.venv\Scripts\python tools/tune_detector.py %T% --model models/detector_tiles.pt --tile 1024 --tile-scale 2 --tta --out models/th_tiles_tta.json
+.venv\Scripts\python tools/pick_detector.py models/th_base.json models/th_tta.json models/th_tiles.json models/th_tiles_tta.json --out models/detector_thresholds.json
+```
+
+Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG), `python tests/test_tiling.py`
+(tiles, seam merging, rotated and mirrored views mapped back) and
 `python tools/test_overlap.py --work <scratch folder>` (overlap tool on the preview).
 
 ### Split
