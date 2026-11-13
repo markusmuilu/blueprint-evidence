@@ -12,6 +12,7 @@ Every route here costs $0 in model calls.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 from .answer import Answer, abstain
@@ -48,6 +49,28 @@ class Context:
         return p if p.exists() else None
 
 
+@lru_cache(maxsize=32)
+def _licences(licence_md: Path) -> dict:
+    """file name -> licence id, from the `| file | title | licence | ...` table in LICENSE.md."""
+    out = {}
+    if licence_md.exists():
+        for line in licence_md.read_text(encoding="utf-8", errors="replace").splitlines():
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) >= 3 and "." in cells[0]:
+                out[cells[0].split("/")[-1]] = cells[2]
+    return out
+
+
+def no_derivatives(ctx: Context) -> bool:
+    """NoDerivatives files must stay unchanged, so no overlay is drawn on (or rendered from) them."""
+    files = [ctx.file]
+    m = ctx.model_ifc()
+    if m is not None:
+        files.append(m)
+    lic = _licences(ctx.root / "data" / ctx.q.source / "LICENSE.md")
+    return any("ND" in lic.get(f.name, "").upper().split("-") for f in files)
+
+
 def candidate_routes(ctx: Context):
     routes = []
     if ctx.sibling("dxf") is not None:
@@ -67,6 +90,8 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         return query, abstain("parser", "question not understood by the rule parser (LLM parser hook not enabled)")
     last = abstain("router", "no route for this file type")
     reasons = []
+    if ctx.evidence and no_derivatives(ctx):
+        ctx.evidence = False   # answer still given; the JSON items list is the evidence
     for fn in candidate_routes(ctx):
         try:
             a = fn(ctx, query)

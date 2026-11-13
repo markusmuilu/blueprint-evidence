@@ -117,5 +117,5 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     d.line([(0, head_h - 2), (img.width, head_h - 2)], fill=(200, 200, 200), width=2)
     canvas.paste(img, (0, head_h))
     out.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(out, optimize=True)
+    canvas.save(out)
     return str(out)

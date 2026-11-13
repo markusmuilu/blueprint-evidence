@@ -25,7 +25,7 @@ from ..answer import Answer, abstain
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
 
 ROUTE = "raster-cv"
-PRIOR_FILE = Path(__file__).resolve().parents[2] / "priors.json"
+PRIOR_FILE = Path(__file__).resolve().parents[2] / "out" / "priors.json"
 
 
 def panels(img_bgr, white=245, min_frac=0.04):
@@ -56,6 +56,7 @@ def fit_priors(questions, parse, split_of) -> dict:
             c.setdefault(f"{q.source}/{p.obj}", Counter())[q.answer] += 1
     out = {k: {"value": v.most_common(1)[0][0], "freq": v.most_common(1)[0][1] / sum(v.values()), "n": sum(v.values())}
            for k, v in c.items()}
+    PRIOR_FILE.parent.mkdir(parents=True, exist_ok=True)
     PRIOR_FILE.write_text(json.dumps(out, indent=1, sort_keys=True), encoding="utf-8")
     priors.cache_clear()
     return out
