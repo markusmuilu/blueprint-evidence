@@ -119,6 +119,11 @@ def ents(M, classes):
                    if (t := E.get_type(e)) is not None and t.is_a("IfcSanitaryTerminalType")]
         except RuntimeError:
             pass
+    if "IfcRoof" in classes:
+        try:
+            out += [e for e in M.m.by_type("IfcSlab") if getattr(e, "PredefinedType", None) == "ROOF"]
+        except RuntimeError:
+            pass
     if "IfcStair" in classes:
         out = [e for e in out if not (E.get_aggregate(e) and E.get_aggregate(e).is_a("IfcStair"))]
     seen, uniq = set(), []
@@ -515,8 +520,20 @@ def plan(M, question) -> Lookup | None:
     if re.search(r"\bthickness(es)?\b", f) and classes and not unknown_terms(f, M):
         return Lookup(intent="types", attr="thickness", **base)
     if re.search(r"\b(dimensions?|sizes?|sizing|width and height|heights?|widths?)\b", f) and classes and named is None and \
-            classes != ["IfcSpace"] and not re.search(r"\b(widest|narrowest|tallest|largest|smallest)\b", f):
+            classes != ["IfcSpace"] and not re.search(r"\b(widest|narrowest|tallest|largest|smallest|greatest|biggest|"
+                                                      r"highest|lowest|maximum|minimum|average|mean|top \d+)\b", f) \
+            and not re.search(r"\bceilings?\b", f):
         return Lookup(intent="types", attr="dims", **base)
+    stat_attr = next((a for rx, a in ((r"width", "width"), (r"height|ceiling", "height"), (r"area", "area"),
+                                      (r"length", "length"), (r"volume", "volume")) if re.search(rx, f)), None)
+    if re.search(r"\b(average|mean|typical)\b", f) and stat_attr and (classes or re.search(r"ceiling", f)):
+        if re.search(r"ceiling", f):
+            base.update(classes=["IfcSpace"], label="space")
+        return Lookup(intent="stats", attr=stat_attr, **base)
+    if re.search(r"\bceiling heights?\b|\bheights? of (the )?ceilings?\b", f) and room is None and \
+            not re.search(r"\b(tallest|highest|lowest|largest|smallest|top)\b", f):
+        base.update(classes=["IfcSpace"], label="space", by_level=True)
+        return Lookup(intent="stats", attr="height", **base)
     # extremes: widest door, largest room, tallest ceilings, narrowest window
     ext_words = [(r"widest|greatest widths?|largest widths?|maximum width|biggest width", "width", "max"),
                  (r"narrowest|smallest widths?|minimum width", "width", "min"),
@@ -893,6 +910,34 @@ def run(M, L):
                 c = Counter(f"{x.is_a()[3:]} {type_name(x)}" for x in inside)
                 text += "\nElements in this space: " + "; ".join(f"{k} ({v})" for k, v in c.most_common(20))
         return text, [dict(facts, key=name)], [e], "element attributes, quantity sets and material"
+
+    if L.intent == "stats":
+        fn = ATTR_FN[L.attr]
+        vals, srcs = [], set()
+        for e in es:
+            v, src = fn(M, e)
+            if v is not None:
+                vals.append((v, e))
+                srcs.add(src)
+        if not vals:
+            raise LookupError(f"no {L.attr} value on the {lab}s")
+        u = ATTR_UNIT[L.attr]
+        xs = [v for v, _ in vals]
+        lo, hi = min(vals, key=lambda t: t[0]), max(vals, key=lambda t: t[0])
+        nm = lambda e: space_display(e) if e.is_a("IfcSpace") else (e.Name or e.GlobalId)
+        lines = [f"{L.attr.capitalize()} of {len(vals)} of {len(es)} {lab}s{scope}: average {_fmt(sum(xs) / len(xs))} {u}, "
+                 f"median {_fmt(sorted(xs)[len(xs) // 2])} {u}, minimum {_fmt(lo[0])} {u} ({nm(lo[1])}), maximum "
+                 f"{_fmt(hi[0])} {u} ({nm(hi[1])})"]
+        if L.by_level:
+            per = OrderedDict()
+            for v, e in sorted(vals, key=lambda t: float(getattr(M.storey_of(t[1]), "Elevation", 0) or 0) if M.storey_of(t[1]) else 0):
+                st = M.storey_of(e)
+                per.setdefault(st.Name if st is not None else "(no storey)", []).append(v)
+            for k, v in per.items():
+                c = Counter(round(x, 2) for x in v).most_common(1)[0]
+                lines.append(f"- {k}: {len(v)} {lab}s, most common {_fmt(c[0])} {u} ({c[1]}), range {_fmt(min(v))} to {_fmt(max(v))} {u}")
+        return "\n".join(lines), [{"key": nm(e), "value": round(v, 3)} for v, e in vals][:200], [e for _, e in vals], \
+            f"{L.attr} from {', '.join(sorted(s for s in srcs if s))}"
 
     if L.intent == "extreme":
         fn = ATTR_FN[L.attr]
