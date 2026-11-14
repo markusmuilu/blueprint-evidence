@@ -32,14 +32,15 @@ from shapely.geometry import LineString, Point, Polygon, box
 from shapely.strtree import STRtree
 
 from .. import takeoff
-from ..answer import Answer, abstain
-from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
+from ..answer import Answer, abstain, estimate
+from ..evidence import AMBER, BLUE, PALETTE, ImageCanvas, evidence_path, finish
 from ..pdfvec import PT_M, load_page
 from .dxf_swiss import AREA_RE, NUM_RE, OUTDOOR, SHAFT_VOID, UNIT_RE, _window_groups
 from . import pdf_generic
 from .scope_guard import single_room_problem
 
 ROUTE = "pdf-vector"
+GENERIC_ROUTE = "pdf-generic"   # answers from the convention-free reading (pdf_generic.py): estimates
 NOMINAL_M_PER_PT = 100 * PT_M        # size gates only, never areas, when no scale is found
 
 
@@ -586,8 +587,11 @@ def answer(ctx, q) -> Answer:
         conf = round(min(conf, sc.confidence), 2)
     unit = "count" if q.measure == "count" else "m2"
     scale_note = f"scale {sc.method} ({sc.detail})" if sc.known else "scale unknown"
-    ans = Answer(value=value, unit=unit, route=ROUTE, confidence=conf, items=items,
+    ans = Answer(value=value, unit=unit, route=ROUTE if gen_conf is None else GENERIC_ROUTE, confidence=conf, items=items,
                  explanation=f"{value} = {note} in {ctx.file.name}; {scale_note}")
+    if gen_conf is not None:      # door swings or text labels, not a recognised drawing convention
+        estimate(ans, f"convention-free reading ({note}), confidence {conf}")
+        ans.uncertain = items or [{"n": i + 1, "bbox_pt": [round(v, 1) for v in b]} for i, b in enumerate(boxes)]
     if q.variant == "type_sum":
         rows = [{"label": r["tname"], "number": r["number"], "area": fl.room_area(r), "source": "drawn room outline x scale"}
                 for r in rooms_used]
@@ -596,11 +600,12 @@ def answer(ctx, q) -> Answer:
                            + f" Source: {ctx.file.name}; {scale_note}.")
 
     if ctx.evidence:
-        ans.evidence = render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes)
+        ans.evidence = render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes, route=ans.route,
+                                       estimate=ans.tier == "estimate")
     return ans
 
 
-def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes):
+def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes, route=ROUTE, estimate=False):
     """Overlay drawn from the same shapes that produced the answer, on the rendered PDF page."""
     img, mat = fl.vp.render()
     cv = ImageCanvas(img)
@@ -622,7 +627,7 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes):
     for i, b in enumerate(boxes):
         a, c = tr(b[0], b[1]), tr(b[2], b[3])
         cv.box((min(a[0], c[0]) - 3, min(a[1], c[1]) - 3, max(a[0], c[0]) + 3, max(a[1], c[1]) + 3), n=i + 1,
-               color=PALETTE[0], width=3)
+               color=AMBER if estimate else BLUE, width=3)
     if q.obj == "apartment" and q.measure == "count":
         for i, u in enumerate(fl.units):
             col = PALETTE[i % len(PALETTE)]
@@ -638,11 +643,12 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes):
             for s in c.get("spans", []):
                 a, d = tr(s.bbox[0], s.bbox[1]), tr(s.bbox[2], s.bbox[3])
                 cv.d.rectangle([min(a[0], d[0]) - 2, min(a[1], d[1]) - 2, max(a[0], d[0]) + 2, max(a[1], d[1]) + 2],
-                               outline=(29, 120, 196), width=2)
+                               outline=BLUE, width=2)
     sum_note = ""
     if q.measure == "area" and len(rooms_used) > 1:
         sum_note = " + ".join(f"{fl.room_area(r):.2f}" for r in rooms_used[:25]) + (" + ..." if len(rooms_used) > 25 else "")
     scale_line = f"scale: {sc.method}, {sc.m_per_pt * 100:.4f} cm per pt" if sc.known else "scale: unknown"
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), ROUTE) if q.variant == "type_sum" else f"Answer: {value} {unit}   route: {ROUTE} (cost $0)"),
+    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), route) if q.variant == "type_sum" else
+                   f"Answer: {value} {unit}{'   ESTIMATE' if estimate else ''}   route: {route} (cost $0)"),
                   note=note + (": " + sum_note if sum_note else "") + f"; {scale_line} (scale sources boxed blue)")

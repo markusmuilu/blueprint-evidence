@@ -25,8 +25,8 @@ import numpy as np
 from PIL import Image
 
 from ..answer import Answer, abstain, estimate
-from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
-from .labels import ROOM_PATTERNS, dedupe, find_rooms, fuzzy_reads, is_word, quad_box
+from ..evidence import AMBER, BLUE, GREY, PALETTE, ImageCanvas, evidence_path, finish
+from .labels import ROOM_PATTERNS, dedupe, find_rooms, fuzzy_reads, is_word, label_reads, quad_box
 from .ocr import ocr_image
 from . import detector
 from . import fixtures as fx
@@ -73,7 +73,9 @@ def answer(ctx, q) -> Answer:
         return ans
 
     first = None
-    if q.obj in ROOM_PATTERNS:
+    if q.obj == "room" and q.label:
+        first = named_labels(ctx, q, img)
+    elif q.obj in ROOM_PATTERNS:
         first = room_labels(ctx, q, img)
     elif q.obj in detector.OBJECTS:
         first = detector.answer(ctx, q, img)
@@ -135,16 +137,46 @@ def room_labels(ctx, q, img) -> Answer:
         for t in words:                      # every other label that was read, thin grey, so absence is checkable
             b = quad_box(t["quad"])
             if tuple(b) not in hit_boxes:
-                cv.box((b[0] - 2, b[1] - 2, b[2] + 2, b[3] + 2), color=(150, 150, 150), width=1)
+                cv.box((b[0] - 2, b[1] - 2, b[2] + 2, b[3] + 2), color=GREY, width=1)
+        col = AMBER if ans.tier == "estimate" else BLUE
         for i, h in enumerate(hits):
             b = h["box"]
-            cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=PALETTE[0], width=3)
+            cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=col, width=3)
         tier = "   ESTIMATE" if ans.tier == "estimate" else "   proven"
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                               f"Answer: {n}{tier}   ({LABEL_ROUTE}, local OCR, $0)",
-                              note=f"red numbered boxes: labels read as {NAMES[q.obj]}: "
+                              note=f"{'amber' if ans.tier == 'estimate' else 'blue'} numbered boxes: labels read as {NAMES[q.obj]}: "
                                    + ", ".join(h["text"] for h in hits) + "; grey boxes: other room labels read"
                                    + (f". Estimate because: {ans.tier_reason}" if ans.tier == "estimate" else ""))
+    return ans
+
+
+def named_labels(ctx, q, img) -> Answer:
+    """"How many rooms labelled 'X'": the readings of that label on the scan. Always an estimate: no Stoa
+    scan question asks this, so the count has no dev measurement behind it."""
+    toks = ocr_image(ctx.file)
+    hits = label_reads(toks, q.label)
+    words = [t for t in dedupe(toks) if len(t["text"].strip()) >= 2]
+    n = len(hits)
+    fz = [h for h in hits if h["fuzzy"]]
+    ans = Answer(value=n, unit="count", route=LABEL_ROUTE, confidence=0.5, tier="estimate",
+                 items=[{"n": i + 1, "label": h["text"], "ocr_conf": h["conf"], "xyxy": [round(v) for v in h["box"]]}
+                        for i, h in enumerate(hits)],
+                 uncertain=[{"label": h["text"], "xyxy": [round(v) for v in h["box"]]} for h in hits],
+                 explanation=f"{n} reading(s) of the label '{q.label}' on the scan"
+                             + (f" ({len(fz)} with one OCR error)" if fz else "")
+                             + (f"; {len(words)} text items read in total" if not n else ""),
+                 tier_reason="named-label counts on scans have no dev measurement (no Stoa scan question asks one)"
+                             + ("" if n else "; a zero needs every label on the plan to be readable"))
+    if ctx.evidence:
+        cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+        for i, h in enumerate(hits):
+            b = h["box"]
+            cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=AMBER, width=3)
+        ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
+                              f"Answer: {n}   ESTIMATE   ({LABEL_ROUTE}, local OCR, $0)",
+                              note=f"amber numbered boxes: readings of '{q.label}': " + ", ".join(h["text"] for h in hits)
+                                   + f". Estimate because: {ans.tier_reason}")
     return ans
 
 
@@ -183,7 +215,7 @@ def fixture_count(ctx, q, img) -> Answer:
         cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
         for it in items:
             x, y, w, h = it["xywh"]
-            cv.box((x - 4, y - 4, x + w + 4, y + h + 4), n=it["n"], color=PALETTE[1], width=3)
+            cv.box((x - 4, y - 4, x + w + 4, y + h + 4), n=it["n"], color=BLUE, width=3)
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                               f"Answer: {n}   route: {FIXTURE_ROUTE} (cost $0)",
                               note=f"each numbered box is the inside of one drawn {FIXTURE_NAMES[q.obj]} outline")

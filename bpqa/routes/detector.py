@@ -35,7 +35,7 @@ import numpy as np
 from PIL import Image
 
 from ..answer import Answer, abstain, estimate
-from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
+from ..evidence import AMBER, BLUE, GREY, ImageCanvas, evidence_path, finish
 from .. import tiling
 
 ROUTE = "raster-detector"
@@ -48,7 +48,6 @@ OBJECTS = {"toilet": ["toilet"], "sink": ["sink"], "shower_or_bath": ["shower", 
 NAMES = {"toilet": "WC seat", "sink": "sink or wash basin", "shower_or_bath": "shower or bathtub",
          "door": "door", "window": "window"}
 MIN_CONF = 0.05
-AMBER = (245, 160, 0)
 
 
 def model_tag(model: Path = MODEL) -> str | None:
@@ -242,9 +241,9 @@ def answer(ctx, q, img=None) -> Answer:
         amber = {id(d) for d in unsure}
         for d in dets:                       # the other boxes of this type, thin grey: what was not counted
             if d["cls"] in OBJECTS[q.obj] and 0.1 <= d["conf"] < t and id(d) not in amber:
-                cv.box(d["xyxy"], color=(160, 160, 160), width=1)
+                cv.box(d["xyxy"], color=GREY, width=1)
         for i, d in enumerate(hits):
-            cv.box(d["xyxy"], n=i + 1, color=AMBER if id(d) in amber else PALETTE[CLASSES.index(d["cls"]) % len(PALETTE)],
+            cv.box(d["xyxy"], n=i + 1, color=AMBER if id(d) in amber else BLUE,
                    width=3)
         for d in unsure:
             if d["conf"] < t:
@@ -252,7 +251,7 @@ def answer(ctx, q, img=None) -> Answer:
         head = f"Answer: {n}" + ("   ESTIMATE: check the amber boxes" if why else "   proven")
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                               f"{head}   ({ROUTE}, local model, $0)",
-                              note=f"numbered boxes: each counted {NAMES[q.obj]} with its detector score >= {t:.2f}; "
+                              note=f"blue numbered boxes: each counted {NAMES[q.obj]} with its detector score >= {t:.2f}; "
                                    f"amber: scored close to the threshold, numbered ones counted, plain ones not; "
                                    f"grey: lower-scored boxes, not counted"
                                    + (f". Estimate because: {ans.tier_reason}" if why else ""))

@@ -422,7 +422,7 @@ def _inside(contour, pt) -> bool:
 def takeoff_answer(ctx, q, img):
     from .. import takeoff
     from ..answer import Answer, abstain
-    from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
+    from ..evidence import BLUE, PALETTE, ImageCanvas, evidence_path, finish
     from PIL import Image
 
     tk = q.extra["takeoff"]
@@ -501,7 +501,7 @@ def takeoff_answer(ctx, q, img):
         for j in sc.rooms if sc.known else []:            # rooms that set the scale, thin blue
             b = pa.rooms[j].area_box
             if b is not None:
-                cv.d.rectangle([b[0] - 5, b[1] - 5, b[2] + 5, b[3] + 5], outline=(29, 120, 196), width=1)
+                cv.d.rectangle([b[0] - 5, b[1] - 5, b[2] + 5, b[3] + 5], outline=BLUE, width=max(1, round(cv.k)))
         lines = "; ".join(f"{i + 1}. {row['label']} {row['area']:.2f} m2 ({'printed' if row['room'].printed is not None else 'measured'})"
                           for i, row in enumerate(rows))
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,

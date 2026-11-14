@@ -28,7 +28,7 @@ from PIL import Image
 
 from .. import nemotron as N
 from ..answer import Answer, abstain
-from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
+from ..evidence import AMBER, ImageCanvas, evidence_path, finish
 from ..query import OBJECTS, Query, QueryParser, fold
 
 ROUTE = "nemotron-estimate"
@@ -180,10 +180,10 @@ def answer(ctx, q: Query) -> Answer:
     if ctx.evidence:
         cv = ImageCanvas(img)
         for it in items:
-            cv.box(it["xyxy"], n=it["n"], color=PALETTE[1], width=max(2, img.width // 500))
+            cv.box(it["xyxy"], n=it["n"], color=AMBER, width=3)
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                               f"Answer: {clean['value']}   ESTIMATE by {N.MODEL}",
-                              note="tier: estimate. Boxes are the regions the model said it relied on, drawn as given "
+                              note="tier: estimate. Amber boxes are the regions the model said it relied on, drawn as given "
                                    "after validation; no other route could prove this answer. " + clean["reading"])
     return ans
 

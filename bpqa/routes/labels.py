@@ -153,17 +153,18 @@ def mirrored(tokens, min_conf=0.5) -> bool:
     return words[True] > 2 * words[False] + 2 and allc[True] > allc[False]
 
 
-def dedupe(tokens, iou_thr=0.3, min_conf=0.5):
+def dedupe(tokens, iou_thr=0.3, min_conf=0.5, prefer=None):
     """One reading per text location across the four rotation passes.
 
     The same label is read once per orientation, and the wrong orientations produce confident
     garbage (an upside-down "MH" reads "HW"). Among overlapping readings, a reading that is a
-    known room abbreviation wins; otherwise the most confident one.
+    known room abbreviation wins (or a reading `prefer` accepts); otherwise the most confident one.
     """
+    prefer = prefer or is_label
     m = mirrored(tokens, min_conf)
     tokens = [t for t in tokens if bool(t.get("mirror")) == m]
     keep = []
-    order = sorted((t for t in tokens if t["conf"] >= min_conf), key=lambda t: (not is_label(t["text"]), -t["conf"]))
+    order = sorted((t for t in tokens if t["conf"] >= min_conf), key=lambda t: (not prefer(t["text"]), -t["conf"]))
     for t in order:
         b = quad_box(t["quad"])
         if not any(_overlap(b, quad_box(k["quad"]), iou_thr) for k in keep):
@@ -217,4 +218,34 @@ def fuzzy_reads(tokens, min_conf=0.5) -> list[tuple[str, str]]:
                 w = fuzzy(o, p)
                 if w:
                     out.append((t["text"], w))
+    return out
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", norm(text))
+
+
+def label_reads(tokens, label: str, min_conf=0.5) -> list[dict]:
+    """Readings of one named room label ("GARAGE", "Bed room"), compared without spaces and punctuation; a
+    trailing room number is allowed ("GARAGE 2"). Labels of 6+ letters also match with one OCR error
+    (`fuzzy` is then the label). One location read twice counts once (dedupe)."""
+    want = _squash(label)
+    if not want:
+        return []
+
+    def hit(text):
+        got = _squash(text)
+        stem = re.sub(r"\d+$", "", got) if not want[-1].isdigit() else got
+        if got == want or stem == want:
+            return "exact"
+        if len(want) >= FUZZY_MIN and want.isalpha() and _edit1(stem, want):
+            return "fuzzy"
+        return None
+
+    out = []
+    for t in dedupe(tokens, min_conf=min_conf, prefer=lambda x: hit(x) is not None):
+        h = hit(t["text"])
+        if h:
+            out.append({"text": t["text"], "part": want, "conf": t["conf"], "box": quad_box(t["quad"]), "rot": t["rot"],
+                        "fuzzy": label if h == "fuzzy" else None})
     return out

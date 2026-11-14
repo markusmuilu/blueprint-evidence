@@ -14,7 +14,22 @@ import matplotlib
 from PIL import Image, ImageDraw, ImageFont
 
 FONT_PATH = Path(matplotlib.get_data_path()) / "fonts" / "ttf" / "DejaVuSans.ttf"
-PALETTE = [(230, 57, 70), (29, 120, 196), (46, 160, 67), (240, 140, 0), (142, 68, 173), (0, 150, 150)]
+# Colours follow DESIGN.md (hue 235-245 blueprint blue for what was proven, amber for what to check), darkened
+# from the app's dark-theme values so they hold on white paper: BLUE is oklch(0.50 0.13 240), 5.8:1 on white.
+BLUE = (0, 106, 165)                  # counted / measured items of a proven answer
+AMBER = (231, 140, 8)                 # uncertain items, estimates: oklch(0.72 0.16 65)
+GREY = (150, 150, 150)                # read but not counted, context
+INK = (28, 48, 65)                    # header text, numbers on amber tabs
+PASS = (0, 135, 75)
+FAIL = (200, 45, 50)
+# several items that must be told apart (rooms side by side): tones of the same blueprint blue
+PALETTE = [BLUE, (18, 146, 192), (0, 79, 130), (70, 130, 170), (0, 120, 140), (40, 95, 150)]
+
+
+def _ink_on(color) -> tuple:
+    """Number-tab text colour: white on dark tabs, ink on light ones (amber)."""
+    r, g, b = color[:3]
+    return INK if 0.299 * r + 0.587 * g + 0.114 * b > 150 else (255, 255, 255)
 
 
 def font(size: int):
@@ -66,14 +81,14 @@ class VectorCanvas:
             self.d.rectangle([box[0] - 2, box[1] - 1, box[2] + 2, box[3] + 1], fill=(255, 255, 255, 210))
         self.d.text((x, y), s, fill=color, font=f, anchor=anchor)
 
-    def box(self, bounds, n=None, color=PALETTE[0], pad=0.08):
+    def box(self, bounds, n=None, color=BLUE, pad=0.08):
         x0, y0, x1, y1 = bounds
         a, b = self.px(x0 - pad, y1 + pad), self.px(x1 + pad, y0 - pad)
         self.d.rectangle([a, b], outline=color, width=3)
         if n is not None:
-            f = font(13)
-            self.d.rectangle([a[0], a[1] - 16, a[0] + 9 * len(str(n)) + 6, a[1]], fill=color)
-            self.d.text((a[0] + 3, a[1] - 15), str(n), fill="white", font=f)
+            f = font(14)
+            self.d.rectangle([a[0], a[1] - 18, a[0] + 9 * len(str(n)) + 8, a[1]], fill=color)
+            self.d.text((a[0] + 4, a[1] - 17), str(n), fill=_ink_on(color), font=f)
 
 
 class ImageCanvas:
@@ -82,16 +97,22 @@ class ImageCanvas:
     def __init__(self, img: Image.Image):
         self.img = img.convert("RGB")
         self.d = ImageDraw.Draw(self.img, "RGBA")
+        # evidence images are shown at most ~1600 px wide: scale strokes and numbers so they stay readable
+        self.k = max(1.0, max(self.img.size) / 1600)
 
-    def box(self, bounds, n=None, color=PALETTE[0], width=3):
+    def box(self, bounds, n=None, color=BLUE, width=3):
         x0, y0, x1, y1 = bounds
-        self.d.rectangle([x0, y0, x1, y1], outline=color, width=width)
+        w = max(1, round(width * self.k)) if width > 1 else max(1, round(self.k))
+        self.d.rectangle([x0, y0, x1, y1], outline=color, width=w)
         if n is not None:
-            f = font(14)
-            self.d.rectangle([x0, y0 - 17, x0 + 9 * len(str(n)) + 6, y0], fill=color)
-            self.d.text((x0 + 3, y0 - 16), str(n), fill="white", font=f)
+            fs = round(14 * self.k)
+            f = font(fs)
+            th = fs + 4
+            tw = round(0.62 * fs * len(str(n))) + round(8 * self.k)
+            self.d.rectangle([x0, y0 - th, x0 + tw, y0], fill=color)
+            self.d.text((x0 + round(4 * self.k), y0 - th + 1), str(n), fill=_ink_on(color), font=f)
 
-    def fill(self, bounds, color=(46, 160, 67, 70)):
+    def fill(self, bounds, color=BLUE + (60,)):
         self.d.rectangle(bounds, fill=color)
 
 
@@ -126,15 +147,16 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     d = ImageDraw.Draw(canvas)
     y = 8
     for ln in lines:
-        d.text((12, y), ln, fill=(40, 40, 40), font=f)
+        d.text((12, y), ln, fill=INK, font=f)
         y += 20
-    d.text((12, y + 2), answer_line, fill=(200, 30, 50), font=fb)
+    d.text((12, y + 2), answer_line, fill=(170, 100, 0) if "ESTIMATE" in answer_line.upper() else
+           FAIL if "ABSTAIN" in answer_line.upper() else BLUE, font=fb)
     y += 28
     for ln in note_lines:
         d.text((12, y), ln, fill=(90, 90, 90), font=font(13))
         y += 18
     for ln, st in check_lines:
-        d.text((12, y), ln, fill=(30, 130, 60) if st == "pass" else (200, 30, 50), font=font(13))
+        d.text((12, y), ln, fill=PASS if st == "pass" else FAIL, font=font(13))
         y += 18
     d.line([(0, head_h - 2), (cw, head_h - 2)], fill=(200, 200, 200), width=2)
     canvas.paste(img, (0, head_h))

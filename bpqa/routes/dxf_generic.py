@@ -36,12 +36,13 @@ import ezdxf
 from shapely.geometry import Point, Polygon
 
 from .. import takeoff
-from ..answer import Answer, abstain
-from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
+from ..answer import Answer, abstain, estimate
+from ..evidence import AMBER, BLUE, PALETTE, VectorCanvas, evidence_path, finish
 from ..query import fold
 from .scope_guard import single_room_problem
 
 ROUTE = "dxf-generic"
+PROVEN_CONF = 0.8      # the line below which an answer is an estimate (same line the app and README use)
 
 # ---------------------------------------------------------------- name vocabulary
 # Tokens are matched on the folded name (lower case, accents stripped), split at non-letters and
@@ -654,6 +655,13 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         items = [{"n": i + 1, "text": s, "at": [round(v, 2) for v in xy]} for i, (s, xy) in enumerate(label_pts)]
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=conf, items=items,
                  explanation=f"{value} = {note} in {dxf.name}")
+    # below PROVEN_CONF the reading rests on text labels alone (no layer or outline convention): an estimate
+    if conf < PROVEN_CONF:
+        estimate(ans, f"confidence {conf} < {PROVEN_CONF}: {note}")
+        ans.uncertain = items
+    else:
+        ans.tier = "proven"
+    col0 = AMBER if ans.tier == "estimate" else BLUE
     if ctx.evidence:
         cv = VectorCanvas(fl.bounds)
         for layer, p in fl.lines:
@@ -664,18 +672,20 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         for _, s, xy in fl.label_texts():      # room labels in grey, so a label count can be checked
             cv.text(xy, s, size=10, color=(120, 120, 120), anchor="ls", bg=False)
         for i, r in enumerate(rooms_used):
-            col = PALETTE[i % len(PALETTE)]
+            col = AMBER if ans.tier == "estimate" else PALETTE[i % len(PALETTE)]
             cv.poly(list(r["poly"].exterior.coords), fill=col + (70,), outline=col, width=3)
             rp = r["poly"].representative_point()
             lab = f"#{i + 1} {r['name'] or ''}" + (f" {r['poly'].area * fl.m_per_unit ** 2:.2f} m²" if unit == "m2" else "")
             cv.text((rp.x, rp.y), lab, size=13)
         pad = (fl.m(0.08) or 0.0)
         for i, b in enumerate(boxes or []):
-            cv.box(b, n=i + 1, pad=pad)
+            cv.box(b, n=i + 1, pad=pad, color=col0)
         for i, (s, xy) in enumerate(label_pts):
-            cv.text(xy, f"{i + 1}: {s}", size=14, color=PALETTE[0], anchor="ls")
+            cv.text(xy, f"{i + 1}: {s}", size=14, color=(170, 100, 0) if ans.tier == "estimate" else BLUE, anchor="ls")
         out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-        ans.evidence = finish(cv.img, out, ctx.q.question, f"Answer: {value} {unit}   route: {ROUTE} (cost $0)", note=note)
+        ans.evidence = finish(cv.img, out, ctx.q.question,
+                              f"Answer: {value} {unit}{'   ESTIMATE' if ans.tier == 'estimate' else '   proven'}"
+                              f"   route: {ROUTE} (cost $0)", note=note)
     return ans
 
 
