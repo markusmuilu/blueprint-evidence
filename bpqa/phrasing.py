@@ -522,14 +522,21 @@ def _llm_reading(question: str) -> tuple[dict | None, str, float, float]:
 
 def llm_parse(question: str) -> Query:
     """The validated LLM reading as a Query (unparsed Query, parser 'llm', when the reply is invalid or 'other')."""
+    # --- parse cost (honest cost): a fresh call is billed, a cached reading is EUR 0 now but keeps its original cost
+    _k = _parse_key(question)
+    cached = _k in _mem or (PARSE_CACHE / f"{_k}.json").exists()
     reading, why, cost, lat = _llm_reading(question)
+    billed = {"parse_cost_usd": 0.0 if cached else cost, "parse_cost_orig_usd": cost, "parse_cached": cached}
+    # --- end parse cost
     if reading is None:
         q = Query(raw=question, parser="llm")
         q.extra["llm_rejected"] = why
+        q.extra.update(billed)
         return q
     q = build(reading, question)
     q.extra["cost_usd"] = cost
     q.extra["llm_latency_s"] = lat
+    q.extra.update(billed)
     return q
 
 
@@ -637,4 +644,7 @@ def read(question: str, use_llm: bool = True) -> Query:
     q.extra["weak"] = why
     if q2.extra.get("llm_rejected"):
         q.extra["llm_rejected"] = q2.extra["llm_rejected"]
+    if q2.extra.get("parse_cost_orig_usd"):          # the call was made and paid for even though the reading was dropped
+        for k in ("parse_cost_usd", "parse_cost_orig_usd", "parse_cached"):
+            q.extra[k] = q2.extra[k]
     return q
