@@ -11,6 +11,10 @@ Three signals, each drawn on the evidence image:
            filled from the label and grown back by the same few pixels; furniture inside a room is
            part of the room (holes are filled). A region is unusable when it reaches the image edge,
            holds another room's label or area (an open doorway merged two rooms), or is tiny.
+           analyse() uses the walls-only barrier (wall_barrier): either the legacy mask (closing, then
+           a fixed opening, then refine()) or, on plans drawn with solid walls, the stroke mask (thick
+           strokes only, doors and windows closed along the wall line), whichever region set agrees
+           better on a scale (hypotheses / choose).
   scale    square metres per pixel, from rooms that have both a printed area and a usable region:
            s_i = printed_i / pixels_i. A scale is set only when 2+ rooms agree within SCALE_TOL of
            their median; otherwise no scale and measured areas abstain.
@@ -24,6 +28,7 @@ are perimeter of the region x an assumed height, openings not deducted, estimate
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -307,23 +312,191 @@ def refine(m, bar, thick, ppm):
     return out
 
 
-def wall_barrier(img_bgr, toks, door_px: int):
-    """Walls only: thin linework (furniture, door swings, stairs, dimension lines) is removed so it
-    cannot cut a room into pieces, and wall gaps up to `door_px` (doorways) are bridged along the
-    wall direction. `door_px` is the doorway width in pixels for an assumed scale; analyse() tries
-    several and keeps the one that agrees with the scale it produces."""
+def _dark_textless(img_bgr, toks):
     g = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     dark = (g < DARK).astype(np.uint8)
     for t in toks:
         x0, y0, x1, y1 = (int(round(v)) for v in quad_box(t["quad"]))
         dark[max(0, y0 - 1):y1 + 2, max(0, x0 - 1):x1 + 2] = 0
+    return dark
+
+
+# ---- stroke walls
+#
+# On plans drawn with solid walls (CubiCasa "colorful" and many others) the walls are the thick dark strokes
+# and everything else (furniture, dashed fixture outlines, door swings, hatching, colour fill edges) is thin.
+# The wall mask is then the dark pixels opened at a size set from the plan's own stroke widths, with no
+# closing first: closing merges a dashed double outline (a bed head, a wardrobe) into a band that survives
+# the opening and cuts the room. Plans whose walls are outlines or hatching have no thick strokes; they keep
+# the legacy mask (closing, then a fixed opening, then refine()).
+
+# "stroke": thick-stroke walls when the plan has them, else legacy; "legacy": always legacy (STOA_WALL_MODE=legacy)
+WALL_MODE = os.environ.get("STOA_WALL_MODE", "stroke")
+THIN_MAX = 3               # strokes up to this wide (px) are linework, not walls
+THICK_MIN_FRAC = 0.25      # share of the dark stroke length that must be thicker than THIN_MAX for stroke walls
+OPEN_FRAC = 0.6            # opening size = this x the plan's thinnest wall width
+
+
+def stroke_widths(dark) -> np.ndarray:
+    """Histogram of stroke widths (px) of a binary linework mask: at each ridge pixel of the distance
+    transform the stroke is 2 x distance wide; each ridge pixel weighs its width (about the dark pixels
+    it stands for). Index = width, rounded."""
+    dt = cv2.distanceTransform(dark, cv2.DIST_L2, 3)
+    mx = cv2.dilate(dt, np.ones((3, 3), np.uint8))
+    ridge = (dt > 0) & (dt >= mx - 1e-6)
+    w = np.round(2 * dt[ridge]).astype(int)
+    return np.bincount(w, weights=w, minlength=64).astype(float)
+
+
+def wall_width(dark):
+    """The plan's thinnest wall stroke width in px, or None when the plan has no thick strokes (walls drawn
+    as outlines or hatching). The thinnest wall is the first width above THIN_MAX that holds at least 15%
+    of the thick stroke weight, counted from the thin end."""
+    h = stroke_widths(dark)
+    tot = h.sum()
+    thick = h[THIN_MAX + 1:].sum()
+    if tot <= 0 or thick / tot < THICK_MIN_FRAC:
+        return None
+    for w in range(THIN_MAX + 1, len(h)):
+        if h[w] >= 0.15 * thick:
+            return w
+    return None
+
+
+def stroke_walls(dark):
+    """(walls mask, opening size px) from thick strokes, or (None, None) when the plan has none."""
+    w = wall_width(dark)
+    if w is None:
+        return None, None
+    s = max(THIN_MAX + 1, int(round(OPEN_FRAC * w)))
+    k = np.ones((s, s), np.uint8)       # square: axis-aligned wall ends stay square, so doorway gaps stay clean bands
+    return cv2.morphologyEx(dark, cv2.MORPH_OPEN, k), s
+
+
+def bridge(walls, door_px: int, band_px: int = 0):
+    """Wall gaps up to `door_px` bridged along the wall direction (rows and columns). With band_px, a
+    bridge must be a thin band across the gap (at most band_px deep): the closing also fills a room or
+    closet narrower than door_px wall to wall, and that fill is deep, not a doorway."""
+    if door_px <= 0:
+        return walls
+    h = cv2.morphologyEx(walls, cv2.MORPH_CLOSE, np.ones((1, door_px), np.uint8))
+    v = cv2.morphologyEx(walls, cv2.MORPH_CLOSE, np.ones((door_px, 1), np.uint8))
+    if band_px > 0:
+        h = h & (1 - walls)
+        v = v & (1 - walls)
+        h = h & (1 - cv2.morphologyEx(h, cv2.MORPH_OPEN, np.ones((band_px + 1, 1), np.uint8)))
+        v = v & (1 - cv2.morphologyEx(v, cv2.MORPH_OPEN, np.ones((1, band_px + 1), np.uint8)))
+    return walls | h | v
+
+
+WIN_M = 2.6        # gaps in a wall line up to this long (windows, wide doors) are closed along the wall line
+BAND_M = 0.55      # ... when the gap is a band no deeper than this (a wall is never thicker)
+GAP_TOL = 2        # px: a wall face drawn ragged by antialiasing still ends the same gap
+
+
+def _gap_runs(walls, min_depth: int = 2):
+    """For every free pixel, the row gap it lies in (between the nearest wall pixels left and right): its
+    length, and the depth of the stack of rows above and below that have the same gap (both ends within
+    GAP_TOL px of the row before). A window or doorway in a horizontal wall is such a stack, as deep as the
+    wall is thick; the inside of a room is a stack as deep as the room, or no stack at all. Only stacks that
+    pass the checks below count. Returns (length, depth), depth 0 where none."""
+    hh, ww = walls.shape
+    idx = np.broadcast_to(np.arange(ww), (hh, ww))
+    wl = walls > 0
+    left = np.maximum.accumulate(np.where(wl, idx, -1), axis=1)
+    right = np.minimum.accumulate(np.where(wl, idx, ww)[:, ::-1], axis=1)[:, ::-1]
+    ok = (~wl) & (left >= 0) & (right < ww)
+    length = np.where(ok, right - left - 1, 0)
+    same = np.zeros_like(ok)                       # same gap as the row above: both ends within GAP_TOL px
+    same[1:] = (ok[1:] & ok[:-1] & (np.abs(left[1:] - left[:-1]) <= GAP_TOL)
+                & (np.abs(right[1:] - right[:-1]) <= GAP_TOL))
+    start = ~same                                  # a new vertical run of equal gaps starts here
+    rid = np.cumsum(start, axis=0) + np.arange(ww)[None, :] * (hh + 1)
+    cnt = np.bincount(rid.ravel())
+    depth = np.where(ok, cnt[rid], 0)
+    # a gap in a wall line has open floor on both sides of the stack (outside and room, or room and room);
+    # a slot between two strokes (a cupboard, a duct) is closed off by a stroke at one end
+    free = ~wl
+    above = np.zeros_like(ok)
+    above[1:] = free[:-1]
+    end = np.ones_like(ok)
+    end[:-1] = ~same[1:]
+    below = np.zeros_like(ok)
+    below[:-1] = free[1:]
+    top_ok = np.zeros(cnt.shape[0], bool)
+    bot_ok = np.zeros(cnt.shape[0], bool)
+    top_ok[rid[start & ok]] = above[start & ok]
+    bot_ok[rid[end & ok]] = below[end & ok]
+    depth = np.where(top_ok[rid] & bot_ok[rid], depth, 0)
+    # and the wall goes on beyond both ends of the gap, in the gap's direction (a stub of the same wall, or
+    # a wall meeting it at a corner): its run there is at least half the gap stack's depth. The floor between
+    # a room wall and a cabinet has a wall end only as long as the wall is thick, the cabinet's stroke even less.
+    lastfree = np.maximum.accumulate(np.where(wl, -1, idx), axis=1)
+    nextfree = np.minimum.accumulate(np.where(wl, ww, idx)[:, ::-1], axis=1)[:, ::-1]
+    rows = np.broadcast_to(np.arange(hh)[:, None], (hh, ww))
+    lc, rc = np.clip(left, 0, ww - 1), np.clip(right, 0, ww - 1)
+    stub = np.minimum(lc - lastfree[rows, lc], nextfree[rows, rc] - rc)
+    depth = np.where(stub >= np.maximum(2, 0.5 * depth), depth, 0)
+    # at least one end is a stub of the same wall: across the gap direction it is about as thick as the
+    # gap stack is deep. A column through a window into the room ends at long walls at both ends.
+    wsame = np.zeros_like(wl)
+    wsame[1:] = wl[1:] & wl[:-1]
+    wid = np.cumsum(~wsame, axis=0) + np.arange(ww)[None, :] * (hh + 1)
+    across = np.bincount(wid.ravel(), weights=wl.ravel().astype(float))[wid]   # wall run across, through each pixel
+    ext = np.minimum(across[rows, lc], across[rows, rc])
+    depth = np.where(ext <= 1.5 * depth + 2, depth, 0)
+    # a gap through a wall is as deep as the wall is thick, and no wall in the mask is thinner than the
+    # opening that made it; a shallower stack is a nub on a wall face, and bridging it would cut the room
+    depth = np.where(depth >= min_depth, depth, 0)
+    return length, depth
+
+
+def wall_line_gaps(walls, min_depth: int = 2):
+    """(length, depth) gap maps for rows and for columns (columns transposed back), computed once per plan."""
+    lh, dh = _gap_runs(walls, min_depth)
+    lv, dv = _gap_runs(np.ascontiguousarray(walls.T), min_depth)
+    return lh, dh, lv.T, dv.T
+
+
+def bridge_lines(walls, gaps, win_px: int, band_px: int):
+    """Close gaps in a wall line: free pixels whose row (column) gap is at most win_px long and whose stack
+    of identical gaps is at most band_px deep."""
+    lh, dh, lv, dv = gaps
+    b = ((lh > 0) & (lh <= win_px) & (dh > 0) & (dh <= band_px)) | ((lv > 0) & (lv <= win_px) & (dv > 0) & (dv <= band_px))
+    return walls | b.astype(walls.dtype)
+
+
+LINE_BRIDGE = True
+LEGACY_LINE_BRIDGE = False     # wall-line bridges on the legacy mask: tried, its ragged blobs give many false stacks
+THIN_DOOR_BRIDGE = os.environ.get("STOA_THIN_DOOR_BRIDGE", "0") == "1"   # off: worse on dev (CHANGELOG)
+
+
+def walls_base(img_bgr, toks, mode: str | None = None):
+    """(walls mask before doorway bridging, kind, wall-line gaps or None): kind "stroke" (thick-stroke walls)
+    when the mode allows it and the plan has thick strokes, else "legacy" (closing by CLOSE_K, then opening
+    by OPEN_K)."""
+    dark = _dark_textless(img_bgr, toks)
+    if (mode or WALL_MODE) == "stroke":
+        walls, s = stroke_walls(dark)
+        if walls is not None:
+            return walls, "stroke", (wall_line_gaps(walls, s) if LINE_BRIDGE else None)
     d = cv2.morphologyEx(dark, cv2.MORPH_CLOSE, np.ones((CLOSE_K, CLOSE_K), np.uint8))
     walls = cv2.morphologyEx(d, cv2.MORPH_OPEN, np.ones((OPEN_K, OPEN_K), np.uint8))
-    if door_px > 0:
-        h = cv2.morphologyEx(walls, cv2.MORPH_CLOSE, np.ones((1, door_px), np.uint8))
-        v = cv2.morphologyEx(walls, cv2.MORPH_CLOSE, np.ones((door_px, 1), np.uint8))
-        walls = walls | h | v
-    return walls
+    return walls, "legacy", (wall_line_gaps(walls, OPEN_K) if LEGACY_LINE_BRIDGE else None)
+
+
+def wall_barrier(img_bgr, toks, door_px: int, mode: str | None = None, base=None):
+    """Walls only: thin linework (furniture, door swings, stairs, dimension lines) is removed so it
+    cannot cut a room into pieces, and wall gaps up to `door_px` (doorways) are bridged along the
+    wall direction. `door_px` is the doorway width in pixels for an assumed scale; analyse() tries
+    several and keeps the one that agrees with the scale it produces. Returns (mask, kind), kind as
+    walls_base(); `base` is a walls_base() result to reuse."""
+    walls, kind, gaps = base if base is not None else walls_base(img_bgr, toks, mode)
+    if gaps is None:
+        band = max(3, int(round(BAND_M * door_px / DOOR_M))) if THIN_DOOR_BRIDGE else 0
+        return bridge(walls, door_px, band), kind
+    ppm = door_px / DOOR_M
+    return bridge_lines(walls, gaps, int(round(WIN_M * ppm)), max(3, int(round(BAND_M * ppm)))), kind
 
 
 def _seed_pixel(free, x, y, r=12):
@@ -340,21 +513,28 @@ def _seed_pixel(free, x, y, r=12):
 
 
 def measure_regions(img_bgr, rooms: list[Room], others: list[tuple], toks, k: int | None = None,
-                    door_px: int | None = None, bar=None):
+                    door_px: int | None = None, bar=None, base=None):
     """Flood-fill each room's region; mark unusable ones with the reason. `others` are the centres
     of every other label and area on the plan (a region holding one of them merged two rooms).
-    door_px None: every dark line is a barrier (thickened by k); else walls only (wall_barrier)."""
+    door_px None: every dark line is a barrier (thickened by k); else walls only (wall_barrier, with
+    `base` a walls_base() result to reuse). Stroke walls need no refine(): furniture is not a barrier."""
     h, w = img_bgr.shape[:2]
     if k is None:
         k = max(1, round(min(h, w) / 450))
+    kind = "lines"
     if bar is None:
-        bar = barrier(img_bgr, toks, k) if door_px is None else wall_barrier(img_bgr, toks, door_px)
+        if door_px is None:
+            bar = barrier(img_bgr, toks, k)
+        else:
+            bar, kind = wall_barrier(img_bgr, toks, door_px, base=base)
+    elif door_px is not None:
+        kind = "legacy"
     if door_px is not None:
         k = 0
     free = (bar == 0).astype(np.uint8)
     n, lab = cv2.connectedComponents(free, connectivity=4)
     thick = None
-    if door_px is not None and REFINE:
+    if door_px is not None and REFINE and kind == "legacy":
         tk_ = OPEN_K + THICK_ADD
         thick = cv2.morphologyEx(bar, cv2.MORPH_OPEN, np.ones((tk_, tk_), np.uint8))
     total = h * w
@@ -392,6 +572,7 @@ def measure_regions(img_bgr, rooms: list[Room], others: list[tuple], toks, k: in
             r.extra["merged"] = len(inside)
             continue
         r.pixels, r.region_ok, r.contour = px, True, c
+        r.extra["walls"] = kind
     return rooms
 
 
@@ -468,7 +649,11 @@ def plan_rooms(toks, orient=UPRIGHT, wh=None, extra=()):
 
 def hypotheses(img, toks, proto, others, mode="auto"):
     """Region sets: one with every line as a barrier, and one per doorway-width hypothesis with
-    walls only. Returns [(name, ppm or None, rooms)]."""
+    walls only: "walls@ppm" with the legacy wall mask, and, when the plan has thick wall strokes,
+    "stroke@ppm" with the stroke wall mask. choose() keeps the set whose rooms agree best on a scale,
+    so the stroke mask is used where it closes more rooms consistently and the legacy one elsewhere
+    (outlined or hatched exterior walls vanish from the stroke mask and its rooms leak).
+    Returns [(name, ppm or None, rooms)]."""
     import copy
     out = []
     if mode in ("auto", "lines"):
@@ -476,29 +661,46 @@ def hypotheses(img, toks, proto, others, mode="auto"):
         measure_regions(img, rs, others, toks)
         out.append(("lines", None, rs))
     if mode in ("auto", "walls"):
-        for ppm in PPM_GRID:
-            rs = copy.deepcopy(proto)
-            measure_regions(img, rs, others, toks, door_px=max(3, round(DOOR_M * ppm)))
-            out.append((f"walls@{ppm}", ppm, rs))
+        bases = [("walls", walls_base(img, toks, mode="legacy"))]
+        if WALL_MODE == "stroke":
+            sb = walls_base(img, toks, mode="stroke")
+            if sb[1] == "stroke":
+                bases.append(("stroke", sb))
+        for tag, base in bases:
+            for ppm in PPM_GRID:
+                rs = copy.deepcopy(proto)
+                measure_regions(img, rs, others, toks, door_px=max(3, round(DOOR_M * ppm)), base=base)
+                out.append((f"{tag}@{ppm}", ppm, rs))
     return out
+
+
+STROKE_MIN_ROOMS = 3   # a stroke set with no legacy scale to beat needs this many agreeing rooms (twice the sets to pick from)
 
 
 def choose(hyps, exclude: int | None = None):
     """The region set whose scale has the most agreeing rooms. A walls hypothesis counts only when
-    the scale it produces matches the pixels-per-metre it assumed for doorways (within 20%)."""
-    best = None
+    the scale it produces matches the pixels-per-metre it assumed for doorways (within 20%).
+    A stroke set (hypotheses) replaces the best legacy set only with strictly more agreeing rooms,
+    or, when no legacy set gives a scale, with at least STROKE_MIN_ROOMS: the incumbent wins ties,
+    and twice as many sets to pick from would otherwise make a chance agreement of 2 rooms likelier."""
+    best = {}
     for name, ppm, rs in hyps:
         sc = estimate_scale(rs, exclude=exclude)
         if not sc.known:
             continue
         if ppm is not None and abs((1 / np.sqrt(sc.m2_per_px)) / ppm - 1) > PPM_AGREE:
             continue
+        fam = "stroke" if name.startswith("stroke") else "legacy"
         key = (len(sc.rooms), -sc.spread)
-        if best is None or key > best[0]:
-            best = (key, name, rs, sc)
-    if best is None:
+        if fam not in best or key > best[fam][0]:
+            best[fam] = (key, name, rs, sc)
+    pick = best.get("legacy")
+    st = best.get("stroke")
+    if st is not None and (st[0][0] > pick[0][0] if pick is not None else st[0][0] >= STROKE_MIN_ROOMS):
+        pick = st
+    if pick is None:
         return None, None, Scale(None, [], 0, "none", "no region set gives 2 rooms that agree on a scale")
-    _, name, rs, sc = best
+    _, name, rs, sc = pick
     sc.method = f"printed-areas ({name})"
     return name, rs, sc
 
@@ -623,7 +825,7 @@ def takeoff_answer(ctx, q, img):
     from .. import takeoff
     from .. import walls as wallmod
     from ..answer import Answer, abstain, estimate
-    from ..evidence import AMBER, BLUE, ImageCanvas, evidence_path, finish, font, record_steps
+    from ..evidence import AMBER, BLUE, GREY, ImageCanvas, dashed_rect, evidence_path, finish, font, record_context, record_steps
     from PIL import Image
 
     tk = q.extra["takeoff"]
@@ -782,10 +984,13 @@ def takeoff_answer(ctx, q, img):
                 cv.d.rectangle([tb[0] - 3, tb[1] - 2, tb[2] + 3, tb[3] + 2], fill=AMBER)
                 cv.d.text((x, y + fs), txt, fill=(28, 48, 65), font=f, anchor="mm")
             record_steps(cv.img, i + 1, _room_steps(row, r, want))
-        for j in sc.rooms if sc.known else []:            # printed rooms that set the scale, thin blue
+        used_ids = {id(row["room"]) for row in rows}
+        for j in sc.rooms if sc.known else []:            # printed rooms that only set the scale: grey, dashed, no fill
             b = pa.rooms[j].area_box
-            if b is not None:
-                cv.d.rectangle([b[0] - 7, b[1] - 7, b[2] + 7, b[3] + 7], outline=BLUE, width=max(1, round(cv.k)))
+            if b is not None and id(pa.rooms[j]) not in used_ids:
+                rect = (b[0] - 7, b[1] - 7, b[2] + 7, b[3] + 7)
+                dashed_rect(cv.d, rect, GREY, max(1, round(cv.k)), max(4, round(5 * cv.k)))
+                record_context(cv.img, rect, "scale")
         lines = "; ".join(f"{i + 1}. {row['label']} {row['area']:.2f} m2 ({row['kind']})" for i, row in enumerate(rows))
         if want_walls:
             extra = f" Walls {totals['walls_m2']:.2f} m2 gross: perimeter x assumed {wallmod.DEFAULT_CEILING_M:.2f} m, openings not deducted."
@@ -798,5 +1003,5 @@ def takeoff_answer(ctx, q, img):
             sc_note += f"; measured rooms amber, {bt}"
         interp = (takeoff.interpretation(tk, [(r["label"], r["area"]) for r in rows]) + " ") if fb else ""
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              head, note=f"{interp}{sc_note}. {lines}.{extra} Printed rooms blue, value boxed.")
+                              head, note=f"{interp}{sc_note}. {lines}.{extra} Rooms in the answer blue, printed value boxed; rooms that only set the scale dashed grey.")
     return ans
