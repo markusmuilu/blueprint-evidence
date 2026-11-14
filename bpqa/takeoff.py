@@ -170,7 +170,7 @@ def parse_takeoff(question: str) -> dict | None:
         surface = "floor+walls"
     group = next((g for g in GROUPS if _Q_TYPE_RE[g].search(f_incl)), None)
     out = {"types": types, "group": group, "material": material, "surface": surface, "aggregation": "sum",
-           "floor_explicit": bool(re.search(r"floors?|lattia|boden|sol|pavimento", f))}
+           "floor_explicit": bool(re.search(r"\bfloors?\b|lattia|\bboden|\bsol\b|pavimento", f))}
     m = SCOPE_ID.search(f)
     if m:
         out["scope_named"] = m.group(0)     # "house A": not resolvable from labels in general

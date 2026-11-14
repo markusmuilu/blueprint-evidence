@@ -230,6 +230,9 @@ def space_height(M, sp):
     return None, ""
 
 
+OPEN_TOL = 0.2   # m: an opening whose plan footprint lies within this distance of the room outline is in its wall
+
+
 def space_openings(M, sp, poly):
     """Doors and windows on the room's walls: plan footprint within 0.2 m of the room outline along at least
     30% of the opening's width. Vertical extent from the opening's own geometry, relative to the room floor."""
@@ -244,7 +247,7 @@ def space_openings(M, sp, poly):
     out = []
     for e in M._openings[st]:
         g, geom = M.footprint(e)
-        if g is None or g.is_empty or g.distance(poly) > 0.2:
+        if g is None or g.is_empty or g.distance(poly) > OPEN_TOL:
             continue
         mrr = g.minimum_rotated_rectangle
         xs = list(mrr.exterior.coords) if hasattr(mrr, "exterior") else []
@@ -252,7 +255,7 @@ def space_openings(M, sp, poly):
         span = sides[-1]
         w = getattr(e, "OverallWidth", None)
         width, wsrc = (float(w) * M.len_scale, "OverallWidth") if w else (span, "plan extent")
-        if rings.intersection(g.buffer(0.2)).length < 0.3 * min(width, span or width):
+        if rings.intersection(g.buffer(OPEN_TOL)).length < 0.3 * min(width, span or width):
             continue
         z0, z1 = _zrange(geom)
         if z0 is None or sz0 is None:
