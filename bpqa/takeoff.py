@@ -208,6 +208,16 @@ def parse_takeoff(question: str) -> dict | None:
     m = SCOPE_ID.search(f)
     if m:
         out["scope_named"] = m.group(0)     # "house A": not resolvable from labels in general
+    # Waste for floor-only takeoffs: a stated percentage, or the default when the question says order/buy.
+    # "needed"/"required" stays net (the dataset's own flooring questions answer net areas).
+    from .walls import parse_inputs, DEFAULT_WASTE_PCT
+    inp = parse_inputs(raw)
+    if "waste_pct" in inp:
+        out["waste_pct"], out["waste_src"] = inp["waste_pct"], "given in the question"
+    elif out["material"] and re.search(r"\b(order|buy|purchase|tilata|tilaan|ostaa|bestellen|kaufen|commander|acheter|"
+                                       r"ordinare|comprare)\w*", f):
+        out["waste_pct"] = DEFAULT_WASTE_PCT
+        out["waste_src"] = f"default {DEFAULT_WASTE_PCT:g}% cutting allowance (say 'with 15% waste' or 'no waste' to change)"
     return out
 
 
@@ -225,6 +235,8 @@ def describe(tk: dict) -> str:
                "a bathroom label, toilet not visible in the drawing")
         s = (f"Takeoff{mat}: sum of net floor areas of the rooms that contain a toilet ({how}){other}, as there is no "
              f"separate WC room on this floor, as drawn inside the walls, no waste allowance")
+    if tk.get("waste_pct"):
+        s = s.replace(", no waste allowance", f", plus {tk['waste_pct']:g}% waste ({tk.get('waste_src', '')})")
     if tk.get("surface") == "ceiling":
         s += "; ceiling area taken equal to floor area"
     if tk.get("material") == "paint" and tk.get("surface") == "floor":
@@ -382,6 +394,11 @@ def summary(rows: list[dict], tk: dict, unit: str = "m2") -> tuple[float, list[d
         return f"{r['label']} ({no})" if no and no not in r["label"] else r["label"]
     lines = " + ".join(f"{tag(r)} {r['area']:.2f}" for r in rows[:20]) + (" + ..." if len(rows) > 20 else "")
     expl = f"{total:.2f} {unit} = {lines}. {describe(tk)}."
+    w = tk.get("waste_pct") or 0
+    if w and unit == "m2":
+        net, total = total, round(total * (1 + w / 100.0), 2)
+        items.append({"totals": {"net_m2": net, "waste_pct": w, "waste_m2": round(total - net, 2), "order_m2": total}})
+        expl = f"{total:.2f} {unit} to order = net {net:.2f} ({lines}) + {w:g}% waste {total - net:.2f}. {describe(tk)}."
     head = interpretation(tk, [((f"{r['label']} {r['number']}" if r.get("number") and str(r["number"]) not in str(r["label"])
                                  else r["label"]), r["area"]) for r in rows])
     return total, items, (head + " " + expl) if head else expl
