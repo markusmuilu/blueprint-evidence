@@ -193,6 +193,21 @@ EXCLUDE = re.compile(r"\b(except|excluding|without|apart from|other than|ohne|au
 QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"|«[^»]*»|„[^“”]*[“”]|“[^”]*”")
 
 
+# the floor as the surface asked for: "floor tiles", "bathroom floors", Finnish "lattia" in every inflection
+# ("lattioihin", "lattiaan", "lattioiden"), German "Boden" / "Fussboden", Swedish "golv". The floor as a storey
+# ("on this floor", "ground floor", "floor plan") is not a surface (judge review 14 Nov: "kylpyhuoneiden lattioihin"
+# still included the walls).
+FLOOR_SURFACE = re.compile(r"\bfloors?\b|\blatti(?:a|o)|boden|\bgolv|\bsol\b|pavimento")
+FLOOR_STOREY = re.compile(r"\bfloor ?plans?\b|\b(?:this|that|each|every|per|the same|which|what|one|ground|first|second|"
+                          r"third|fourth|fifth|top|upper|lower|entrance|main|basement|\d+(?:st|nd|rd|th)?) floors?\b|"
+                          r"\bfloors? \d+\b")
+
+
+def floor_asked(f: str) -> bool:
+    """True when a folded question names the floor as the surface to cover, not as a storey."""
+    return bool(FLOOR_SURFACE.search(FLOOR_STOREY.sub(" ", f)))
+
+
 def parse_takeoff(question: str) -> dict | None:
     """Takeoff interpretation of a question, or None when it is not a room-type area question."""
     raw = QUOTED.sub(" ", question)
@@ -217,12 +232,13 @@ def parse_takeoff(question: str) -> dict | None:
         return None
     f_surf = re.sub(r"ceiling heights?|room heights?|huonekorkeus|raumhohe", " ", f)   # an input, not a surface
     walls, ceiling = bool(WALLS.search(f_surf)), bool(CEILING.search(f_surf))
-    surface = "walls" if walls and not re.search(r"\bfloors?\b|lattia|boden|\bgolv", f) else ("ceiling" if ceiling else "floor")
-    if walls and re.search(r"\bfloors?\b|lattia|boden|\bgolv", f):
+    floor = floor_asked(f)
+    surface = "walls" if walls and not floor else ("ceiling" if ceiling else "floor")
+    if walls and floor:
         surface = "floor+walls"
     group = next((g for g in GROUPS if _Q_TYPE_RE[g].search(f_incl)), None)
     out = {"types": types, "group": group, "material": material, "surface": surface, "aggregation": "sum",
-           "floor_explicit": bool(re.search(r"\bfloors?\b|lattia|boden|\bgolv|\bsol\b|pavimento", f))}
+           "floor_explicit": floor}
     m = SCOPE_ID.search(f)
     if m:
         out["scope_named"] = m.group(0)     # "house A": not resolvable from labels in general

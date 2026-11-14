@@ -3,6 +3,19 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: tiling means one thing, cheap abstains, branch `tiling-abstains`
+
+Tiling: "floor" (lattia in any inflection, Boden, golv) means floor only on every route, "on this floor" is a storey,
+not a surface; "walls" means walls only. A waste said in the question is applied on every route, the school sheet
+included (toilets with 5% waste 23.6 -> 24.8 m2, corridors 164.6 -> 172.9 m2). Plain "tiling for the toilets" keeps
+each route's value (IFC/DXF floor + walls + 10%, sheet floor only) and the text states floor only and floor plus walls,
+each with the waste. The sheet route measures walls (outline x ceiling height minus door boxes) for wall questions.
+Abstains answered: "How big is MH 1?" on scans from the printed area beside the label (11.0, estimate); sheet route
+reads Finnish and German room words ("wc-tilaa", "WC-Raume": 7); a stated waste on the scan every-type total (10372
+laminate 8%: 129.10 -> 139.43); "How many square meters of external wall" reads as wall side area; "As 5" + "62 m2"
+OCR pieces are joined to "As 5,62 m2". Language tag: one foreign storey name no longer makes an English question
+German. Evidence headers say EUR 0, not $0.
+
 ## 2026-11-14: no wrong Proven from a dropped constraint, branch `no-wrong-proven`
 
 `bpqa/constraints.py`, called once in `router.solve`: a room number, a name the drawing prints, an apartment, a storey

@@ -299,7 +299,7 @@ def answer(ctx, q) -> Answer:
             cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=it["n"], color=LABEL_COLOR, width=2)
         tier = "proven" if proven else "ESTIMATE"
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {value}   {tier}   ({ROUTE}: room detector + local OCR, $0)",
+                              f"Answer: {value}   {tier}   ({ROUTE}: room detector + local OCR, €0)",
                               note=f"numbered thick boxes: {d} drawn {name}(s) found by the room detector; "
                                    f"L-numbered thin boxes: {o} {name} label(s) read"
                                    + (f": {', '.join(str(it.get('label')) for it in lab_items)}" if lab_items else "")

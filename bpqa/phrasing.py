@@ -287,7 +287,9 @@ CEILING_WORDS = re.compile(r"ceiling|\bkatto|katon|kattoo|\btak\b|innertak|\bdec
 
 def _surface_in_text(s: str, f: str) -> str | None:
     """The model's surface, kept only as far as the question names it (a model tends to fill in 'floor')."""
-    floor, wall, ceil = bool(FLOOR_WORDS.search(f)), bool(WALL_WORDS.search(f)), bool(CEILING_WORDS.search(f))
+    # the floor as a surface, read as the rules read it (takeoff.floor_asked: "lattioihin", not "on this floor")
+    floor = TK.floor_asked(f) or bool(re.search(r"\bflooring\b|\bvloer|\bgulv", f))
+    wall, ceil = bool(WALL_WORDS.search(f)), bool(CEILING_WORDS.search(f))
     if s == "floor":
         return "floor" if floor else None
     if s == "walls":
@@ -721,6 +723,7 @@ def weak(q: Query, question: str) -> str | None:
     return understand.gaps(q, question)     # a room type or qualifier the question names and the reading lacks
 
 
+AREA_UNIT_Q = re.compile(r"m2|sqm|sq\.? ?m|square met|neliom|kvadratmeter|quadratmeter|m²")
 UNIT_WORDS = re.compile(r"\bm2\b|\bm3\b|\bsqm\b|\bsq\.? ?m\b|square met|cubic met|neliom|neliot|kuutiom|kuutio|kvadratmeter|"
                         r"kubikmeter|\bkvm\b|quadratmeter|kubikmeter|\bmetres\b|\bmeters\b|metrina|\bmetreinä\b")
 APARTMENT_LETTER = re.compile(r"\b(?:apartment|flat|wohnung|lagenhet|lägenhet|huoneisto\w*|asunto\w*|appartement|appartamento)\s+([A-Z])\b",
@@ -759,6 +762,9 @@ def read(question: str, use_llm: bool = True) -> Query:
     q = RuleParser().parse(understand.rewrite(question))   # Swedish area words for the rules; the model sees the question
     q.raw = raw
     understand.finish(q, question)       # storey named in words, a qualifier the adjacency rule missed, sq ft
+    if q.measure == "count" and q.obj == "wall" and AREA_UNIT_Q.search(fold(strip_quoted(question))):
+        # "How many square meters of external wall?" is the walls' side area, not a count (QA 14 Nov: a type listing)
+        q.measure, q.variant = "area", "side_area"
     why = weak(q, question)
     if why is None or not use_llm:
         if why is not None:

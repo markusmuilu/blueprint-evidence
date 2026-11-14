@@ -135,6 +135,41 @@ def orient_name(mirror: bool, rot: int) -> str:
     return (f"rotated {rot} degrees" if rot else "") + (" and " if rot and mirror else "") + ("mirrored" if mirror else "")
 
 
+_SPLIT_HEAD = re.compile(r"^(.*?[A-Za-z].*?)\s*(\d)$")         # "As 5": a room word and the units digit
+_SPLIT_TAIL = re.compile(r"^(\d{2})\s*(m\s*[2²]|m²)\s*$", re.I)    # "62 m2": the decimals and the unit
+
+
+def join_split_decimals(toks: list[dict]) -> list[dict]:
+    """OCR splits a printed area at its decimal comma: "As 5,62 m2" reads as "As 5" and "62 m2" (judge review 14 Nov).
+    Two upright tokens on one line, the first ending in one digit and the second two digits and m2, right next to
+    each other, are read as one token "As 5,62 m2". Anything else is left as read."""
+    out, used = [], set()
+    for i, t in enumerate(toks):
+        if i in used:
+            continue
+        m = _SPLIT_HEAD.match(t["text"].strip())
+        if m and t.get("rot", 0) == 0 and not t.get("mirror"):
+            a = quad_box(t["quad"])
+            h = max(a[3] - a[1], 4.0)
+            for j, u in enumerate(toks):
+                if j == i or j in used or u.get("rot", 0) != 0 or u.get("mirror"):
+                    continue
+                n = _SPLIT_TAIL.match(u["text"].strip())
+                if not n:
+                    continue
+                b = quad_box(u["quad"])
+                same_line = abs((a[1] + a[3]) / 2 - (b[1] + b[3]) / 2) <= 0.5 * h
+                gap = b[0] - a[2]
+                if same_line and -0.2 * h <= gap <= 1.2 * h:
+                    x0, y0, x1, y1 = min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])
+                    t = dict(t, text=f"{m.group(1)} {m.group(2)},{n.group(1)} m2", conf=min(t["conf"], u["conf"]),
+                             quad=[[x0, y0], [x1, y0], [x1, y1], [x0, y1]], joined=[t["text"], u["text"]])
+                    used.add(j)
+                    break
+        out.append(t)
+    return out
+
+
 def plan_tokens(f: Path, allow_run: bool = True, min_conf: float = 0.5):
     """((mirror, rot), tokens, extra rooms) for the plan's text: the pass the text reads in, that pass's tokens in
     original pixels, and the rooms whose label and printed area read together only in another rotation of the
@@ -157,6 +192,7 @@ def plan_tokens(f: Path, allow_run: bool = True, min_conf: float = 0.5):
     for t in allt:
         if t["conf"] >= min_conf:
             by[(bool(t.get("mirror")), t["rot"])].append(t)
+    by[UPRIGHT] = join_split_decimals(by[UPRIGHT])
     read = {p: read_rooms_oriented(by[p], *p, w, h, min_conf)[0] for p in PASSES}
 
     def score(p):

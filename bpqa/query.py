@@ -258,11 +258,26 @@ def whole_model_asked(question: str) -> bool:
     return bool(WHOLE_MODEL.search(fold(strip_quoted(question))))
 
 
+# Question words and grammar first, then drawing vocabulary. A storey or room name in another language inside an
+# English question ("How many windows are on 'Erdgeschoss'?") is vocabulary: it does not make the question German
+# (judge review 14 Nov). Quoted names are left out of the vocabulary test.
+_LANG_GRAMMAR = [("fi", r"kuinka|montako|paljonko|\bmika\b|\bmitka\b"), ("de", r"\bwie |\bwelche|\bwieviel|\bgibt es\b"),
+                 ("fr", r"combien|quelle|\bquel\b"), ("it", r"quant|qual |\bquale\b"),
+                 ("da", r"hvor mange|hvad er|hvor stor"), ("et", r"mitu |kui suur")]
+_LANG_WORDS = [("fi", r"pohjapiirustu"), ("de", r"grundriss|geschoss|wohnung"), ("fr", r"piece|etage"),
+               ("it", r"pianta|locale"), ("da", r"plantegning|modellen"), ("et", r"korrus")]
+_ENGLISH = re.compile(r"\b(how|what|which|where|the|are there|is there)\b")
+
+
 def detect_lang(f: str) -> str:
-    for lang, cue in [("fi", r"kuinka|montako|pohjapiirustu"), ("de", r"wie |grundriss|geschoss|wohnung"),
-                      ("fr", r"combien|quelle|piece|etage"), ("it", r"quant|qual |pianta|locale"),
-                      ("da", r"hvor mange|hvad er|plantegning|modellen"), ("et", r"mitu |kui suur|korrus")]:
+    for lang, cue in _LANG_GRAMMAR:
         if re.search(cue, f):
+            return lang
+    bare = re.sub(r"'[^']*'|\"[^\"]*\"|«[^»]*»|“[^”]*”", " ", f)
+    if _ENGLISH.search(bare):
+        return "en"
+    for lang, cue in _LANG_WORDS:
+        if re.search(cue, bare):
             return lang
     return "en"
 

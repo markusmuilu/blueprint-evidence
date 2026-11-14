@@ -46,7 +46,54 @@ def panels(img_bgr, white=245, min_frac=0.04):
     return sorted(out, key=lambda b: (b[0], b[1]))
 
 
+def printed_label_area(ctx, q) -> Answer | None:
+    """'How big is MH 1?' on a scan: the area printed beside the label read exactly as asked (QA 14 Nov: a Cannot,
+    while "MH 1 11,0 m2" is printed). The label token must read as the asked label with its number; the area is the
+    nearest printed area above, below or after it. Estimate: an OCR reading, not a measurement. None when not found."""
+    from . import raster_area as RA
+    from .labels import quad_box
+    want = re.sub(r"[^a-z0-9]", "", (q.label or q.room_no or "").lower())
+    if not want or not re.search(r"\d", want) or not re.search(r"[a-z]", want):
+        return None
+    _, toks, _ = RA.plan_tokens(ctx.file)
+    best = None
+    for t in toks or []:
+        pa = RA.parse_area(t["text"])
+        if pa is not None and re.sub(r"[^a-z0-9]", "", pa[1].lower()) == want:
+            best = (0.0, t, t, pa[0])              # label and area in one token: "MH 1 11,0 m2"
+            break
+        if re.sub(r"[^a-z0-9]", "", t["text"].lower()) != want:
+            continue
+        a = quad_box(t["quad"])
+        h = max(a[3] - a[1], 4.0)
+        for u in toks:
+            pu = RA.parse_area(u["text"])
+            if u is t or pu is None or pu[1]:
+                continue
+            b = quad_box(u["quad"])
+            ox = max(0.0, min(a[2], b[2]) - max(a[0], b[0])) / max(1.0, min(a[2] - a[0], b[2] - b[0]))
+            vg = max(0.0, max(a[1], b[1]) - min(a[3], b[3]))
+            hg = max(0.0, max(a[0], b[0]) - min(a[2], b[2]))
+            near = (ox >= 0.3 and vg <= 1.5 * h) or (vg == 0 and hg <= 2 * h)
+            if near and (best is None or vg + hg < best[0]):
+                best = (vg + hg, t, u, pu[0])
+    if best is None:
+        return None
+    _, t, u, v = best
+    label = q.label or q.room_no
+    shown = t["text"] if t is u else f"{t['text']} / {u['text']}"
+    return Answer(value=round(v, 2), unit="m2", route="raster-area", confidence=0.6, tier="estimate",
+                  tier_reason="read from the area printed beside the room label on the scan (OCR), not measured",
+                  explanation=f"{v:g} m2: the floor area printed beside the room label {label} on the plan ('{shown}').",
+                  items=[{"n": 1, "room": label, "area_m2": round(v, 2), "printed": shown,
+                          "xyxy": [round(c) for c in quad_box(u["quad"])]}])
+
+
 def answer(ctx, q) -> Answer:
+    if q.measure == "area" and (q.label or q.room_no) and q.variant != "type_sum":
+        a = printed_label_area(ctx, q)
+        if a is not None:
+            return a
     if q.measure == "area" and q.variant == "type_sum":
         img = cv2.imread(str(ctx.file))
         if img is None:
@@ -112,6 +159,20 @@ def answer(ctx, q) -> Answer:
     return first or abstain(ROUTE, f"no raster method for {q.obj}")
 
 
+def _with_waste(ctx, a: Answer) -> Answer:
+    """A waste said in the question ("total floor area for laminate flooring with 8% waste") added to a summed area
+    (judge review 14 Nov: the 8% was dropped). The rooms' net sum stays in the explanation."""
+    from ..walls import parse_inputs
+    w = parse_inputs(ctx.q.question).get("waste_pct")
+    if not a.answered or not w or a.unit != "m2" or not isinstance(a.value, (int, float)):
+        return a
+    net = float(a.value)
+    a.value = round(net * (1 + w / 100.0), 2)
+    a.explanation = (f"{a.value:.2f} m2 to order = net {net:.2f} m2 + {w:g}% waste {a.value - net:.2f} m2 (given in the "
+                     f"question). " + (a.explanation or ""))
+    return a
+
+
 def _rooms_of_every_type(ctx, q) -> Answer:
     """'Total floor area' on a scan with no printed flat area: the room-type takeoff over every known type."""
     from ..compose import ALL_TYPES, _base_query
@@ -125,7 +186,7 @@ def _rooms_of_every_type(ctx, q) -> Answer:
         b.explanation = ("No floor area is printed for the whole flat: the rooms of every labelled type are added up "
                          "(rooms without a readable label are not included). " + (b.explanation or ""))
         estimate(b, "the flat's area is not printed; sum of the labelled rooms")
-        return b
+        return _with_waste(ctx, b)
     # one type at a time: the types that are measured are added up, the others are named
     got, missed, seen, first = [], [], set(), None
     for t in ALL_TYPES:
@@ -150,7 +211,7 @@ def _rooms_of_every_type(ctx, q) -> Answer:
                  evidence=first.evidence)
     estimate(out, "the flat's area is not printed; sum of the labelled rooms"
                   + (f"; not measured: {', '.join(missed)}" if missed else ""))
-    return out
+    return _with_waste(ctx, out)
 
 
 LABEL_ROUTE = "raster-ocr-labels"
@@ -213,7 +274,7 @@ def room_labels(ctx, q, img, calibrate: bool = True) -> Answer:
             cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=col, width=3)
         tier = "   ESTIMATE" if ans.tier == "estimate" else "   proven"
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {n}{tier}   ({LABEL_ROUTE}, local OCR, $0)",
+                              f"Answer: {n}{tier}   ({LABEL_ROUTE}, local OCR, €0)",
                               note=f"{'amber' if ans.tier == 'estimate' else 'blue'} numbered boxes: labels read as {NAMES[q.obj]}: "
                                    + (", ".join(h["text"] for h in hits) or "none") + "; grey boxes: other room labels read"
                                    + (f". Estimate because: {ans.tier_reason}" if ans.tier == "estimate" else ""))
@@ -243,7 +304,7 @@ def named_labels(ctx, q, img) -> Answer:
             b = h["box"]
             cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=AMBER, width=3)
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {n}   ESTIMATE   ({LABEL_ROUTE}, local OCR, $0)",
+                              f"Answer: {n}   ESTIMATE   ({LABEL_ROUTE}, local OCR, €0)",
                               note=f"amber numbered boxes: readings of '{q.label}': " + ", ".join(h["text"] for h in hits)
                                    + f". Estimate because: {ans.tier_reason}")
     return ans

@@ -50,7 +50,10 @@ TOTAL_RE = re.compile(r"\b(total|whole|overall|entire|gross)\b.*\b(floor )?area\
 PERIM_RE = re.compile(r"\b(perimeter|skirting|baseboard|base board)\b", re.I)
 EXIST_RE = re.compile(r"^\s*(is|are) there\b|\b(does|do) (the|this|it|we)\b.*\b(have|has|contain|include|show)\b|"
                       r"\bis there (a|an|any)\b|\bare there any\b", re.I)
-COUNT_RE = re.compile(r"\bhow many\b|\bnumber of\b|\bcount\b", re.I)
+COUNT_RE = re.compile(r"\bhow many\b|\bnumber of\b|\bcount\b|\bkuinka monta\b|\bmontako\b|\bwie ?viele\b|\banzahl\b|"
+                      r"\bcombien\b|\bhvor mange\b|\bhur manga\b", re.I)
+AREA_Q_RE = re.compile(r"\b(area|perimeter|skirting|baseboard|m2|square)\b|pinta-?ala|neliometri|neliömetri|fl(a|ä)che|"
+                       r"quadratmeter|m²", re.I)
 
 
 def applies(ctx) -> bool:
@@ -87,8 +90,31 @@ def label_words(text: str) -> list[str]:
     return [sing(w) for w in re.findall(r"[a-z]+", _norm(t))]
 
 
+# Finnish and German room words a question may use on an English sheet (judge review 14 Nov: "Kuinka monta
+# wc-tilaa" abstained while the English question found 7 toilet rooms). Matched on the folded word, so inflected
+# and compound forms match (wc-tilaa -> wctilaa, WC-Raume -> wcraume, kaytavien, luokkahuoneita).
+FOREIGN_ROOM = [(re.compile(r"^(wc\w*|vess\w+|toalet\w*|toilette\w*|klo|klos)$"), "toilet"),
+                (re.compile(r"^(kaytav\w*|korridor\w*|flur\w*)$"), "corridor"),
+                (re.compile(r"^(luokkahuone\w*|luok(ka|an|ass|ia|ien|at)\w*|klassenzimmer\w*|klassenr(au|ae|a)m\w*)$"), "classroom"),
+                (re.compile(r"^(keitti\w*|kuche\w*|kueche\w*)$"), "kitchen"),
+                (re.compile(r"^(toimisto\w*|buro\w*|buero\w*)$"), "office"),
+                (re.compile(r"^(varast\w*|lager\w*|abstellr\w*)$"), "store"),
+                (re.compile(r"^(porra\w*|portai\w*|treppe\w*)$"), "stair"),
+                (re.compile(r"^(hissi\w*|aufzug\w*|aufzuge)$"), "lift"),
+                (re.compile(r"^(suihku\w*|dusche\w*)$"), "shower"),
+                (re.compile(r"^(pukuhuone\w*|umkleide\w*)$"), "changing")]
+
+
+def _foreign(w: str) -> str:
+    for rx, en in FOREIGN_ROOM:
+        if rx.match(w):
+            return en
+    return w
+
+
 def question_words(q: str) -> list[str]:
-    ws = ["wc" if w == "wcs" else sing(w) for w in re.findall(r"[a-z]+", _norm(q))]
+    from ..query import fold
+    ws = ["wc" if w == "wcs" else sing(_foreign(w)) for w in re.findall(r"[a-z]+", _norm(fold(q)))]
     out, i = [], 0
     while i < len(ws):
         for n in (2, 1):
@@ -335,7 +361,7 @@ def short_scale(sc: S.SheetScale) -> str:
 
 def _finish(ctx, cv: Canvas, head: str, note: str) -> str:
     return finish(cv.cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                  f"{head}   ESTIMATE   ({ROUTE}, local OCR and vision, $0)", note=note)
+                  f"{head}   ESTIMATE   ({ROUTE}, local OCR and vision, €0)", note=note)
 
 
 # ---------------------------------------------------------------- answers
@@ -348,7 +374,8 @@ def answer(ctx, query) -> Answer:
         return objects(ctx, obj)
     d = S.analyse(ctx.file, regions=False)
     labels = room_labels(d)
-    if measure in ("area", "length") or re.search(r"\b(area|perimeter|skirting|baseboard|m2|square)\b", q, re.I):
+    tk = (query.extra.get("takeoff") if query is not None else None) or None
+    if measure in ("area", "length") or AREA_Q_RE.search(q) or tk:
         d = S.analyse(ctx.file, regions=True)
         d = S.assumed(d, getattr(ctx, "assume", None))     # scale-assumption: the person's ratio and sheet, if any
         labels = room_labels(d)
@@ -357,7 +384,7 @@ def answer(ctx, query) -> Answer:
             return measured(ctx, d, ph, hits, labels, perimeter=True)
         if not ph and TOTAL_RE.search(q):
             return total_area(ctx, d, labels)
-        return measured(ctx, d, ph, hits, labels)
+        return measured(ctx, d, ph, hits, labels, tk=tk)
     if EXIST_RE.search(q) and not COUNT_RE.search(q):
         ph, hits = match_phrase(q, labels)
         if ph:
@@ -511,7 +538,56 @@ def _area_why(sc: S.SheetScale) -> str:
                "; the scale rests on one source only" if sc.ppm else ""))
 
 
-def measured(ctx, d: dict, ph: list[str], hits: list[dict], labels: list[dict], perimeter: bool = False) -> Answer:
+def _tiling(ctx, d: dict, sc, tk: dict, ok: list[dict]) -> dict:
+    """A takeoff (tiles, flooring) on the rooms measured on the sheet, read the way every other route reads it
+    (bpqa/walls.py surfaces): "floor" floor only, "walls" walls only, both when both are named. Plain "tiling for the
+    toilets" keeps this route's floor area as the value, and the text states floor only and floor plus walls, each
+    with the waste. A waste said in the question is always applied; otherwise waste is added only to an explicit
+    surface asked to order (the rule walls.summary uses). Walls: traced outline length x ceiling height (given, or
+    assumed) minus the door boxes in the room's walls at 2.0 m high."""
+    from .. import walls as W
+    _, want_walls, how = W.surfaces(tk)
+    inp = W.parse_inputs(ctx.q.question, tk)
+    stated = inp.get("waste_pct") is not None
+    waste = float(inp["waste_pct"]) if stated else W.DEFAULT_WASTE_PCT
+    k = 1 + waste / 100.0
+    asked = tk.get("surface") or "floor"
+    plain = asked == "floor" and not tk.get("floor_explicit")
+    floor = sum(h["area_m2"] for h in ok)
+    walls_t, rows, hsrc = None, [], ""
+    if all(h.get("perimeter_m") for h in ok):
+        boxes, _ = detect(ctx.file, S.read_scale(d).ppm)
+        for h in ok:
+            ops = door_openings(ctx.file, h, boxes=boxes, ppm=sc.ppm)
+            w = W.room_walls({"label": h["text"], "perimeter": h["perimeter_m"],
+                              "openings": [{"kind": "door", "width": o["width_m"] or 0.0, "z0": 0.0, "z1": W.DOOR_H_M}
+                                           for o in ops]}, inp)
+            rows.append((h, w, len(ops)))
+            hsrc = w["height_src"]
+        walls_t = sum(w["net"] for _, w, _ in rows)
+    if asked in ("walls", "floor+walls") and walls_t is None:
+        return {"abstain": "wall area needs each room's traced outline length, and "
+                           + ", ".join(h["text"] for h in ok if not h.get("perimeter_m")) + " has none"}
+    base, what = ((walls_t, "walls only") if asked == "walls" else
+                  (floor + walls_t, "floor plus walls") if asked == "floor+walls" else (floor, "floor only"))
+    add = stated or (not plain and bool(inp.get("order")))
+    value = round(base * (k if add else 1.0), 1)
+    src = "given in the question" if stated else f"default {W.DEFAULT_WASTE_PCT:g}% cutting allowance"
+    read = how if not plain else ("floor only: this route answers plain tiling with the floor area" if want_walls else how)
+    head = (f"about {value:g} m2 = {what} {base:.1f} m2" + (f" + {waste:g}% waste ({src})" if add else ", no waste added")
+            + f". Surfaces: {read}.")
+    both = f" Floor only: {floor:.1f} m2, with {waste:g}% waste {floor * k:.1f} m2."
+    if walls_t is not None:
+        both += (f" Floor plus walls: {floor + walls_t:.1f} m2, with {waste:g}% waste {(floor + walls_t) * k:.1f} m2 (walls "
+                 f"{walls_t:.1f} m2 = outline length x {rows[0][1]['band']:.2f} m minus door openings: "
+                 + ", ".join(f"{h['text']} {h['perimeter_m']:.1f} m, {n} door(s)" for h, _, n in rows[:8])
+                 + (", ..." if len(rows) > 8 else "") + (f"; {hsrc}" if "ASSUMED" in hsrc else "") + ").")
+    why = f"; walls use an {hsrc.split(' (')[0]}" if asked in ("walls", "floor+walls") and "ASSUMED" in hsrc else ""
+    return {"value": value, "text": head + both, "why": why}
+
+
+def measured(ctx, d: dict, ph: list[str], hits: list[dict], labels: list[dict], perimeter: bool = False,
+             tk: dict | None = None) -> Answer:
     sc = S.scale_of(d)
     if not sc.ppm:
         return abstain(ROUTE, f"no scale on the sheet: {sc.detail}")
@@ -558,6 +634,13 @@ def measured(ctx, d: dict, ph: list[str], hits: list[dict], labels: list[dict], 
     expl = (f"about {total:g} {unit}: {what} of {len(ok)} room(s) "
             f"named '{name}' ({per}{', ...' if len(ok) > 12 else ''}), traced between the walls and converted with "
             f"the sheet scale: {short_scale(sc)}. Scale evidence: {sc.detail}")
+    tko = _tiling(ctx, d, sc, tk, ok) if tk and not perimeter else None
+    if tko and tko.get("abstain"):
+        return abstain(ROUTE, tko["abstain"])
+    if tko:
+        total = tko["value"]
+        expl = tko["text"] + " Floor area " + expl[len("about "):]
+        why += tko["why"]
     ans = Answer(value=total, unit=unit, route=ROUTE, confidence=0.55 if sc.strong else 0.4, tier="estimate",
                  tier_reason=why, explanation=expl,
                  items=[{"n": i + 1, "label": h["text"], "area_m2": h.get("area_m2"), "perimeter_m": h.get("perimeter_m"),
