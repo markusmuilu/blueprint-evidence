@@ -161,7 +161,27 @@ def common_flag(M, e, key):
     for ps, vals in psets(e).items():
         if ps.endswith("Common") and key in vals and vals[key] is not None:
             return bool(vals[key])
+    for ps, vals in psets(e).items():
+        if key in vals and isinstance(vals[key], bool):
+            return vals[key]
     return None
+
+
+LAYER_KEYS = {"ebene", "layer", "layername", "layer name", "tag layer", "category", "kategorie"}
+EXT_WORD = re.compile(r"aussen|außen|au.enw|exterior|external|outer|outside|ytter|utvendig|ulko|facade|fassade")
+INT_WORD = re.compile(r"innen|interior|internal|inner|inside|innv|innerv|sisa|partition|trennw")
+
+
+def layer_side(e):
+    """Exterior/interior from the element's CAD layer or category name ('Aussenwaende',
+    'A24_Innervegger'), used only when IsExternal is missing everywhere. Returns (flag, text)."""
+    for ps, k, v in flat_props(e):
+        if fold(str(k)).strip() in LAYER_KEYS and isinstance(v, str) and v.strip():
+            fv = fold(v)
+            ext, inn = bool(EXT_WORD.search(fv)), bool(INT_WORD.search(fv))
+            if ext != inn:
+                return ext, f"{k} '{v}'"
+    return None, None
 
 
 def qty(M, e, keys):
@@ -334,12 +354,85 @@ def find_element(M, question, classes):
     return None
 
 
+SUBSCOPE = re.compile(r"\b(house|block|wing|apartment|unit|flat|duplex|tower|building)\s+[A-Z0-9]\b(?!\s*(?:m|mm|sq))")
+# words a lookup above already understands; any other content word of 4+ letters is a property to search for
+KNOWN = set("""what which how many much are is the there this that these those with their them they its and or of in on
+for to by per from all any each every some list show give provide tell could would you please me can does do did
+type types kind kinds sort sorts different various distinct quantity quantities number numbers count counts total
+totals distribution distributed breakdown percentage percentages share shares used use installed present exist exists
+existing available include includes including included contain contains building buildings model level levels floor
+floors storey storeys story stories element elements component components item items detail details information
+info data overview summary along also have has having been being find found where located location here within inside
+outside interior exterior internal external inner outer side sides envelope facade facades partition partitions
+respective respectively respect overall combined complete full entire whole main primary specific specified
+grouped group groups organized organised organize across between both other others plus versus compared comparison
+about related relating associated function functions functional usage purpose
+square meters metres meter metre area areas volume volumes length lengths width widths height heights thickness
+thicknesses dimension dimensions size sizes sizing value values property properties attribute attributes name names
+named called labelled labeled identify identified applied apply applies employed employ fitted provided
+specification specifications characteristic characteristics construction constructed structure structures structural
+system systems standard standards material materials made built composed composition layers layer
+ground basement underground attic first second third fourth fifth sixth range ranges ones equipment equipments
+utilized utilised utilization utilisation required require requires needed need needs average averages find
+rooms room spaces space type-wise usable gross net nett floorspace much more less than most least highest lowest largest smallest every
+""".split())
+ING_KEEP = {"glazing", "flooring", "skirting", "roofing", "cladding", "insulating", "lighting", "heating", "plumbing"}
+
+
+def unknown_terms(f: str, M=None) -> list:
+    if M is not None:
+        for nm in _model_names(M):
+            if len(nm) >= 3 and nm in f:
+                f = f.replace(nm, " ")
+    words = re.findall(r"[a-z][a-z\-]{3,}", f)
+    out = []
+    for w in words:
+        if w in KNOWN or (w.endswith("ing") and w not in ING_KEEP):
+            continue
+        if any(re.fullmatch(rf"(?:{rx})", w) for rx, _, _ in CLASS_WORDS):
+            continue
+        out.append(w)
+    return list(dict.fromkeys(out))
+
+
+def _model_names(M):
+    if not hasattr(M, "_prop_names"):
+        names = set()
+        for s in M.storeys:
+            names |= {fold(s.Name or ""), fold(getattr(s, "LongName", None) or "")}
+        for sp in ents(M, ["IfcSpace"]):
+            names |= {fold(sp.Name or ""), fold(getattr(sp, "LongName", None) or "")}
+        M._prop_names = sorted((n.strip() for n in names if n.strip()), key=len, reverse=True)
+    return M._prop_names
+
+
+def find_room_by_name(M, question, storey):
+    """A space whose LongName or Name (4+ characters) is printed in the question; unique, or unique on
+    the asked storey."""
+    f = fold(question)
+    hits = []
+    for sp in ents(M, ["IfcSpace"]):
+        for nm in (getattr(sp, "LongName", None), sp.Name):
+            n = fold(nm or "").strip()
+            if len(n) >= 4 and re.search(rf"(?<![\w]){re.escape(n)}(?![\w])", f):
+                hits.append((len(n), sp))
+                break
+    if storey is not None:
+        hits = [h for h in hits if M.storey_of(h[1]) == storey]
+    if not hits:
+        return None
+    best = max(h[0] for h in hits)
+    top = [sp for n, sp in hits if n == best]
+    return top[0] if len(top) == 1 else None
+
+
 def plan(M, question) -> Lookup | None:
     f = fold(question)
     classes, label = _classes(f)
     storey, snote, asked_storey = find_storey(M, question)
-    room = find_room(M, question)
+    room = find_room(M, question) or find_room_by_name(M, question, storey)
     ext = None
+    f = re.sub(r"\b(inside|within|in) (of )?(the |this )?(building|model|house)\b", " ", f)
     if re.search(r"\b(exterior|outside|external|outer|facade|envelope)\b", f) and not re.search(r"\b(interior|inside|internal|inner)\b", f):
         ext = True
     elif re.search(r"\b(interior|inside|internal|inner|partitions?)\b", f):
@@ -348,6 +441,11 @@ def plan(M, question) -> Lookup | None:
     base = dict(classes=classes, label=label, storey=storey, storey_note=snote, room=room, external=ext, by_level=by_level)
     if asked_storey and storey is None:
         return Lookup(intent="unresolved", storey_note=snote)
+    m = SUBSCOPE.search(question)
+    if m:
+        return Lookup(intent="unresolved", storey_note=f"'{m.group(0)}' names a part of the building that the model does not identify by that name")
+    if re.search(r"\b(north|south|east|west)(ern)?\b", f):
+        return Lookup(intent="unresolved", storey_note="orientation (north/south/east/west) is not resolved by this lookup")
 
     if re.search(r"\b(software|application|authoring|ifc (version|schema|standard)|modell?ing standards?|"
                  r"which standards?|ifc standards?)\b", f):
@@ -363,8 +461,11 @@ def plan(M, question) -> Lookup | None:
         return Lookup(intent="storeys")
     if re.search(r"\bmaterials?\b|made of|what (is|are) .* built (of|from)", f) and classes:
         return Lookup(intent="materials", **base)
-    if re.search(r"\bthickness(es)?\b", f) and classes:
+    if re.search(r"\bthickness(es)?\b", f) and classes and not unknown_terms(f, M):
         return Lookup(intent="types", attr="thickness", **base)
+    if re.search(r"\b(dimensions?|sizes?|sizing|width and height|heights?|widths?)\b", f) and classes and \
+            classes != ["IfcSpace"] and not re.search(r"\b(widest|narrowest|tallest|largest|smallest)\b", f):
+        return Lookup(intent="types", attr="dims", **base)
     # extremes: widest door, largest room, tallest ceilings, narrowest window
     ext_words = [(r"widest|greatest widths?|largest widths?|maximum width|biggest width", "width", "max"),
                  (r"narrowest|smallest widths?|minimum width", "width", "min"),
@@ -380,7 +481,7 @@ def plan(M, question) -> Lookup | None:
             if re.search(r"ceiling", f):
                 attr, classes = "height", ["IfcSpace"]
                 base.update(classes=classes, label="space")
-            k = 1
+            k = 10 if re.search(r"\b(which|what)\s+(\w+\s+)?(rooms|spaces|doors|windows|walls)\b", f) else 1
             m = re.search(r"\b(two|three|four|five|ten|\d{1,2})\s+(?:\w+\s+)?(?:doors|windows|rooms|spaces|walls|slabs)", f)
             if m:
                 k = NUM_WORDS.get(m.group(1)) or int(m.group(1))
@@ -399,7 +500,11 @@ def plan(M, question) -> Lookup | None:
         if re.search(rx, f):
             total_attr = a
             break
-    if classes == ["IfcSpace"] or (not classes and re.search(r"\bspaces?\b|\brooms?\b", f)):
+    if not classes and re.search(r"\b(floor area|gross area|net area|usable area|nettoflache|bruttoflache)\b", f):
+        classes = ["IfcSpace"]
+        base.update(classes=classes, label="space")
+        base.update(by_level=base["by_level"] or bool(re.search(r"\b(level|storey|floor)s?\b.*\b(breakdown|by)\b|\bby (level|storey|floor)", f)))
+    if (classes == ["IfcSpace"] or (not classes and re.search(r"\bspaces?\b|\brooms?\b", f))) and not unknown_terms(f, M):
         base.update(classes=["IfcSpace"], label="space")
         grp = "function" if re.search(r"function|usage|use\b|purpose|grouped", f) else "none"
         if room is not None:
@@ -407,6 +512,9 @@ def plan(M, question) -> Lookup | None:
         return Lookup(intent="spaces", group=grp, attr="area", **base)
     if total_attr and classes and re.search(r"\b(total|sum|combined|overall|how much)\b", f):
         return Lookup(intent="total", attr=total_attr, **base)
+    terms = unknown_terms(f, M)
+    if terms and classes:
+        return Lookup(intent="search", prop=" ".join(terms), **base)
     if classes and re.search(r"\btypes?\b|how many|quantit|distribution|breakdown|count|which .*(are|is) (used|installed|present)|"
                              r"what .*(are|is) (used|installed|present)|\bpresent\b|\binstalled\b|\bused\b|\blist\b", f):
         return Lookup(intent="types", **base)
@@ -415,17 +523,52 @@ def plan(M, question) -> Lookup | None:
 
 # ------------------------------------------------------------------ lookup -> rows, text
 
+def room_elements(M, sp, es):
+    """Elements of `es` that belong to space `sp`: contained in it, bounding it (IfcRelSpaceBoundary),
+    or, without either relation, whose footprint lies within 0.3 m of the space footprint on its storey."""
+    ids = {e.id() for e in contained_in_space(M, sp)}
+    for rel in getattr(sp, "BoundedBy", []) or []:
+        if rel.RelatedBuildingElement is not None:
+            ids.add(rel.RelatedBuildingElement.id())
+    hit = [e for e in es if e.id() in ids]
+    if hit:
+        return hit, "contained in or bounding the space (IFC relations)"
+    fp, _ = M.footprint(sp)
+    if fp is None:
+        return [], "space has no geometry"
+    st = M.storey_of(sp)
+    tol = 0.3 / (M.len_scale or 1.0)
+    out = []
+    for e in es:
+        if M.storey_of(e) != st:
+            continue
+        g, _ = M.footprint(e)
+        if g is not None and g.distance(fp) <= tol:
+            out.append(e)
+    return out, "footprint within 0.3 m of the space footprint (no IFC relation)"
+
+
 def _filter(M, L, es):
     notes = []
+    if L.room is not None and L.classes != ["IfcSpace"]:
+        es, how = room_elements(M, L.room, es)
+        notes.append(f"in space {space_display(L.room)}: {how}")
     if L.storey is not None:
         es = [e for e in es if M.storey_of(e) == L.storey]
         notes.append(f"contained in storey {L.storey.Name}")
     if L.external is not None:
         flags = [(e, common_flag(M, e, "IsExternal")) for e in es]
         if all(fl is None for _, fl in flags):
-            return None, "IsExternal is not set on any of these elements, so exterior/interior cannot be told apart"
-        es = [e for e, fl in flags if fl is L.external]
-        notes.append(f"Pset_*Common.IsExternal = {L.external}")
+            side = [(e,) + layer_side(e) for e in es]
+            if sum(1 for _, fl, _ in side if fl is not None) < 0.5 * max(len(es), 1):
+                return None, "IsExternal is not set on these elements and their layer names do not say exterior/interior"
+            es = [e for e, fl, _ in side if fl is L.external]
+            ex = Counter(t for _, fl, t in side if fl is L.external).most_common(2)
+            notes.append(f"{'exterior' if L.external else 'interior'} from the CAD layer name (IsExternal not set): "
+                         + ", ".join(t for t, _ in ex))
+        else:
+            es = [e for e, fl in flags if fl is L.external]
+            notes.append(f"Pset_*Common.IsExternal = {L.external}")
     return es, "; ".join(notes)
 
 
@@ -465,8 +608,10 @@ def run(M, L):
     if not L.classes:
         raise LookupError("no element class named in the question")
     es = ents(M, L.classes)
+    lab = L.label or L.classes[0]
     if not es:
-        raise LookupError(f"the model has no {'/'.join(L.classes)} entities")
+        return (f"No {lab} elements in this model: 0 entities of {' / '.join(L.classes)}."), [], [], \
+            f"entity count by class ({', '.join(L.classes)})"
     es, fnote = _filter(M, L, es)
     if es is None:
         raise LookupError(fnote)
@@ -512,6 +657,36 @@ def run(M, L):
             rows.append({"key": t, "count": len(d["guids"]), "values": dict(d["values"])})
         cited = [e for e in es if any(e.GlobalId in d["guids"] for d in by_type.values())]
         return "\n".join(lines), rows, cited, "fire-rating properties"
+
+    if L.intent == "search":
+        terms = [t for t in L.prop.split() if len(t) >= 4]
+        stems = [t[:-1] if t.endswith("s") else t for t in terms]
+        hits = OrderedDict()
+        for e in es:
+            found = []
+            for ps, k, v in flat_props(e):
+                kn = fold(str(k))
+                if any(st in kn for st in stems) and v not in (None, "", " ") and str(v) != str(k):
+                    found.append((ps, k, v))
+            for m, t in materials_of(e):
+                if m and any(st in fold(m) for st in stems):
+                    found.append(("material", "Name", m + (f" ({float(t) * M.len_scale * 1000:.0f} mm)" if t else "")))
+            for ps, k, v in found:
+                d = hits.setdefault((str(k), type_name(e)), {"values": Counter(), "guids": [], "pset": ps})
+                d["values"][str(v)] += 1
+                d["guids"].append(e.GlobalId)
+        if not hits:
+            return (f"Not available in this model: no property or material matching {', '.join(repr(t) for t in terms)} "
+                    f"on any of the {len(es)} {lab}s{scope} or their types."), [], es[:50], \
+                f"searched every property name and material of every {lab}"
+        lines = [f"Properties matching {', '.join(repr(t) for t in terms)} on {lab}s{scope}:"]
+        rows = []
+        for (k, t), d in list(hits.items())[:40]:
+            vs = "; ".join(f"{v}" + (f" ({c})" if c > 1 else "") for v, c in d["values"].most_common(6))
+            lines.append(f"- {t}: {k} = {vs}")
+            rows.append({"key": t, "property": f"{d['pset']}.{k}", "values": dict(d["values"])})
+        cited = [e for e in es if any(e.GlobalId in d["guids"] for d in hits.values())]
+        return "\n".join(lines), rows, cited, "property names / materials matching the question words"
 
     if L.intent == "element":
         e = L.element
@@ -585,8 +760,20 @@ def run(M, L):
             key = (ln or type_name(e)) if L.group == "function" else ""
             groups.setdefault(key, []).append((e, a))
             total += a or 0
-        where = f"storey {L.storey.Name}" if L.storey is not None else "the model"
-        lines = [f"{len(es)} spaces on {where}, total area {_fmt(total)} sq m:"]
+        where = f"on storey {L.storey.Name}" if L.storey is not None else "in the model"
+        lines = [f"{len(es)} spaces {where}, total area {_fmt(total)} sq m."]
+        if L.storey is None:
+            per = OrderedDict()
+            for e in es:
+                st = M.storey_of(e)
+                d = per.setdefault(st.Name if st is not None else "(no storey)", [0, 0.0])
+                d[0] += 1
+                d[1] += M.space_area(e)[0] or 0
+            lines.append("By storey: " + "; ".join(f"{k}: {n} spaces, {_fmt(a)} sq m" for k, (n, a) in per.items()))
+        if L.group == "function" and total:
+            lines.append("By function: " + "; ".join(
+                f"{k or '-'}: {len(v)} spaces, {_fmt(sum(a or 0 for _, a in v))} sq m ({100 * sum(a or 0 for _, a in v) / total:.1f}%)"
+                for k, v in sorted(groups.items(), key=lambda kv: -sum(a or 0 for _, a in kv[1]))[:25]))
         for key, items in sorted(groups.items(), key=lambda kv: -sum(a or 0 for _, a in kv[1])):
             if key:
                 lines.append(f"{key} ({len(items)} spaces, {_fmt(sum(a or 0 for _, a in items))} sq m):")
@@ -650,22 +837,37 @@ def run(M, L):
             for e in es:
                 st = M.storey_of(e)
                 per_level[type_name(e)][st.Name if st is not None else "(no storey)"] += 1
-        thick = {}
+        thick, dims = {}, {}
         if L.attr == "thickness":
             for e in es:
                 v, _ = thickness_of(M, e)
                 if v is not None:
                     thick.setdefault(type_name(e), Counter())[round(v * 1000)] += 1
+        if L.attr == "dims":
+            for e in es:
+                w, _ = width_of(M, e)
+                h, _ = height_of(M, e)
+                if w is not None or h is not None:
+                    dims.setdefault(type_name(e), Counter())[(round(w, 3) if w else None, round(h, 3) if h else None)] += 1
         for t, n in c.most_common(60):
             s = f"- {t}: {n} ({100 * n / len(es):.1f}%)"
             if t in thick:
-                s += ", thickness " + ", ".join(f"{mm} mm" for mm, _ in thick[t].most_common())
+                s += ", thickness " + ", ".join(f"{mm} mm ({mm / 1000:.3f} m)" for mm, _ in thick[t].most_common())
+            if t in dims:
+                s += ", " + "; ".join((f"width {_fmt(w)} m" if w else "") + (" x " if w and h else "") + (f"height {_fmt(h)} m" if h else "")
+                                      + (f" ({k})" if len(dims[t]) > 1 else "") for (w, h), k in dims[t].most_common(4))
             lines.append(s)
             if L.by_level:
                 lines.append("    " + "; ".join(f"{lv}: {k}" for lv, k in per_level[t].most_common()))
             rows.append({"key": t, "count": n})
         if len(c) > 60:
             lines.append(f"... and {len(c) - 60} more types")
+        if thick:
+            byt = Counter()
+            for t, cc in thick.items():
+                for mm, k in cc.items():
+                    byt[mm] += k
+            lines.append("By thickness: " + "; ".join(f"{mm} mm: {k} ({100 * k / len(es):.1f}%)" for mm, k in sorted(byt.items())))
         if L.by_level:
             lv = Counter(M.storey_of(e).Name if M.storey_of(e) is not None else "(no storey)" for e in es)
             lines.append("By storey: " + "; ".join(f"{k}: {v}" for k, v in lv.most_common()))
