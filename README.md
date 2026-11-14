@@ -1055,8 +1055,9 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
   scale is within 3 to 4% of the printed-area scale (median), the object scale within about 4 to 5%, but a room's
   area is off by a median of about 12% for rooms of 6 m2 and over, about 19% for 3 to 6 m2, and rooms under 3 m2
   are not answered (about 40%, nearly always too small). The traced room outline, not the scale, is most of that
-  error, so printed door sizes barely improve the room numbers. Open kitchens merge with the living room (the
-  answer warns). A scale is set on about 80% of dev scans (door sizes alone on 14%); plans that are thumbnails
+  error, so printed door sizes barely improve the room numbers. End to end (takeoff questions on those plans,
+  areas hidden): 84 answered, 7 within 2%, 38 within 10%, median 12%. Kitchens are not approximated (median 87%
+  off: open kitchens merge with the living room); the answer abstains and says so. A scale is set on about 80% of dev scans (door sizes alone on 14%); plans that are thumbnails
   (colorful-11960, 240 x 161 px) or whose labels cannot be read abstain. See CHANGELOG "area approximation".
 - Unnamed numbered rooms in Swiss floors are ambiguous (wet rooms, shafts, balconies). The fixture rule
   is right more often than not, and is where most remaining Swiss area errors are.

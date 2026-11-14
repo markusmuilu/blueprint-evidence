@@ -42,7 +42,22 @@ Availability on the 939 dev scans with a detector cache (`modscale_eval.py avail
 scale 757 (80%), either 759.
 
 End to end (`tools/objscale_e2e.py --half all`, 370 plans, takeoff questions whose rooms all print an area, printed
-areas hidden): running when this was committed; numbers follow in the next commit.
+areas hidden; the gold is the sum of the printed areas; eval.py's 2% rule), 182 plans, 354 questions, all abstained
+before:
+
+| | all types | without kitchens (shipped) |
+|---|---|---|
+| answered (all tier estimate) | 99 | 84 |
+| right, within 2% | 7 | 7 |
+| within 5% / 10% / 20% | 20 / 40 / 64 | 19 / 38 / 61 |
+| median abs error (signed) | 14.1% | 11.9% (-6.7%) |
+
+By type: bedrooms 50 answered, 6 right, median 9.9%; bathrooms 28, 0, 19.7%; WC 3, 1, 6.8%; sauna 3, 0, 8.6%;
+kitchens 15, 0, 86.7%. By scale source: door sizes 54 answered, 3 right, median 12.9%; objects 45, 4, 14.2%.
+So the approximation is right by eval.py's rule only 7 times in 84: it is a rough size, which is why the answer
+says "about", gives the typical error and says "Check before ordering". Kitchens are not approximated
+(`NO_APPROX_TYPES`): the answer abstains and says why ("measured kitchens were off by a median of 87% ..."), with
+the scale it would have used. Removing "kitchen" from that dict answers them with a warning instead.
 
 Switched on (`DEFAULT_ON = True`, `STOA_OBJECT_SCALE=0` off) for room area and takeoff questions on scans with no
 printed-area scale. Stoa's dataset asks no area question on a scan, so no dataset answer changes.
@@ -53,7 +68,7 @@ Transparency:
   openings 0.9 to 1.0 m), each matched to the door it labels (doors D1 to D5), 53 px per m, spread 4%. Typical error
   for rooms of these sizes: about 12%. Check before ordering."). With order/buy waste (main's takeoff change):
   "About 31 m2 to order (approximation: net floor about 28 m2 plus 10% waste)". Kitchens add a warning that the
-  outline may include the living room. Tier always estimate, `tier_reason` starts "approximation, never proven";
+  outline may include the living room (only reached if kitchens are re-enabled, see above). Tier always estimate, `tier_reason` starts "approximation, never proven";
   confidence 0.35. Error bands: `MODULE_BANDS` (cross-fitted, 455 rooms of 87 plans) for (b), Y's `BANDS` for (c).
 - `Answer.approx` (new field) carries the sentence, the source, px per m, spread, band, the tagged objects and the
   rooms; the server passes it on; the Why panel gets a Scale line; the strip says "Approximate scale from ...".

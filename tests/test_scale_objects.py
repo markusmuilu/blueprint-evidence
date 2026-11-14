@@ -197,3 +197,17 @@ def test_approximation_evidence_steps(monkeypatch, tmp_path):
     assert len(so) == 4 and all(m["tone"] == "amber" and m["label"].endswith("door 0.84 m") for m in so)
     # scale objects are context: never pinned as answer items
     assert not [m for m in mk["marks"] if m["kind"] == "box" and m.get("tone") == "amber" and m.get("n") is None]
+
+
+def test_no_approximation_for_kitchens(monkeypatch):
+    m2 = 1 / PPM ** 2
+    r = RA.Room("K", (10, 10, 18, 18), None, None, (10, 10), pixels=140 * 140, region_ok=True, contour=square(140))
+    r.measured = round(r.pixels * m2, 2)
+    sc = RA.Scale(m2, [], 0.05, "objects (walls@43)", "OBJECT SCALE (weaker than printed areas)")
+    sc.objects, sc.source = OS.tag_objects(OS.candidates(dets(door(0, 0), door(50, 0), door(100, 0), door(150, 0)))), "objects"
+    monkeypatch.setattr(RA, "analyse", lambda *_a, **_k: RA.PlanAreas([r], [], sc, "walls@43"))
+    qtext = "How big is the kitchen?"
+    ctx = SimpleNamespace(file=Path("none.png"), q=SimpleNamespace(path="data/x/none.png", question=qtext),
+                          evidence=False, out_dir=Path("."))
+    a = RA.takeoff_answer(ctx, parse(qtext), None)
+    assert not a.answered and "no approximation for kitchen" in a.abstain and "87%" in a.abstain

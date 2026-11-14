@@ -435,6 +435,11 @@ def about(v: float) -> str:
     return f"{v:.0f}" if v >= 10 else f"{v:.1f}"
 
 
+# Room types not approximated: end to end (tools/objscale_e2e.py --half all, printed areas hidden) kitchens were off by
+# a median of 87% (15 answers; open kitchens merge with the living room), against 10% for bedrooms. They abstain, saying
+# why. Remove "kitchen" to answer them with KITCHEN_NOTE in the sentence instead.
+NO_APPROX_TYPES = {"kitchen": "measured kitchens were off by a median of 87% in the end-to-end test (open kitchens "
+                              "merge with the living room in the traced outline)"}
 KITCHEN_NOTE = ("Kitchens are often open to the living room, so the outline may hold both (kitchens were the worst "
                 "type in the object-scale end-to-end test): check the outline.")
 

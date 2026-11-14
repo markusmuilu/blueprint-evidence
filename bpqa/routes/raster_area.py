@@ -975,6 +975,14 @@ def takeoff_answer(ctx, q, img):
         scale_txt, bt = sc.detail, OS.band_text([r["area"] for r in meas_rows], sc)
         band_note = f" Measured areas are approximations from a door or object scale: {bt}." if meas_rows else ""
     approx = OS.is_object(sc) and bool(meas_rows)      # the approximation: an area rests on a door / object scale
+    if approx:
+        from .. import takeoff as _tk
+        bad = sorted({t for r in meas_rows for t in _tk.room_types(r["label"] or "") if t in OS.NO_APPROX_TYPES})
+        if bad:
+            return abstain(ROUTE, f"no approximation for {', '.join(bad)}: this drawing prints no area for "
+                                  + ", ".join(r["label"] for r in meas_rows) + " and "
+                                  + "; ".join(OS.NO_APPROX_TYPES[t] for t in bad)
+                                  + f". {OS.scale_sentence(sc)}")
     approx_txt = OS.approx_text(sum(r["area"] for r in rows), [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want) if approx else ""
     uncertain = [{"room": r["label"], "area_m2": round(r["area"], 2), "why": "measured, not printed"} for r in meas_rows]
 
