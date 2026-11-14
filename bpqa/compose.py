@@ -353,6 +353,7 @@ def run(ctx, p: dict, solve_q) -> tuple[Query, Answer]:
     kind = p["kind"]
     shell = Query(raw=question, parser="rules")
     shell.extra["composite"] = kind
+    shell.extra["reading"] = describe(p)
     if kind == "which_storey":
         return shell, which_storey(ctx)
     if kind == "parts":
@@ -450,6 +451,28 @@ def run(ctx, p: dict, solve_q) -> tuple[Query, Answer]:
                      + f". {base.explanation or ''}")
         return shell, a
     return shell, abstain("compose", f"unknown composite {kind}")
+
+
+def describe(p: dict) -> str:
+    """One plain sentence: how the question was split or built (shown in the Why panel)."""
+    noun = _noun(p.get("types") or [])
+    k = p["kind"]
+    if k == "parts":
+        return f"{len(p['parts'])} questions, each answered on its own: " + " | ".join(p["parts"])
+    if k == "list":
+        return f"a list of the {noun} with their floor areas, one row per room"
+    if k == "extreme":
+        return (f"the {'largest' if p['max'] else 'smallest'} of the {noun} by floor area"
+                + (", with its name" if p.get("which") else ""))
+    if k == "condition":
+        return (f"{'the number of' if p.get('count') else 'the'} {noun} {p['op']} {p['threshold']:g} m2")
+    if k == "share":
+        return f"the floor area of the {noun} as a percentage of the floor area of all rooms"
+    if k == "per_apartment":
+        return f"the floor area of the {noun}, summed per apartment"
+    if k == "which_storey":
+        return "the storey this drawing shows"
+    return k
 
 
 def run_parts(ctx, parts: list[str], solve_q, shell: Query) -> tuple[Query, Answer]:

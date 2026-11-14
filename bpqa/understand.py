@@ -273,6 +273,14 @@ def gaps(q: Query, question: str) -> str | None:
             miss -= {"wc"}
         if miss and not re.search(r"\b(with|having|containing|mit|med|jossa|joissa|avec|con)\b", f):
             return f"a count of {q.obj}s was read, but the question also names {sorted(miss)}"
+    # a synonym the reader knows and the rules do not ("sleeping rooms", "wet room"): its type must be in the reading
+    have = set((tk or {}).get("types") or ()) | ({phrasing._OBJ_TO_TYPE.get(q.obj)} if q.obj else set())
+    f_in = _NOT_COUNTING.sub(" ", f)
+    for k, v in phrasing.TYPE_SYN.items():
+        if q.measure not in ("count", "area"):
+            break
+        if " " in k and v not in have and v != "wet" and re.search(rf"\b{re.escape(k)}s?\b", f_in):
+            return phrasing.BLOCKING[1] + f" ('{k}', {v})"
     # a room word the vocabulary does not know, under a reading of rooms of any kind
     if q.obj == "room" and q.measure in ("count", "area") and not q.label and not q.room_no \
             and q.variant not in ("type_sum", "net_indoor_total"):
@@ -296,3 +304,8 @@ def storey_scope(ctx, query: Query) -> tuple[str | None, str]:
     from .routes import ifc_route
     st, note = resolve_storey(ifc_route.load(str(path)), sr.get("kind", ""))
     return (st.Name, note) if st is not None else (None, f"the question names the {phrase}: {note}")
+
+
+# "not counting separate WC rooms", "except the sauna": the words after it are left out on purpose
+_NOT_COUNTING = re.compile(r"\b(not counting|not including|excluding|except|without|apart from|other than|ohne|ausser|"
+                           r"paitsi|lukuun ottamatta|pois lukien|ilman|utom|utan|exklusive|sauf|hors|tranne)\b[^)?.;]*")

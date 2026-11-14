@@ -246,6 +246,9 @@ def why(a: dict, query: dict, ext: str) -> list[dict]:
         why_llm = ex.get("llm_reason") or "the rule parser did not read the question"
         out.append({"kind": "query", "text": f"Question read by the language model as: {ex['reading']}. "
                                              f"(Asked because {why_llm}.) Check that this is what you asked."})
+    elif ex.get("composite") and ex.get("reading"):
+        # a question built from several answers (bpqa/compose.py): lists, superlatives, several parts
+        out.append({"kind": "query", "text": f"Question read as {ex['reading']}."})
     elif q and route != "parser":
         bits = [f"{q.get('measure', '?')} of {q.get('obj', '?')}"]
         if q.get("lang"):
