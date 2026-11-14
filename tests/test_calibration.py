@@ -120,6 +120,47 @@ def test_router_calibrates_a_proven_scan_answer_from_any_raster_route(monkeypatc
     assert a.tier == "estimate" and "70%" in a.tier_reason
 
 
+def _rooms_setup(monkeypatch, ocr_tier, calls):
+    import numpy as np
+    from types import SimpleNamespace
+    from bpqa.routes import raster, raster_rooms as rr
+    cfg = {"thr": 0.45, "band": [0.35, 0.55], "prefer": "ocr_proven", "proven_rule": "agree_ocr", "imgsz": 896}
+    monkeypatch.setattr(rr, "thresholds", lambda: {"kitchen": cfg, "bedroom": dict(cfg, proven_rule="agree")})
+    monkeypatch.setattr(rr.cv2, "imread", lambda *a, **k: np.zeros((10, 10, 3), np.uint8))
+    monkeypatch.setattr(rr, "detect_views", lambda *a, **k: [[{"cls": "kitchen", "conf": 0.9, "xyxy": [0, 0, 5, 5]},
+                                                              {"cls": "bedroom", "conf": 0.9, "xyxy": [5, 5, 9, 9]}]])
+
+    def labels(ctx, q, img, calibrate=True):
+        calls.append(calibrate)
+        a = Answer(value=1, unit="count", route="raster-ocr-labels", tier=ocr_tier)
+        if calibrate:
+            calibration.apply(a, q.obj)
+        return a
+    monkeypatch.setattr(raster, "room_labels", labels)
+    return rr, SimpleNamespace(file=Path("x.png"), evidence=False)
+
+
+def test_rooms_route_combines_the_label_routes_own_tier(monkeypatch):
+    """raster-rooms was tuned on the OCR route's own tier; the calibrated tier (an estimate for every label
+    count) must not leak into its combination rule."""
+    monkeypatch.setitem(TABLE, "raster-rooms|kitchen",
+                        {"n": 300, "correct": 290, "precision": 0.967, "proven": False, "counts": {}})
+    monkeypatch.setitem(TABLE, "raster-rooms|kitchen|ocr-proven",
+                        {"n": 200, "correct": 199, "precision": 0.995, "proven": True, "counts": {}})
+    calls = []
+    rr, ctx = _rooms_setup(monkeypatch, "proven", calls)
+    a = rr.answer(ctx, parse("How many kitchens are on this floor plan?"))
+    assert calls == [False]
+    assert a.route == "raster-rooms" and a.value == 1 and a.tier == "proven" and a.tier_cell == "ocr-proven"
+
+
+def test_rooms_route_proven_rule_without_dev_support_is_an_estimate(monkeypatch):
+    calls = []
+    rr, ctx = _rooms_setup(monkeypatch, "estimate", calls)
+    a = rr.answer(ctx, parse("How many bedrooms are on this floor plan?"))     # rule "agree" holds, no cell
+    assert a.tier == "estimate" and "no dev measurement" in a.tier_reason and a.tier_cell == ""
+
+
 # ---------------------------------------------------------------- the QA cases, end to end
 
 FULL = Path(__file__).resolve().parents[2] / "data" / "stoa-full" / "junction-dataset"

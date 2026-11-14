@@ -105,7 +105,9 @@ ANSWER_COUNTS = {"kitchen": {1}, "bathroom": {1}, "sauna": {1}, "bedroom": "posi
                  "wc_room": "all", "balcony": {0, 1}}
 
 
-def room_labels(ctx, q, img) -> Answer:
+def room_labels(ctx, q, img, calibrate: bool = True) -> Answer:
+    """Room-label count. calibrate=False keeps the route's own tier (raster-rooms combines that tier with
+    its detector reading, as tuned; the combined answer is calibrated as its own route)."""
     toks = ocr_image(ctx.file)
     hits = find_rooms(toks, q.obj)
     words = [t for t in dedupe(toks) if is_word(t["text"])]
@@ -132,7 +134,8 @@ def room_labels(ctx, q, img) -> Answer:
         if misread:
             estimate(ans, f"the OCR misreads room labels on this plan ({', '.join(f'{t} as {w}' for t, w in misread[:4])}), "
                           f"so a zero is not proof of absence")
-    calibration.apply(ans, q.obj)
+    if calibrate:
+        calibration.apply(ans, q.obj)
     if ans.tier == "estimate":
         ans.confidence = 0.3
         ans.uncertain = [{"label": h["text"], "xyxy": [round(v) for v in h["box"]]} for h in hits]

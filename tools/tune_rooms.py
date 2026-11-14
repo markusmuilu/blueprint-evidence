@@ -71,7 +71,7 @@ def ocr_reading(stoa: Path, path: str, q, question: str):
     ctx = SimpleNamespace(file=stoa / path, evidence=False, out_dir=REPO / "out" / "evidence",
                           q=SimpleNamespace(path=path, question=question))
     img = cv2.imread(str(ctx.file))
-    a = raster.room_labels(ctx, q, img)
+    a = raster.room_labels(ctx, q, img, calibrate=False)
     return int(a.value), a.tier == "proven"
 
 

@@ -14,8 +14,9 @@ A route may also name the condition it met (Answer.tier_cell, e.g. "clear" for a
 all agree with no box near the threshold); those answers are measured again as their own cell
 ("raster-detector|toilet|clear"), so the proven tier can be kept for that condition alone.
 
-Detector answers on images the detector trained on (data/detector/ds_cubi/train.txt and val.txt) are left
-out: they would overstate its precision. Test-split answers are refused.
+Answers of a learned route on images its model trained on are left out (raster-detector:
+data/detector/ds_cubi/train.txt and val.txt; raster-rooms: data/detector/ds_rooms/train.txt and
+val.txt): they would overstate its precision. Test-split answers are refused.
 """
 from __future__ import annotations
 
@@ -31,7 +32,9 @@ sys.path.insert(0, str(REPO))
 from bpqa.calibration import MIN_N, MIN_PRECISION, TABLE  # noqa: E402
 from bpqa.data import split_of  # noqa: E402
 
-TRAIN_LISTS = [REPO.parent / "data" / "detector" / "ds_cubi" / f for f in ("train.txt", "val.txt")]
+DS = REPO.parent / "data" / "detector"
+TRAIN_LISTS = {"raster-detector": [DS / "ds_cubi" / f for f in ("train.txt", "val.txt")],
+               "raster-rooms": [DS / "ds_rooms" / f for f in ("train.txt", "val.txt")]}
 
 
 def wilson_low(k: int, n: int, z: float = 1.96) -> float:
@@ -43,7 +46,7 @@ def wilson_low(k: int, n: int, z: float = 1.96) -> float:
     return (c - m) / (1 + z * z / n)
 
 
-def load(path: Path, train: set[str]):
+def load(path: Path, train: dict[str, set[str]]):
     """Distinct (route, object, drawing) proven answers: (route, obj, value, correct)."""
     seen = {}
     for line in open(path, encoding="utf-8"):
@@ -55,7 +58,7 @@ def load(path: Path, train: set[str]):
             continue
         obj = (r.get("query") or {}).get("obj") or r.get("obj") or "?"
         measure = (r.get("query") or {}).get("measure") or r.get("measure") or "?"
-        if route == "raster-detector" and Path(r["path"]).stem in train:
+        if Path(r["path"]).stem in train.get(route, ()):
             continue
         o = obj if measure == "count" else f"{obj}:{measure}"
         seen.setdefault((route, o, r["path"]), (r["value"], bool(r["correct"])))
@@ -70,7 +73,8 @@ def main(argv=None):
     ap.add_argument("--out", default=str(TABLE))
     ap.add_argument("--note", default="", help="how the answers were produced, kept in the table")
     args = ap.parse_args(argv)
-    train = {Path(l.strip()).stem for f in TRAIN_LISTS if f.exists() for l in open(f) if l.strip()}
+    train = {route: {Path(l.strip()).stem for f in fs if f.exists() for l in open(f) if l.strip()}
+             for route, fs in TRAIN_LISTS.items()}
     seen = {}
     for p in args.answers:
         seen.update(load(Path(p), train))

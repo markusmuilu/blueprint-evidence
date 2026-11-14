@@ -3,6 +3,46 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: raster-rooms calibrated, branch `rooms-calibration`
+
+`raster-rooms` (room detector + OCR labels) had no cells in `bpqa/scan_calibration.json`, so every answer was an
+estimate with "no dev measurement". Measured the same way as the other scan routes: full set, dev split, the 626
+CubiCasa drawings with cached room-detector, detector and OCR results, calibration off; room-detector answers on
+its training images (`data/detector/ds_rooms/train.txt`, `val.txt`) left out (24 drawing x type pairs), which leaves
+the 624 tune images. Same rule: proven only at >= 98% over >= 100 drawings.
+
+New condition `ocr-proven` (`Answer.tier_cell`): the drawn rooms and the labels agree and the label reading is one
+the OCR route's own rules prove. Proven precision per drawing on dev:
+
+| type | proven (route rule) | of those `ocr-proven` | kept proven |
+|---|---|---|---|
+| kitchen | 218 of 219, 99.5% | 218 of 219, 99.5% | yes, every proven kitchen count |
+| WC room | 249 of 255, 97.6% | 213 of 214, 99.5% | `ocr-proven` |
+| bathroom | 168 of 173, 97.1% | 153 of 155, 98.7% | `ocr-proven` (and count 1, the same answers) |
+| sauna | 258 of 266, 97.0% | 83 of 84, 98.8% | no: 84 drawings, under 100 |
+| balcony | 126 of 130, 96.9% | 126 of 130, 96.9% | no |
+| bedroom | 252 of 262, 96.2% | 200 of 208, 96.2% | no |
+
+Also looked at (dev, proven answers): no room box inside the uncertainty band (kitchens 99.5%, bedrooms 96.7%,
+no type newly over the line); nearest box at least 0.20 from the threshold (bedrooms 98.5% over 203, balconies 98.1%
+over 106, saunas 97.7%), not shipped because it was not pre-declared and dev is also the room route's tune set.
+Caveat: the room route's thresholds and proof rules were tuned on these same 624 images (AGREE_MIN 95%), so dev
+overstates it. Test numbers were not looked at.
+
+Bug fixed: `raster.room_labels` now calibrates its own answer, and raster-rooms read that calibrated tier as "the
+OCR reading is proven". After the calibration merge every label count is an estimate, so on main `prefer:
+ocr_proven` always took the detector on a disagreement (kitchens, bathrooms, bedrooms) and `agree_ocr` never held.
+raster-rooms now asks for the label route's own tier (`room_labels(..., calibrate=False)`, also in
+`tools/tune_rooms.py`), as it was tuned. Dev, English room-type questions, 1,468 drawing x type pairs (the part of the set run so far), calibration
+on: main 89.2% exact, fixed 91.1% (kitchens 86.0% to 91.4%, bathrooms 86.7% to 90.9%, bedrooms 85.7% to 86.5%,
+the others unchanged).
+
+Re-check of the other cells with raster-rooms on main: the detector and storey cells are unchanged (the same three
+detector counts clear the bar, precisions within 0.3 points). raster-ocr-labels no longer answers room-type
+questions (raster-rooms does, and falls back to it only without a room model); its cells are kept from the earlier
+dev run, all under the line as before. `tools/calibrate_tiers.py` now leaves out each learned route's own training
+images (raster-detector: ds_cubi, raster-rooms: ds_rooms).
+
 ## 2026-11-14: object scale for scans without printed areas, branch `object-scale` (behind a flag, off)
 
 Problem: `raster_area.py` sets a pixel scale only from 2+ printed room areas that agree, so on a scan that prints
