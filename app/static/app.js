@@ -909,17 +909,17 @@ async function loadCosts() {
   const el = $("#costTable");
   if (!el) return;
   const as = c.assumed || {};
-  const head = `<thead><tr><th>Route</th><th class="num">Questions</th><th class="num">Median wall</th><th class="num">p90 wall</th><th class="num">Cold median</th><th class="num">CPU s, mean</th><th class="num">$ per 1,000, CPU</th><th class="num">$ per 1,000 if on a GPU</th></tr></thead>`;
-  const line = (r, cls = "") => `<tr class="${cls}"><td>${esc(r.label || ROUTE_LABEL[r.route] || r.route)}${r.route && r.route !== "all" ? ` <span class="mono dim">${esc(r.route)}</span>` : ""}</td><td class="num">${num(r.n)}</td>
+  const head = `<thead><tr><th>Route</th><th class="num">Questions</th><th class="num">Answered</th><th class="num">Median wall</th><th class="num">p90 wall</th><th class="num">Cold median</th><th class="num">CPU s, mean</th><th class="num">$ per 1,000, CPU</th><th class="num">$ per 1,000 if on a GPU</th></tr></thead>`;
+  const line = (r, cls = "") => `<tr class="${cls}"><td>${esc(r.label || ROUTE_LABEL[r.route] || r.route)}${r.route && r.route !== "all" ? ` <span class="mono dim">${esc(r.route)}</span>` : ""}</td><td class="num">${num(r.n)}</td><td class="num">${num(r.answered)}</td>
     <td class="num">${fmtSec(r.wall_median_s)}</td><td class="num">${fmtSec(r.wall_p90_s)}</td><td class="num">${fmtSec(r.cold_median_s)}</td>
     <td class="num">${r.cpu_mean_s == null ? "-" : r.cpu_mean_s.toFixed(2)}</td><td class="num">${fmtUsd(r.usd_per_1000_cpu)}</td><td class="num">${fmtUsd(r.usd_per_1000_if_gpu)}</td></tr>`;
   let body = (c.routes || []).map((r) => line(r)).join("");
   if (c.all) body += line({ ...c.all, route: "all", label: "All sampled questions" }, "total");
   const b = c.baseline;
-  if (b) body += `<tr class="base"><td>Nemotron, plain prompt <span class="mono dim">baseline</span></td><td class="num">${num(b.n)}</td><td class="num">${fmtSec(b.latency_median_s)}</td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num" colspan="2">${fmtUsd(b.usd_per_1000)} at measured tokens</td></tr>`;
-  el.innerHTML = head + "<tbody>" + (body || `<tr><td colspan="8" class="dim">${esc(c.missing || "No measurements yet.")}</td></tr>`) + "</tbody>";
+  if (b) body += `<tr class="base"><td>Nemotron, plain prompt <span class="mono dim">baseline</span></td><td class="num">${num(b.n)}</td><td class="num">-</td><td class="num">${fmtSec(b.latency_median_s)}</td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num" colspan="2">${fmtUsd(b.usd_per_1000)} at measured tokens</td></tr>`;
+  el.innerHTML = head + "<tbody>" + (body || `<tr><td colspan="9" class="dim">${esc(c.missing || "No measurements yet.")}</td></tr>`) + "</tbody>";
   $("#costNote").textContent = `Assumed prices, not quotes: $${as.cpu_vcpu_hour_usd} per vCPU-hour, $${as.gpu_hour_usd} per GPU-hour (L4 or A10G class)${b ? `, and $${b.price_in_per_mtok} / $${b.price_out_per_mtok} per million input / output tokens for Nemotron, applied to its measured ${num(Math.round(b.prompt_tokens_mean))} input and ${num(Math.round(b.completion_tokens_mean))} output tokens per question (${b.source})` : ""}. `
-    + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off (tools/cost_eval.py, out/cost/cost_by_route.json). CPU seconds count every thread; a cold question is the first one on its drawing.` : "");
+    + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off (tools/cost_eval.py, out/cost/cost_by_route.json). CPU seconds count every thread; a cold question is the first one on its drawing; a question every route abstained on is booked under the first route tried.` : "");
 }
 const ROUTE_LABEL = {};
 function datasetName(p) { return /preview/.test(p || "") ? "Stoa preview set" : /junction-dataset/.test(p || "") ? "Stoa full set" : (p || "dataset"); }
