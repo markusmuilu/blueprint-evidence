@@ -1147,6 +1147,9 @@ def takeoff_answer(ctx, q, img):
             estimate(ans, f"{len(conflict)} printed value(s) disagree with the measured room by more than 10%")
         if fb:
             estimate(ans, fb)
+        sr = takeoff.scope_reason(tk, [r["label"] for r in rows])
+        if sr:
+            estimate(ans, sr)        # "the WC" with two WCs summed: an estimate, as on the IFC, DXF and PDF routes
         head = (f"Answer [ESTIMATE, APPROXIMATION]: about {OS.about(total)} m2 ({total:.2f}{' incl. ' + format(tk['waste_pct'], 'g') + '% waste' if tk.get('waste_pct') else ''}) over {len(rows)} room(s), floor only, "
                 f"scale from {OS.scale_short(sc)}   route: {ROUTE}" if approx else
                 f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows

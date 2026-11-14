@@ -518,6 +518,13 @@ def answer(ctx, q) -> Answer:
                     + (f" (apartment {big['unit']})" if big.get("unit") else "")).strip()
         elif q.label:
             rooms_used = [r for r in fl.rooms if r["name"] == q.label]
+            if q.extra.get("label_from_text"):
+                # a name written in the question without quotes ("area of the gym"): any case, and a name not on
+                # this floor is not a room of 0 m2
+                rooms_used = [r for r in fl.rooms if (r["name"] or "").strip().lower() == q.label.strip().lower()]
+                if not rooms_used:
+                    named = sorted({r["name"] for r in fl.rooms if r["name"]})
+                    return abstain(ROUTE, f"no room named '{q.label}' on this floor (room names: {', '.join(named[:15])})")
             note = f"rooms labelled '{q.label}'"
         elif q.variant == "type_sum":
             tk = q.extra["takeoff"]

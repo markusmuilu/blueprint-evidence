@@ -139,6 +139,27 @@ LIST_ROOMS = re.compile(r"\b(list|lists|listing|enumerate|itemi[sz]e|luettele\w*
                         r"lista|listan)\b")
 
 
+NAMED_AREA = re.compile(r"^\s*(?:(?:what is|what's|whats|give me|tell me)\s+)?(?:the\s+)?(?:floor\s+)?(?:area|size)\s+of\s+"
+                        r"(?:the\s+)?(?P<a>[\w\-' ]{2,40}?)\s*\??\s*$|"
+                        r"^\s*how\s+(?:big|large)\s+is\s+(?:the\s+)?(?P<b>[\w\-' ]{2,40}?)\s*\??\s*$", re.I)
+NAMED_NOT = re.compile(r"\b(this|it|that|plan|drawing|sheet|floor|storey|level|flat|apartment|unit|house|home|building|"
+                       r"site|plot|room|rooms|space|spaces|all|each|every|whole|entire|total|biggest|largest|smallest|"
+                       r"rest)\b")
+
+
+def named_room_area(question: str) -> str | None:
+    """The room name in 'what is the area of the cafe?' / 'how big is MEETING 01', as written; None for anything
+    else (the plan, the flat, the building, a facade or roof, a total)."""
+    m = NAMED_AREA.match(question.strip())
+    if not m:
+        return None
+    name = (m.group("a") or m.group("b") or "").strip()
+    f = fold(name)
+    if not name or len(name.split()) > 4 or NAMED_NOT.search(f) or FLAT_AREA_NOT.search(f):
+        return None
+    return name
+
+
 def whole_flat_area(f_obj: str, measure: str | None) -> bool:
     """True for an area question about the whole drawing that names no object: read as the total of the rooms."""
     if FLAT_AREA_NOT.search(f_obj):
@@ -318,6 +339,13 @@ class RuleParser(QueryParser):
             q.measure, q.obj = "area", "room"                       # "floor area of the whole floor"
         if q.measure is None and q.obj == "room" and LIST_ROOMS.search(f_obj):
             q.measure = "text"                                      # "list the rooms", "luettele huoneet"
+        nm = named_room_area(question) if not qs and q.obj is None and q.measure in (None, "area", "text") else None
+        if nm:
+            # "what is the area of the cafe?", "how big is MEETING 01": one room by its printed name, as the reader
+            # reads it (a room type named this way is read by the takeoff below instead)
+            q.measure, q.obj, q.label = "area", "room", nm
+            q.extra["single_room"] = True
+            q.extra["label_from_text"] = True    # not quoted: matched ignoring case, and no match is not 0 m2
         if not qs and q.obj is None and whole_flat_area(f_obj, q.measure):
             q.measure, q.obj = "area", "room"                       # "total floor area?", "neliöitä yhteensä?"
         # "what is the scale of this drawing?": the drawing scale (read off the sheet)
@@ -398,6 +426,7 @@ class RuleParser(QueryParser):
             tk = parse_baseboard(question) or parse_takeoff(question)
             if tk is not None:
                 q.measure, q.obj, q.variant, q.label = "area", "room", "type_sum", None
+                q.extra.pop("single_room", None)     # "how big is the kitchen": a room type, not a name
                 # a breakdown per room is part of every takeoff answer, so "with a breakdown by
                 # bathroom" is answered; a named sub-building ("house A") is not resolvable
                 q.extra.pop("compound", None)

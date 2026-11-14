@@ -62,6 +62,17 @@ question themselves, and they missed:
   counts only labels read exactly; "PESUIHUONE" (AY's one-error Finnish word) still makes the answer an estimate.
 - **Stale answers** (`app/server.py`): CACHE_VERSION 6, and every answer cache key now holds a hash of bpqa/ (`CODE_FINGERPRINT`),
   so an answer cached by older code is never served after a merge, also when nobody bumps the version.
+- **A room named in the question** (`query.py`): "what is the area of the cafe?", "how big is MEETING 01" are one room by
+  its printed name, as the reader reads them (AX's 9.23 m2 on the unseen DXF came with the reader on; rules only it was
+  "not understood" on AX's branch too). The name is matched ignoring case; on Swiss DXF a name not on the floor is a
+  cannot, not 0 m2 (`dxf_swiss.py`). A room type named this way ("how big is the kitchen") stays a takeoff.
+- **"Buero"** is an office label (FZK Erdgeschoss "How big is the Buero?" was 0 m2 proven, "no space named as office";
+  now 12.60).
+- **One room type, several rooms, on scans** (`raster_area.py`): "How big is the WC?" on 10372 sums WC 2.50 + WC 1.80 and
+  said so, but stayed proven; now an estimate with that reason, as on the IFC, DXF and PDF routes.
+- Not reproduced: Tyneside "how many bathrooms" is 1 (estimate, adopted from the shower check), on AY's own branch too
+  with today's caches; AY reported 2. The detector's two bathroom boxes now hold Bedroom labels (scores 0.77, 0.32), so
+  the label filter drops both.
 - Dataset parses (6,821 distinct questions, rules only): 2 changed, "Can you give me the list of all room types?" and
   "... list of each room available in house A?" now read as text questions (not understood before). Dev eval on
   swiss_dwellings and ifc_models (28,400 questions): every answer, tier and route identical before and after.

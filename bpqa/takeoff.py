@@ -69,7 +69,7 @@ LABEL_RE = {
     "stair": r"treppenhaus|treppe|cage d'escalier|vano scala|stair(s|case)?|trappe(rum)?|trepikoda|porras",
     # offices and meeting rooms (QA 14 Nov: "how many offices" on Molio counted all 13 spaces): Danish Kontor,
     # Mode / Moderum (Mode from Møde), and the same words in the other languages of the data
-    "office": r"kontor|kontorer|office|offices|buro|bureau|ufficio|toimisto|toimistohuone|tyohuone|arbetsrum|"
+    "office": r"kontor|kontorer|office|offices|buro|buero|bureau|ufficio|toimisto|toimistohuone|tyohuone|arbetsrum|"
               r"kantoor|kabinet|kabinett|cabinet",
     "meeting": r"mode|moderum|modelokale|meeting( room)?|conference( room)?|besprechung(sraum|szimmer)?|"
                r"konferenz(raum)?|sitzungszimmer|salle de reunion|sala riunioni|neuvotteluhuone|neuvottelu|"
