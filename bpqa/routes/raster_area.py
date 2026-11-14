@@ -467,7 +467,7 @@ def _name(r) -> str:
 def takeoff_answer(ctx, q, img):
     from .. import takeoff
     from .. import walls as wallmod
-    from ..answer import Answer, abstain
+    from ..answer import Answer, abstain, estimate
     from ..evidence import AMBER, BLUE, ImageCanvas, evidence_path, finish, font
     from PIL import Image
 
@@ -475,21 +475,31 @@ def takeoff_answer(ctx, q, img):
     pa = analyse(str(ctx.file))
     if pa is None:
         return abstain(ROUTE, "image or OCR unavailable")
-    want = set(tk["types"])
-    # one-letter labels (S, K) only when printed upper case: OCR noise reads stray strokes as "s"
-    typed = [r for r in pa.rooms if r.label and takeoff.room_types(r.label) & want
-             and not (len(r.label.strip(" .")) == 1 and not r.label.strip(" .").isupper())]
-    if not typed:
-        read = sorted({r.label for r in pa.rooms if r.label})
-        return abstain(ROUTE, f"no room label of type {', '.join(tk['types'])} read upright on the plan "
-                              f"(labels read: {', '.join(read[:15]) or 'none'})")
-    # labels read in other orientations (full OCR cache) that the upright pass missed would be
-    # rooms left out of the sum: abstain rather than under-order
     from .labels import find_rooms
     from .ocr import ocr_image
     full = ocr_image(ctx.file, allow_run=False, partial=True) or []
     lab_types = {"bathroom": "bathroom", "wc": "wc_room", "sauna": "sauna", "kitchen": "kitchen",
                  "bedroom": "bedroom", "balcony": "balcony"}
+    # one-letter labels (S, K) only when printed upper case: OCR noise reads stray strokes as "s"
+    labelled = [{"name": r.label, "room": r} for r in pa.rooms if r.label
+                and not (len(r.label.strip(" .")) == 1 and not r.label.strip(" .").isupper())]
+    if "wc" in tk["types"] and full and find_rooms(full, "wc_room"):
+        used = takeoff.select(labelled, tk)[0]     # a WC label exists (maybe only read sideways): WC rooms only
+    else:
+        # "toilets" and no WC label: the rooms that contain a toilet, by their bathroom labels (a scan
+        # carries no toilet symbols this route reads, so the answer says the toilet is not confirmed)
+        used, _, tk = takeoff.toilet_fallback(labelled, tk, has_toilet=None)
+    fb = takeoff.fallback_reason(tk)
+    want = set(tk["types"])
+    typed = [w["room"] for w in used]
+    if not typed:
+        read = sorted({r.label for r in pa.rooms if r.label})
+        why = (tk.get("toilet_rooms") or {}).get("why")
+        return abstain(ROUTE, (f"{why} (labels read upright: {', '.join(read[:15]) or 'none'})" if why else
+                               f"no room label of type {', '.join(tk['types'])} read upright on the plan "
+                               f"(labels read: {', '.join(read[:15]) or 'none'})"))
+    # labels read in other orientations (full OCR cache) that the upright pass missed would be
+    # rooms left out of the sum: abstain rather than under-order
     for t in want & set(lab_types):
         n_full = len(find_rooms(full, lab_types[t])) if full else 0
         n_up = sum(1 for r in typed if t in takeoff.room_types(r.label))
@@ -565,7 +575,7 @@ def takeoff_answer(ctx, q, img):
                  f"region against the annotated room outlines of {PERIM_BAND['n']} dev and test rooms), before the height assumption. ") + basis_txt + " " + scale_txt + "." + band_note
         est = "walls: perimeter x assumed height, openings not deducted" + ("; some rooms measured" if meas_rows else "")
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=0.45, items=items, explanation=expl)
-        ans.tier, ans.tier_reason = "estimate", est + ("; " + bt if meas_rows else "")
+        ans.tier, ans.tier_reason = "estimate", est + ("; " + bt if meas_rows else "") + ("; " + fb if fb else "")
         head = (f"Answer [ESTIMATE]: {total:.2f} m2 = floor {totals['floor_m2'] or 0:.2f} + walls {totals['walls_m2']:.2f}"
                 f" + {totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}   route: {ROUTE}") if want_floor else                (f"Answer [ESTIMATE]: {total:.2f} m2 = walls {totals['walls_m2']:.2f} + {totals['waste_pct']:g}% waste "
                 f"{totals['waste_m2']:.2f}   route: {ROUTE}")
@@ -580,8 +590,10 @@ def takeoff_answer(ctx, q, img):
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=conf, items=items, explanation=expl)
         if meas_rows:
             ans.tier, ans.tier_reason = "estimate", f"{len(meas_rows)} room(s) have no printed area: measured region x scale; {bt}"
+        if fb:
+            estimate(ans, fb)
         head = (f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows
-                else takeoff.answer_line(total, len(rows), ROUTE))
+                else takeoff.answer_line(total, len(rows), ROUTE, "rooms with a toilet, no WC room" if fb else ""))
     ans.uncertain = uncertain
 
     if ctx.evidence:
@@ -619,6 +631,7 @@ def takeoff_answer(ctx, q, img):
         sc_note = f"Scale from printed rooms {', '.join(scale_names[:5])}" if sc.known else "No pixel scale"
         if meas_rows:
             sc_note += f"; measured rooms amber, {bt}"
+        interp = (takeoff.interpretation(tk, [(r["label"], r["area"]) for r in rows]) + " ") if fb else ""
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              head, note=f"{sc_note}. {lines}.{extra} Printed rooms blue, value boxed.")
+                              head, note=f"{interp}{sc_note}. {lines}.{extra} Printed rooms blue, value boxed.")
     return ans

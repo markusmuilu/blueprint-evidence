@@ -470,6 +470,7 @@ def answer(ctx, q) -> Answer:
         return abstain(ROUTE, f"PDF page is {fl.kind} (no vector linework); needs a raster route")
     sc = fl.scale
     items, value, rooms_used, boxes, note = [], None, [], [], ""
+    tku = {}               # takeoff interpretation when the toilet fallback was needed (bpqa/takeoff.py)
     gen_conf = None        # set when a convention-free reading (pdf_generic) produced the count
 
     if q.measure == "count":
@@ -558,11 +559,22 @@ def answer(ctx, q) -> Answer:
             tk = q.extra["takeoff"]
             for r in fl.rooms:     # the label that names a room type ("Bathroom 1 (A104)", "Bad")
                 r["tname"] = next((t for t in r["texts"] if takeoff.room_types(t)), r["name"])
-            rooms_used, generic = takeoff.select(fl.rooms, tk, name_key="tname")
+            has_toilet = None
+            if fl.toilets:        # toilet symbols (ellipses without a drain): centre inside the room shape
+                syms = [(Point((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), (b[2] - b[0]) * (b[3] - b[1])) for b in fl.toilets]
+                others = [Point(c) for c in fl.fixture_centroids]
+                has_toilet = lambda r: (True if any(r["poly"].area > a and r["poly"].contains(c) for c, a in syms) else
+                                        (False if any(r["poly"].contains(c) for c in others) else None))
+            rooms_used, generic, tk = takeoff.toilet_fallback(fl.rooms, tk, name_key="tname", has_toilet=has_toilet)
+            tku = tk
             if not rooms_used:
                 named = sorted({r["tname"] for r in fl.rooms if r["tname"]})
-                return abstain(ROUTE, f"no room of type {', '.join(tk['types'])} among the {len(named)} room labels "
-                                      f"read ({', '.join(named[:15])})")
+                why = (tk.get("toilet_rooms") or {}).get("why")
+                return abstain(ROUTE, (why + f" (room labels: {', '.join(named[:15])})") if why else
+                               f"no room of type {', '.join(tk['types'])} among the {len(named)} room labels "
+                               f"read ({', '.join(named[:15])})")
+            if tk.get("toilet_rooms"):
+                boxes = list(fl.toilets)          # the toilet symbols, boxed on the evidence image
             note = takeoff.describe(tk) + (f"; {len(generic)} generic room(s) ({generic[0]['tname']}) not typed, not included"
                                            if generic else "")
         else:
@@ -593,9 +605,13 @@ def answer(ctx, q) -> Answer:
         estimate(ans, f"convention-free reading ({note}), confidence {conf}")
         ans.uncertain = items or [{"n": i + 1, "bbox_pt": [round(v, 1) for v in b]} for i, b in enumerate(boxes)]
     if q.variant == "type_sum":
-        rows = [{"label": r["tname"], "number": r["number"], "area": fl.room_area(r), "source": "drawn room outline x scale"}
-                for r in rooms_used]
-        ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
+        rows = [{"label": r["tname"] or "unlabelled room", "number": r["number"], "area": fl.room_area(r),
+                 "source": "drawn room outline x scale"} for r in rooms_used]
+        ans.value, ans.items, expl = takeoff.summary(rows, tku or q.extra["takeoff"])
+        if tku.get("toilet_rooms"):
+            estimate(ans, takeoff.fallback_reason(tku))
+            note = takeoff.interpretation(tku, [(r["label"] + (f" {r['number']}" if r["number"] else ""), r["area"])
+                                                for r in rows]) + " " + note
         ans.explanation = (expl + (" " + note.split("; ", 1)[1] + "." if "generic" in note else "")
                            + f" Source: {ctx.file.name}; {scale_note}.")
 
@@ -618,7 +634,7 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes, route=ROUT
         rp = r["poly"].representative_point()
         lab = f"{r['number'] or r['name'] or ''} {fl.room_area(r):.2f} m²" if q.measure == "area" else f"#{i + 1}"
         if q.variant == "type_sum":
-            lab = f"{i + 1}. {r['tname']} {fl.room_area(r):.2f} m²"
+            lab = f"{i + 1}. {r['tname'] or 'unlabelled'} {fl.room_area(r):.2f} m²"
         x, y = tr(rp.x, rp.y)
         f = font(15)
         bb = cv.d.textbbox((x, y), lab, font=f, anchor="mm")
@@ -649,6 +665,7 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes, route=ROUT
         sum_note = " + ".join(f"{fl.room_area(r):.2f}" for r in rooms_used[:25]) + (" + ..." if len(rooms_used) > 25 else "")
     scale_line = f"scale: {sc.method}, {sc.m_per_pt * 100:.4f} cm per pt" if sc.known else "scale: unknown"
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), route) if q.variant == "type_sum" else
+    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), route, "rooms with a toilet, no WC room" if estimate else "")
+                                                       if q.variant == "type_sum" else
                    f"Answer: {value} {unit}{'   ESTIMATE' if estimate else ''}   route: {route} (cost $0)"),
                   note=note + (": " + sum_note if sum_note else "") + f"; {scale_line} (scale sources boxed blue)")

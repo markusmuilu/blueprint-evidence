@@ -25,11 +25,12 @@ from shapely.ops import unary_union
 
 from .. import takeoff
 from .. import walls as wallmod
-from ..answer import Answer, abstain
+from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
 from .scope_guard import single_room_problem
 
 ROUTE = "dxf-geometry"
+TOILET_COL = (200, 30, 160)     # toilet symbols that confirm a bathroom as a room with a toilet (evidence)
 NUM_RE = re.compile(r"^[A-Z]?\d+\.\d+$")
 AREA_RE = re.compile(r"^([\d.]+)\s*m")
 UNIT_RE = re.compile(r"^(Whg|App|Apt|Wohnung|Appartamento|Appartement)\.?\s+([A-Z]{1,2})$")
@@ -163,6 +164,23 @@ class SwissFloor:
         return any(r["poly"].contains(Point(c)) for c in self.fixture_centroids)
 
 
+def swiss_has_toilet(fl):
+    """Room -> True when a toilet symbol (FIXTURE ellipse without drain) has its centre inside the room
+    outline and the room is larger than the symbol (a sliver of shaft around the bowl is not the room);
+    False when other FIXTURE shapes are inside but no toilet; None when nothing is drawn inside.
+    None for the whole floor when it has no toilet symbols at all (nothing to confirm a bathroom with)."""
+    if not fl.toilets:
+        return None
+    syms = [(Point((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), (b[2] - b[0]) * (b[3] - b[1])) for b in fl.toilets]
+    others = [Point(c) for c in fl.fixture_centroids]
+
+    def test(r):
+        if any(r["poly"].area > a and r["poly"].contains(c) for c, a in syms):
+            return True
+        return False if any(r["poly"].contains(c) for c in others) else None
+    return test
+
+
 def swiss_wall_rooms(fl, rooms_used):
     """Room records for bpqa/walls.py from Swiss DXF rooms. A floor plan has no heights, so the ceiling
     height is the stated default (walls.py) and door / window heights are stated assumptions. Openings:
@@ -195,7 +213,7 @@ def swiss_wall_rooms(fl, rooms_used):
                         "z1": wallmod.WINDOW_SILL_M + wallmod.WINDOW_H_M,
                         "src": f"window width from WINDOW strips; height ASSUMED {wallmod.WINDOW_H_M:.2f} m on a "
                                f"{wallmod.WINDOW_SILL_M:.2f} m sill", "bbox": b})
-        out.append({"label": r["name"], "number": r["number"], "floor_area": fl.room_area(r),
+        out.append({"label": r["name"] or "unlabelled room", "number": r["number"], "floor_area": fl.room_area(r),
                     "floor_src": "ROOM_OUTLINE polygon", "poly": poly, "perimeter": wallmod.ring_length(poly),
                     "perimeter_src": "ROOM_OUTLINE polygon", "height": None, "height_src": "", "openings": ops})
     return out
@@ -289,6 +307,7 @@ def answer(ctx, q) -> Answer:
         return dxf_generic.answer(ctx, q, dxf)
     fl = load(str(dxf))
     items, value, rooms_used, boxes, note = [], None, [], [], ""
+    tku = {}          # the takeoff interpretation the answer is built from (toilet fallback, bpqa/takeoff.py)
 
     if q.measure == "count":
         table = {"door": [_bbox(p) for p in fl.doors], "window": fl.windows,
@@ -328,11 +347,14 @@ def answer(ctx, q) -> Answer:
             note = f"rooms labelled '{q.label}'"
         elif q.variant == "type_sum":
             tk = q.extra["takeoff"]
-            rooms_used, generic = takeoff.select(fl.rooms, tk)
+            rooms_used, generic, tk = takeoff.toilet_fallback(fl.rooms, tk, has_toilet=swiss_has_toilet(fl))
+            tku = tk
             if not rooms_used:
                 named = sorted({r["name"] for r in fl.rooms if r["name"]})
-                return abstain(ROUTE, f"no room of type {', '.join(tk['types'])} among the {len(named)} room names "
-                                      f"on this floor ({', '.join(named[:15])})")
+                why = (tk.get("toilet_rooms") or {}).get("why")
+                return abstain(ROUTE, (why + f" (room names: {', '.join(named[:15])})") if why else
+                               f"no room of type {', '.join(tk['types'])} among the {len(named)} room names "
+                               f"on this floor ({', '.join(named[:15])})")
             note = takeoff.describe(tk) + (f"; {len(generic)} generic room(s) ({generic[0]['name']}) not typed, not included"
                                            if generic else "")
         else:
@@ -360,11 +382,12 @@ def answer(ctx, q) -> Answer:
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=conf, items=items,
                  explanation=f"{value} = {note} in {dxf.name}")
     if q.variant == "type_sum":
-        rows = [{"label": r["name"], "number": r["number"], "area": fl.room_area(r), "source": "ROOM_OUTLINE polygon"}
+        rows = [{"label": r["name"] or "unlabelled room", "number": r["number"], "area": fl.room_area(r), "source": "ROOM_OUTLINE polygon"}
                 for r in rooms_used]
-        ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
+        tk = tku or q.extra["takeoff"]
+        ans.value, ans.items, expl = takeoff.summary(rows, tk)
         ans.explanation = expl + (" " + note.split("; ", 1)[1] if "generic" in note else "") + f" Source: {dxf.name}."
-        tk = q.extra["takeoff"]
+        fb = takeoff.fallback_reason(tk)
         if wallmod.surfaces(tk)[1]:
             wrooms = swiss_wall_rooms(fl, rooms_used)
             ans.value, ans.items, wexpl, totals = wallmod.summary(wrooms, tk, ctx.q.question)
@@ -372,8 +395,13 @@ def answer(ctx, q) -> Answer:
             ans.explanation = wexpl + f" Source: {dxf.name}."
             ans.tier = "estimate" if not wallmod.parse_inputs(ctx.q.question).get("ceiling_m") else None
             ans.tier_reason = "room height, door and window heights are assumptions (a floor plan does not carry them)" if ans.tier else ""
+            if fb:
+                estimate(ans, fb)
             if ctx.evidence:
                 cv = base_canvas(fl)
+                if fb:
+                    for b in fl.toilets:            # the toilet symbols that confirm the rooms, boxed
+                        cv.box(b, n=None, color=TOILET_COL)
                 inp = wallmod.parse_inputs(ctx.q.question)
                 for r in wrooms:
                     w = wallmod.room_walls(r, inp)
@@ -383,12 +411,16 @@ def answer(ctx, q) -> Answer:
                                    lambda i, r: f"{i + 1}. {r['label']}: floor {r['floor_area']:.2f}, walls "
                                                 f"{wallmod.room_walls(r, inp)['net']:.2f} m²")
                 out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-                ans.evidence = finish(cv.img, out, ctx.q.question, wallmod.answer_line(ans.value, totals, ROUTE, "assumed heights" if ans.tier else ""),
-                                      note=(f"Walls = ROOM_OUTLINE (thick blue) x height - openings (amber: doors from DOOR "
+                est = "; ".join(x for x in ("assumed heights" if ans.tier and "room height" in ans.tier_reason else "",
+                                             "rooms with a toilet, no WC room" if fb else "") if x)
+                ans.evidence = finish(cv.img, out, ctx.q.question, wallmod.answer_line(ans.value, totals, ROUTE, est),
+                                      note=((takeoff.interpretation(tk, [(f"{r['label']} {r['number'] or ''}".strip(), r["floor_area"]) for r in wrooms]) + " ") if fb else "") + (f"Walls = ROOM_OUTLINE (thick blue) x height - openings (amber: doors from DOOR "
                                             f"leaves, windows from WINDOW strips). {wallmod.room_walls(wrooms[0], inp)['height_src'] if wrooms else ''}. "
                                             f"Door height {wallmod.DOOR_H_M:.2f} m, window {wallmod.WINDOW_H_M:.2f} m on a "
                                             f"{wallmod.WINDOW_SILL_M:.2f} m sill: assumptions. Surfaces: {totals['surfaces']}."))
             return ans
+        if fb:
+            estimate(ans, fb)
 
     if ctx.evidence:
         cv = base_canvas(fl)
@@ -399,7 +431,7 @@ def answer(ctx, q) -> Answer:
             rp = r["poly"].representative_point()
             lab = f"{r['number'] or ''} {fl.room_area(r):.2f} m²" if q.measure == "area" else f"#{i + 1}"
             if q.variant == "type_sum":
-                lab = f"{i + 1}. {r['name']} {fl.room_area(r):.2f} m²"
+                lab = f"{i + 1}. {r['name'] or 'unlabelled'} {fl.room_area(r):.2f} m²"
             cv.text((rp.x, rp.y), lab, size=13, color=(0, 0, 0))
         for i, b in enumerate(boxes):
             cv.box(b, n=i + 1)
@@ -413,6 +445,12 @@ def answer(ctx, q) -> Answer:
         if q.measure == "area" and len(rooms_used) > 1:
             sum_note = " + ".join(f"{fl.room_area(r):.2f}" for r in rooms_used[:25]) + (" + ..." if len(rooms_used) > 25 else "")
         out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-        ans.evidence = finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), ROUTE) if q.variant == "type_sum" else f"Answer: {value} {unit}   route: {ROUTE} (cost $0)"),
+        if tku.get("toilet_rooms"):
+            for b in fl.toilets:                    # the toilet symbols that confirm the rooms, boxed
+                cv.box(b, n=None, color=TOILET_COL)
+            note = takeoff.interpretation(tku, [(f"{r['name'] or 'unlabelled room'} {r['number'] or ''}".strip(), fl.room_area(r))
+                                                for r in rooms_used]) + " " + note
+        ans.evidence = finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), ROUTE, takeoff.fallback_reason(tku) and "rooms with a toilet, no WC room")
+                                                            if q.variant == "type_sum" else f"Answer: {value} {unit}   route: {ROUTE} (cost $0)"),
                               note=(note + (": " + sum_note if sum_note else "")))
     return ans

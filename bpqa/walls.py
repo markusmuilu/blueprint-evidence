@@ -177,7 +177,10 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
     expl = (f"{value:.2f} m2 = {'; '.join(lines)}. Value is the {totals['value_is']}. Surfaces: {how}. Per room: "
             + " | ".join(per) + (" | ..." if len(items) > 12 else "") + "."
             + (" Assumptions: " + "; ".join(sorted(assumed)) + "." if assumed else ""))
-    return value, items, expl, totals
+    from .takeoff import interpretation
+    head = interpretation(tk, [((f"{r['label']} {r['number']}" if r.get("number") and str(r["number"]) not in str(r["label"])
+                                 else r["label"]), r["floor_area"]) for r in rooms])
+    return value, items, (head + " " + expl) if head else expl, totals
 
 
 def answer_line(value: float, totals: dict, route: str, estimate: str = "") -> str:
