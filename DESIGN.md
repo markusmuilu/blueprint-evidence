@@ -8,6 +8,7 @@ library grouped by what the system can do, and a "Try these" list in the empty a
 Version 2.2 (2026-11-14) adds view rotation and mirroring to the viewer toolbar and drag-resizable
 side panels. Version 2.3 (2026-11-14) adds evidence layers: a Steps card that shows the reasoning for one
 item, one layer at a time.
+Version 2.4 (2026-11-14) adds an app bar that keeps the name on every view and a first-visit guide.
 
 ## Context
 
@@ -113,6 +114,7 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
 
 ## Layout
 
+- App bar (v2.4): a 40px well-coloured strip across the top of every view with the sheet glyph and "Blueprint Evidence" at the left and a quiet "How it works" text command at the right. The rail no longer carries the mark. Ask and Results sit under it, so the name never disappears, including when the drawings column is hidden. On phones the bar is the first row, the rail's icon row the second.
 - Ask view: rail 52px | drawing library 300px | work area (question bar over the viewer, verification
   strip under it) | answer panel 384px. The library collapses from the rail; under 1080px it floats
   over the work area; under 760px everything stacks and the rail becomes a top bar. The widths are
@@ -336,3 +338,11 @@ counts, scan room label counts, IFC elements.
 Checked in Chromium at 1440 x 900, 1280 x 800 and 390 x 844: layers align at 0, 90 and 90 + mirror on a scan
 and on a DXF plan, and with the header strip on or off; "Not this one", "Add missed item", the 3D switch and
 resizable panels still work; no horizontal page scroll.
+
+## First-visit guide (v2.4)
+
+For someone who opens the app cold. A raised card (1px border, 3px radius) at the top of the answer panel, titled "How it works", with a close X. Three numbered rows using the square citation numerals: pick a drawing or upload your own; ask in your own words, in any language; check the answer on the drawing. Under them one legend sentence (Proven is read from the drawing's own data; Estimate: check the amber items; Cannot prove says why) and a "Show me" button. "Show me" opens the Swiss tiling example (the first "Try these" row), asks it, then opens the Steps card on the first room and steps through its layers once. The "Try these" list stays below the card and is not repeated in it.
+
+Rules: shown until it is closed or the first answer arrives; either one stores `bpe-guide-seen` in localStorage (read and written in try/catch, so with storage blocked it simply shows on every load). Reopened from "How it works" in the app bar, which toggles it. On phones the card moves to the top of the page, above the question, because the answer panel is stacked at the bottom there. Code sits in one marked block at the end of `app.js`.
+
+Checked in Chromium at 1440 x 900, 1280 x 800 and 390 x 844: first visit, Show me, after reload, reopened, Results with the name visible, blocked storage, no console errors, no horizontal scroll at 390.

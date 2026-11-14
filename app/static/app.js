@@ -1857,3 +1857,60 @@ window.addEventListener("hashchange", async () => {
   if (p.get("mode") === "3d") setMode("3d");
   if (p.get("q") && (moved || p.get("q") !== $("#question").value)) { $("#question").value = p.get("q"); ask(); }
 });
+
+
+/* ================================================================ first-visit guide (onboarding block)
+   Self-contained: a dismissible card at the top of the answer panel, reopened from "How it works" in the app bar.
+   Dismissal is remembered in localStorage (try/catch; without storage the card simply shows on every load).
+   "Show me" reuses TRY[0], selectDrawing, ask, openSteps and playSteps; nothing above depends on this block. */
+(() => {
+  const KEY = "bpe-guide-seen";
+  const guide = $("#guide"), openBtn = $("#guideOpen"), note = $("#guideNote"), show = $("#guideShow");
+  const seen = () => { try { return localStorage.getItem(KEY) === "1"; } catch (_) { return false; } };
+  const remember = () => { try { localStorage.setItem(KEY, "1"); } catch (_) { /* not stored: shows again next visit */ } };
+  // phones stack the answer panel under the viewer: the guide goes to the top of the page instead
+  const phone = window.matchMedia("(max-width: 760px)");
+  const place = () => { if (phone.matches) $(".work").prepend(guide); else $("#detail").prepend(guide); };
+  place();
+  if (phone.addEventListener) phone.addEventListener("change", place);
+  function setOpen(on, scroll) {
+    guide.hidden = !on;
+    openBtn.setAttribute("aria-expanded", String(on));
+    if (on && scroll) { $("#detail").scrollTop = 0; guide.scrollIntoView({ block: "nearest" }); }
+  }
+  function close() { remember(); setOpen(false); }
+  $("#guideClose").addEventListener("click", () => { close(); openBtn.focus(); });
+  openBtn.addEventListener("click", () => {
+    if (!guide.hidden) { close(); return; }
+    showView("ask");
+    setOpen(true, true);
+  });
+  // the first answer ends the first visit
+  const origRender = renderAnswer;
+  renderAnswer = function (a) { origRender(a); if (a && !guide.hidden) close(); };
+
+  let running = false;
+  show.addEventListener("click", async () => {
+    if (running) return;
+    const t = TRY[0];
+    running = true; show.disabled = true;
+    try {
+      showView("ask");
+      note.textContent = "Opening a Swiss plan.";
+      await selectDrawing(t.path);
+      if (!state.drawing) { note.textContent = "That example drawing is not in this library."; return; }
+      $("#question").value = t.q;
+      note.textContent = "Asking: " + t.q;
+      await ask();
+      if (!state.answer) { note.textContent = ""; return; }
+      remember();
+      const items = checkItems(state.answer);
+      if (items.length && state.layer === "evidence") {
+        openSteps(0);
+        if (layers.sel && layers.sel.steps.length > 1) setTimeout(() => { if (layers.sel) playSteps(); }, 700);
+      }
+    } catch (_) { /* the toast from ask already says what failed */ }
+    finally { running = false; show.disabled = false; }
+  });
+  setOpen(!seen());
+})();
