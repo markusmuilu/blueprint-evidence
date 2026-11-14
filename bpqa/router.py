@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from . import calibration
+from . import calibration, qualifiers
 from . import checks as checking
 from .answer import Answer, abstain
 from .data import Question
@@ -158,9 +158,15 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     last = abstain("router", "no route for this file type")
     held = None
     reasons = []
+    skipped = ""        # why routes that cannot filter by a qualifier did not run
     if ctx.evidence and no_derivatives(ctx):
         ctx.evidence = False   # answer still given; the JSON items list is the evidence
     for fn in candidate_routes(ctx, query):
+        qwhy = qualifiers.cannot_honour(fn, query)   # a qualifier ("fire doors") is never dropped silently
+        if qwhy:
+            ctx.tried.append(qualifiers.route_module(fn))
+            skipped = skipped or qwhy        # one message is enough: the same filter, whatever the route
+            continue
         try:
             a = fn(ctx, query)
         except Exception as ex:  # a broken route must never take the run down
@@ -189,10 +195,15 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
                 return query, a
             held = a
         reasons.append(f"{a.route}: {a.abstain}")
+    if qualifiers.kinds(query) and qualifiers.blocks_fallback(query):
+        # no route could filter by the qualifier, and the lookups and models below cannot either: stop here
+        return query, qualifiers.final_abstention(skipped, reasons, query)
     if any(fn is ifc_props.answer for fn in text_routes(ctx)):   # property lookups before any estimate
         a = _try_text(ctx, query, "")
         if a.answered:
             return query, a
+    if qualifiers.kinds(query):         # a model looking at the image cannot filter by the qualifier either
+        return query, qualifiers.final_abstention(skipped, reasons, query)
     if use_nemo:                        # last resort: every route above abstained
         try:
             a = nemotron.answer(ctx, query)

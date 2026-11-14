@@ -27,6 +27,7 @@ from shapely.ops import unary_union
 
 from .. import takeoff
 from .. import walls as wallmod
+from .. import qualifiers
 from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
 from .scope_guard import ambiguous_room, single_room_problem
@@ -149,6 +150,14 @@ class Model:
 @lru_cache(maxsize=3)
 def load(path: str) -> Model:
     return Model(Path(path))
+
+
+def qualifier_abstain(why: str, n: int, q, storey) -> Answer:
+    """The model was read and does not record what the qualifier asks for: final, no model guesses."""
+    a = abstain(ROUTE, why + ("" if "in total" in why or "in the model" in why else
+                              f"; {n} {q.obj}s{' on storey ' + storey.Name if storey is not None else ''} in total"))
+    a.final = True
+    return a
 
 
 def _external_filter(M, ents, q):
@@ -649,12 +658,24 @@ def answer(ctx, q) -> Answer:
         ents = M.entities(q.obj)
         if storey is not None:
             ents = [e for e in ents if M.storey_of(e) == storey]
+        ents, qnote, qtier, qwhy = qualifiers.filter_ifc(M, ents, q, storey)
+        if qwhy:
+            return qualifier_abstain(qwhy, len(ents), q, storey)
+        n_before = len(ents)
         ents = _external_filter(M, ents, q)
         if ents is None:
             return abstain(ROUTE, "interior/exterior asked but IsExternal not set in the model")
         used = [(e, None) for e in ents]
         value, unit = len(ents), "count"
-        note = f"{len(ents)} x {CLASSES[q.obj][0]}" + (f" on storey {storey.Name}" if storey else " in the model")
+        where = f" on storey {storey.Name}" if storey else " in the model"
+        note = f"{len(ents)} x {CLASSES[q.obj][0]}" + where
+        filters = [qnote.removesuffix(where)] if qnote else []
+        if q.extra.get("external") is not None and not q.extra.get("slab_type"):
+            filters.append(f"{len(ents)} of {n_before} {q.obj}s with IsExternal = {q.extra['external']}")
+        if filters:
+            note = f"{'; '.join(filters)}{where} ({CLASSES[q.obj][0]})"
+        if qtier:
+            tier_reason = qtier
     elif q.measure in ("area", "length", "volume"):
         if q.obj == "room":
             spaces = M.entities("room")
@@ -713,9 +734,14 @@ def answer(ctx, q) -> Answer:
             ents = M.entities(q.obj)
             if storey is not None:
                 ents = [e for e in ents if M.storey_of(e) == storey]
+            ents, qnote, qtier, qwhy = qualifiers.filter_ifc(M, ents, q, storey)
+            if qwhy:
+                return qualifier_abstain(qwhy, len(ents), q, storey)
             ents = _external_filter(M, ents, q)
             if ents is None:
                 return abstain(ROUTE, "interior/exterior asked but IsExternal not set in the model")
+            if qtier:
+                tier_reason = qtier
             scale = {"length": M.len_scale, "area": M._area_scale(), "volume": M._vol_scale()}[q.measure]
             srcs = set()
             for e in ents:
@@ -727,7 +753,7 @@ def answer(ctx, q) -> Answer:
                 return abstain(ROUTE, f"no quantity sets for {q.obj} {q.measure}")
             value = round(sum(v for _, v in used), 3)
             unit = {"length": "m", "area": "m2", "volume": "m3"}[q.measure]
-            note = f"sum of {', '.join(sorted(srcs))} over {len(used)}/{len(ents)} {CLASSES[q.obj][0]}"
+            note = f"sum of {', '.join(sorted(srcs))} over {len(used)}/{len(ents)} {CLASSES[q.obj][0]}" + (f" ({qnote})" if qnote else "")
         else:
             return abstain(ROUTE, f"no IFC rule for {q.obj} {q.measure}")
     else:

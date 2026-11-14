@@ -42,7 +42,7 @@ def fold(s: str) -> str:
 
 
 # Count / measure cues. Checked on accent-folded lower-case text.
-COUNT = r"\b(how many|wie viele|combien|quant[ie]|kuinka monta|hvor mange|mitu)\b"
+COUNT = r"\b(how many|wie viele|combien|quant[ie]|kuinka monta|hvor mange|hur manga|mitu)\b"
 AREA = r"(area|flache|surface|superficie|nettoareal|areal|pind|pinta-ala)"
 LENGTH = r"(length|lange|laengde|langde|longueur|lunghezza|pituus|wie lang)"
 VOLUME = r"(volume|volumen|volym|tilavuus|maht)"
@@ -64,8 +64,9 @@ OBJECTS: list[tuple[str, str]] = [
     ("balcony", r"balconies|parveke"),
     ("storey", r"floors \(storeys\)|kerrosta"),
     ("apartment", r"apartment|wohnung|appartement|appartament|residential unit|unite abitativ"),
-    ("door", r"\bdoors?\b|turen|\bportes?\b|\bporte\b|\bdore\b|\bust\b|\bovea\b|\bovi"),
-    ("window", r"windows?|fenster|fenetres|finestre|vinduer|akent|ikkuna"),
+    ("door", r"\bdoors?\b|turen|\bportes?\b|\bporte\b|\bdore\b|\bust\b|\bovea\b|\bovi|"
+             r"\b(?:palo|liuku|lasi|pari|sisa|ulko)-?ov(?:i\w*|ea)\b|\w*dorr(?:ar|en)?\b"),
+    ("window", r"windows?|fenster|fenetres|finestre|vinduer|akent|ikkuna|\bfonster\b"),
     ("wall", r"walls?\b|wande|vaegge|vaegge|vagge|seina"),
     ("column", r"columns|saojler|sojler|posti\b|stutzen|saulen"),
     ("beam", r"beams|bjaelker|bjelker|tala\b|trager"),
@@ -286,7 +287,7 @@ class RuleParser(QueryParser):
                     # unlike a quoted room name, which keeps the abstaining guard (routes/scope_guard.py)
                     tk["single_type"] = True
                 q.extra["takeoff"] = tk
-        return q
+        return attach_qualifier(question, q)
 
 
 def single_type_asked(f: str, tk: dict) -> bool:
@@ -325,4 +326,98 @@ def parse(question: str, fallback: QueryParser | None = None) -> Query:
         q2 = fallback.parse(question)
         if q2.ok():
             return q2
+    return q
+
+
+# ---------------------------------------------------------------------------------------------------
+# Qualifiers: words that narrow the counted object ("fire doors", "exterior walls", "sliding doors").
+# A qualifier is never dropped silently: the router only lets a route answer when the route can filter
+# by it (bpqa/qualifiers.py), otherwise the answer is an abstention that says why.
+# Kept apart from RuleParser so a different question parser can call `attach_qualifier` unchanged.
+# ---------------------------------------------------------------------------------------------------
+QUALIFIER_OBJS = {"door", "window", "wall", "column", "beam", "slab", "stair"}
+OBJ_NOUN = (r"(doors?|windows?|walls?|columns?|beams?|slabs?|stairs?|staircases?|openings?|"
+            r"portes?|fenetres?|murs?|ovi\w*|ovea|ikkuna\w*|sein\w*|tur\w*|fenster|wand\w*|dorr\w*|dor\w*|"
+            r"fonster|vagg\w*|vinduer?|vaegg\w*)")
+# Adjective in English / French: must stand next to the object noun (at most two words between), so
+# "outside the building" or "glass of water" do not qualify. Compound words (fi, de, sv, da) carry the
+# object inside the word and are searched anywhere.
+_NEAR = lambda adj: (rf"\b(?:{adj})\b(?:\W+\w+){{0,1}}?\W+{OBJ_NOUN}\b|\b{OBJ_NOUN}\b(?:\W+\w+){{0,1}}?\W+(?:{adj})\b")
+
+# (kind, adjacency-bound words, anywhere words). First matching kind is the primary one.
+QUALIFIER_KINDS: list[tuple[str, str, str]] = [
+    ("emergency", r"emergency|exits?|escape|egress|sortie de secours|issue de secours",
+     r"notausgang\w*|nottur\w*|nottuer\w*|fluchttur\w*|fluchttuer\w*|hataposisu\w*|poistumis\w*|nodutgang\w*|nodutg\w*"),
+    ("fire", r"fire|fire[- ]?rated|fire[- ]?resistant|fire[- ]?proof|coupe[- ]?feu|pare[- ]?flammes|resistants? au feu|"
+             r"ei ?\d{2,3}|ei[- ]?rated",
+     r"palo\w*|ei ?\d{2,3}\b|brandschutz\w*|brandschott\w*|feuerhemm\w*|feuerbestaendig\w*|feuerwiderstand\w*|"
+     r"feuerschutz\w*|brand(?:klass|skydd|dorr|dor|cell|sikr|skott|skot)\w*"),
+    ("sliding", r"sliding|slide|coulissant\w*|coulissante?s?",
+     r"liuku\w*|schiebe\w*|skjut\w*|skyde\w*"),
+    ("double", r"double|double[- ]leaf|two[- ]leaf|doubles|deux vantaux|a deux battants|double battant",
+     r"doppel\w*|zweifluegel\w*|zweiflugel\w*|dubbel\w*|pariov\w*|parioven\w*"),
+    ("glazed", r"glazed|glass|glazing|vitre\w*|vitrees?",
+     r"lasi\w*|verglas\w*|glas(?:tur|tuer|dorr|vagg|wand)\w*|glasdor\w*"),
+    ("accessible", r"accessible|wheelchair|barrier[- ]?free|inva|pmr|handicap\w*|disabled",
+     r"barrierefrei\w*|esteet\w*|rullatori\w*|tillganglig\w*"),
+    ("loadbearing", r"load[- ]?bearing|porteurs?",
+     r"tragend\w*|kantava\w*|baerande\w*|barande\w*"),
+    ("material", r"steel|wooden|wood|timber|aluminium|aluminum|metal|concrete|brick|masonry|acier|bois|beton|brique",
+     r"stahl\w*|holz\w*|teras\w*|puu(?:ovi|ikkuna|seina)\w*|betoni\w*|tegel\w*|trae\w*|tra(?:dor|vagg)\w*"),
+    ("orientation", r"(?:north|south|east|west)(?:ern)?[- ]?(?:facing|side|facade|elevation|oriented)?",
+     r"pohjois\w*|etela\w*|lansi\w*|nordseite\w*|suedseite\w*|ostseite\w*|westseite\w*|nordfassade\w*|suedfassade\w*"),
+]
+# interior / exterior also drive q.extra["external"] (the IFC IsExternal filter), set in RuleParser above
+_EXT_ADJ = r"exterior|external|outer|outside|outdoor|exterieur\w*|exterieures?"
+_EXT_ANY = r"ulko\w*|aussen\w*|ytter\w*|utvandig\w*|yder\w*|fassad\w*|facade\w*"
+_INT_ADJ = r"interior|internal|inner|inside|indoor|interieur\w*"
+_INT_ANY = r"sisa\w*|innen\w*|inner(?:dorr|vagg)\w*|invandig\w*|indvendig\w*"
+# a question about one schedule entry or one drawing sheet filters by the schedule's own type codes
+# ("door type A1 (swing door)"); the schedule route reads those, so nothing is dropped there
+_SCHEDULE_Q = re.compile(r"\bsheet\b|schedule|\b(door|window) types?\b|\btypes? [a-z]{1,2}-?\d|\bmark\b|\btyp\b|"
+                         r"\bbezeichnung|designation|labelled")
+# the qualifier is the question's own subject, not a filter ("both interior and entrance doors together")
+_TOGETHER = re.compile(r"together|zusammen|ensemble|insieme|yhteensa|tillsammans|og\b.*\bsammen|confondu\w*|"
+                       r"\b(und|et|and|e|ja|och|og) (eingangs|d'entree|entree|entrance|ingress|sisaan|ytter)\w*|"
+                       r"\ball (the )?(doors|windows|walls)\b|\bboth\b|\beither\b")
+
+
+def attach_qualifier(question: str, q: Query) -> Query:
+    """Detect qualifiers attached to the counted object and record them in q.extra.
+
+    extra["qualifier"] = {"kind": "fire", "raw": "fire"} is the first one found, extra["qualifiers"] lists
+    all of them. Only element counts and quantities (door, window, wall ...) carry qualifiers; a question
+    about a schedule entry or sheet is left alone. Interior / exterior also set extra["external"].
+    """
+    if q.obj not in QUALIFIER_OBJS or q.measure not in ("count", "area", "length", "volume"):
+        return q
+    f = fold(strip_quoted(question))
+    if _SCHEDULE_Q.search(f) or q.extra.get("compound") or q.extra.get("unresolved_scope"):
+        return q
+    found: list[dict] = []
+    ext = re.search(_NEAR(_EXT_ADJ), f) or re.search(rf"\b(?:{_EXT_ANY})", f)
+    inn = re.search(_NEAR(_INT_ADJ), f) or re.search(rf"\b(?:{_INT_ANY})", f)
+    ext = ext or re.search(r"\b(exterior|outside|external|outer)\b", f)
+    inn = inn or re.search(r"\b(interior|inside|internal|inner)\b", f)
+    if ext and inn:             # "exterior and interior walls": both sides asked, no filter
+        ext = inn = None
+    if ext and not inn:
+        found.append({"kind": "external", "raw": ext.group(0).strip()})
+        q.extra["external"] = True
+    elif inn and not ext and not _TOGETHER.search(f):
+        found.append({"kind": "internal", "raw": inn.group(0).strip()})
+        q.extra["external"] = False
+    for kind, adj, anywhere in QUALIFIER_KINDS:
+        m = re.search(_NEAR(adj), f) or re.search(rf"\b(?:{anywhere})", f)
+        if m is None and kind == "fire":
+            m = re.search(r"\b(?:with|have|having|has|carry|carrying|which|that|rated)\b\W+(?:\w+\W+){0,2}?"
+                          r"(fire[- ]?rat\w*|fire[- ]?resist\w*)", f)
+        if m is None:
+            continue
+        raw = m.group(0).strip()
+        mm = re.search(rf"(?:{adj}|{anywhere})", raw)
+        found.append({"kind": kind, "raw": (mm.group(0) if mm else raw).strip()})
+    if found:
+        q.extra["qualifier"] = found[0]
+        q.extra["qualifiers"] = found
     return q
