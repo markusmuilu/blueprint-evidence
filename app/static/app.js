@@ -2763,7 +2763,7 @@ const resSrc = (s) => RESULT_SOURCE_NAMES[s] || SOURCE_NAMES[s] || s;
 
 /* The source code link: one place to set it. "#" until Markus decides on publishing. The per-question results
    README (results/README.md in the repo) is linked from the same URL, assuming a GitHub-style /tree/main/ path. */
-const SOURCE_CODE_URL = "#";
+const SOURCE_CODE_URL = "https://github.com/markusmuilu/blueprint-evidence";
 const CSV_ORDER = ["cubicasa5k", "swiss_dwellings", "ifc_models", "ifc_bench", "opening_design"];
 async function renderResLinks() {
   const a = $("#srcLink");
