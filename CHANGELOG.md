@@ -28,6 +28,43 @@ areas x k, waste recomputed on the new net), then 600 ms after the last change t
   not used. Proven answers (printed areas, CAD, IFC, vector PDFs) carry no `approx` and show nothing.
 - The CSV (single answer and Ask several) has a `scale_assumption` column, and Save correction records it.
   Answer cache version 6.
+## 2026-11-14 evening: integration check after the merges, branch `integration-check`
+
+Builder BD. The fixes BA reported held on BA's branch only when the language-model reader read the question (and the
+live app was serving answers cached before the merge). With the reader off or unreachable, the rules read the
+question themselves, and they missed:
+
+| Question | Merged main, rules only | Now |
+|---|---|---|
+| FZK Erdgeschoss "Paljonko seinälaattaa kylpyhuoneeseen 1,2 metrin korkeuteen?" | 34.34 (tiles to the full 2.5 m) | 16.64 proven |
+| colorful-11196 "Paljonko neliöitä on yhteensä?" / "What is the total floor area?" / "What is the total area of the apartment?" | not understood / cannot | 73.5 m2 proven (printed summary) |
+| 10372 "Paljonko lattiamateriaalia tarvitaan makuuhuoneisiin 10 % hukalla?" | 33.3, no waste | 36.63 proven |
+| 10372 "Lattiamateriaali makuuhuoneisiin, hukkaa kymmenen prosenttia" | 25.8% (read as a share) | 36.63 |
+| Tyneside "list the rooms" | not understood | one row per room (estimate, approximated areas) |
+| high_quality-14334 showers and bathtubs (en, fi), gold 0 | 1 | 0 (estimate) |
+
+- **FZK tiles, by hand.** Bad (3): perimeter 14.16 m x 1.20 m = 16.99 m2; door 0.89 m wide, 1.06 m2 below 1.2 m; window
+  2.00 m wide, sill 0.80 m, 0.80 m2 below 1.2 m; net 15.13 m2, order with the default 10% 16.64 m2. 16.64 is right. 15.13
+  was the net value before BA made a material question an order quantity; 34.34 is the full 2.5 m room height, because
+  `walls._parse_inputs` read only "m", "cm" and "mm" after a number, not "metrin".
+- **Heights and waste in words** (`walls.py`): a length unit written out in any inflection (metrin, metriä, Zentimeter,
+  metres), Finnish waste inflections (hukalla, hukan, varauksella), "10 percent", "10 prosentin", and a percentage in
+  words or "10pct" ("kymmenen prosenttia", "ten percent"; `walls.spelled_percent`, also used by the check on the
+  reader's waste). `baseboard.py` uses the same waste patterns. A stated waste is not a share question (`compose.plan`).
+- **Whole-flat area without the reader** (`query.py`): "total floor area", "pinta-ala", "neliöitä yhteensä", "how
+  many square metres in total" and "the total area of the apartment" (one apartment, no letter) are the total of the
+  rooms, the reading the model gives too, so a scan's printed summary is reached. The building, gross or net usable
+  areas, facades, roofs and breakdowns stay out.
+- **List the rooms** (`query.py`, `compose.py`): "list the rooms", "luettele huoneet", "what rooms are there" are a
+  composite list (one row per room, with the area the route has); an IFC model's own space list answers first. "list
+  the room types" is not this.
+- **One-error labels never replace a count** (`checks.py`): the showers >= bathrooms check, which replaces the answer,
+  counts only labels read exactly; "PESUIHUONE" (AY's one-error Finnish word) still makes the answer an estimate.
+- **Stale answers** (`app/server.py`): CACHE_VERSION 6, and every answer cache key now holds a hash of bpqa/ (`CODE_FINGERPRINT`),
+  so an answer cached by older code is never served after a merge, also when nobody bumps the version.
+- Dataset parses (6,821 distinct questions, rules only): 2 changed, "Can you give me the list of all room types?" and
+  "... list of each room available in house A?" now read as text questions (not understood before). Dev eval on
+  swiss_dwellings and ifc_models (28,400 questions): every answer, tier and route identical before and after.
 
 ## 2026-11-14: question understanding round 3, branch `phrasing-3`
 
