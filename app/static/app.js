@@ -9,7 +9,7 @@ const num = (x) => (x == null ? "-" : Number(x).toLocaleString("en-US"));
 
 const SOURCE_NAMES = {
   swiss_dwellings: "Swiss dwellings", cubicasa5k: "CubiCasa scans", ifc_models: "IFC models",
-  ifc_bench: "IFC-Bench", opening_design: "OpeningDesign", upload: "Upload",
+  ifc_bench: "IFC-Bench (free-text model questions, mostly declined)", opening_design: "OpeningDesign", upload: "Upload",
 };
 const EXAMPLES = [
   { lang: "en", label: "Doors", q: "How many doors are shown on this floor plan?" },
@@ -1699,7 +1699,8 @@ async function loadRun(id) {
     runData = await api("/api/results/" + encodeURIComponent(id));
   } catch (e) { toast("Could not load run: " + e.message, true); return; }
   const d = runData;
-  $("#runHeader").textContent = `${d.label || d.id}. ${d.header || ""}`;
+  $("#runHeader").textContent = `${d.label || d.id}.`;
+  if (d.header) $("#runHeader").title = d.header;
   $("#runHeader").title = `${d.where || "out"}/${d.id}/summary.json`;
   const all = d.rows.find((r) => r.source === "ALL" && r.type === "ALL");
   const where = d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
@@ -1724,15 +1725,15 @@ async function loadOverview() {
     $("#overviewTable").innerHTML = `<tbody><tr><td class="dim">Could not read: ${esc(e.message)}</td></tr></tbody>`;
     return;
   }
-  const head = `<thead><tr><th>Test set</th><th class="num">Questions</th><th class="num">Accuracy</th><th class="num">Precision when answered</th><th>Detail</th><th>Source</th></tr></thead>`;
+  const head = `<thead><tr><th>Test set</th><th class="num">Questions</th><th class="num">Accuracy</th><th class="num">Precision when answered</th><th>Detail</th></tr></thead>`;
   const body = items.map((it) => {
-    if (it.missing) return `<tr><td>${esc(it.set)}</td><td colspan="4" class="dim">Not run on this machine (${esc(it.missing)}). The README states the last measured numbers.</td><td></td></tr>`;
+    if (it.missing) return `<tr><td>${esc(it.set)}</td><td colspan="4" class="dim">Not run in this build. The README states the last measured numbers.</td></tr>`;
     let detail = "";
     if (it.baseline_accuracy != null) detail = `Nemotron, plain prompt: ${pct(it.baseline_accuracy)}; router: ${esc(it.note || "")}`;
     else if (it.wrong != null) detail = `${it.correct} correct, ${it.wrong} wrong (${it.proven_wrong} of them proven), ${it.abstain} abstained, ${it.abstain_ok} correctly abstained`;
     else if (it.proven != null) detail = `proven ${num(it.proven)} at ${pct(it.proven_precision)}, estimate ${num(it.estimate)} at ${pct(it.estimate_precision)}`;
     return `<tr><td>${esc(it.set)}</td><td class="num">${num(it.n)}</td><td class="num">${pct(it.accuracy)}</td>
-      <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td><td class="mono dim srcfile">${esc(it.source || "")}</td></tr>`;
+      <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td></tr>`;
   }).join("");
   $("#overviewTable").innerHTML = head + "<tbody>" + body + "</tbody>";
 }
@@ -1751,14 +1752,14 @@ async function loadBaseline() {
 }
 
 function renderSrcTable(d) {
-  const head = `<thead><tr><th>Source</th><th>Type</th><th class="num">n</th><th class="num">Accuracy</th><th class="num">Coverage</th><th class="num">Precision</th><th class="num">$ per q</th></tr></thead>`;
+  const head = `<thead><tr><th>Source</th><th>Type</th><th class="num">n</th><th class="num">Accuracy</th><th class="num">Coverage</th><th class="num">Precision</th><th class="num">€ per 1,000</th></tr></thead>`;
   const rows = [];
   const bySrc = {};
   for (const r of d.rows) (bySrc[r.source] = bySrc[r.source] || []).push(r);
   const order = Object.keys(bySrc).filter((s) => s !== "ALL");
   const line = (r, cls, first) => `<tr class="${cls}"><td>${first}</td><td>${r.type === "ALL" ? "all" : esc(r.type)}</td><td class="num">${num(r.n)}</td>
       <td class="num">${pct(r.accuracy)}</td><td class="num${r.answered ? "" : " dim"}">${pct(r.coverage)}</td>
-      <td class="num${r.answered ? "" : " dim"}">${r.answered ? pct(r.precision) : "-"}</td><td class="num">${Number(r.cost_per_q || 0).toFixed(4)}</td></tr>`;
+      <td class="num${r.answered ? "" : " dim"}">${r.answered ? pct(r.precision) : "-"}</td><td class="num">${fmtUsd((r.cost_per_q || 0) * 1000)}</td></tr>`;
   for (const s of order) {
     const rs = bySrc[s];
     const total = rs.find((r) => r.type === "ALL");
@@ -1892,7 +1893,7 @@ window.addEventListener("hashchange", async () => {
   let running = false;
   show.addEventListener("click", async () => {
     if (running) return;
-    const t = TRY[0];
+    const t = { path: "data/swiss_dwellings/site3387_bldg5238_floor23498.pdf", q: "What is the floor area of the bathrooms?" };
     running = true; show.disabled = true;
     try {
       showView("ask");
