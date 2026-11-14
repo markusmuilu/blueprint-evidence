@@ -1,0 +1,839 @@
+drawing,question_id,question_type,our_answer,unit,status,correct
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86666,door count,211,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86667,door count,211,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86668,window count,297,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86669,window count,297,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86670,room count,285,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86671,room count,285,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86672,wall count,846,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86673,wall count,846,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86674,column count,37,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86675,column count,37,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86676,beam count,37,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86677,beam count,37,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86678,stair count,4,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86679,stair count,4,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86680,door count,46,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86681,door count,46,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86682,room count,50,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86683,room count,50,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86684,column count,37,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86685,column count,37,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86686,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86687,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86688,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86689,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86690,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86691,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86692,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86693,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86694,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86695,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86696,room area,5.96,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86697,room area,5.96,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86698,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86699,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86700,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86701,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86702,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86703,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86704,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86705,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86706,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86707,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86708,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86709,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86710,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86711,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86712,room area,33.43,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86713,room area,33.43,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86714,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86715,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86716,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86717,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86718,room area,5.77,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86719,room area,5.77,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86720,room area,59.37,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86721,room area,59.37,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86722,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86723,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86724,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86725,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86726,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86727,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86728,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86729,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86730,room area,14.33,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86731,room area,14.33,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86732,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86733,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86734,room area,4.26,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86735,room area,4.26,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86736,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86737,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86738,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86739,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86740,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86741,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86742,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86743,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86744,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86745,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86746,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86747,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86748,room area,23.97,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86749,room area,23.97,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86750,room area,25.13,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86751,room area,25.13,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86752,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86753,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86754,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86755,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86756,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86757,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86758,room area,6.71,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86759,room area,6.71,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86760,room area,3.48,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86761,room area,3.48,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86762,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86763,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86764,room area,90.64,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86765,room area,90.64,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86766,room area,10.32,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86767,room area,10.32,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86768,room area,18.66,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86769,room area,18.66,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86770,room area,28.95,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86771,room area,28.95,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86772,room area,15.38,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86773,room area,15.38,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86774,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86775,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86776,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86777,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86778,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86779,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86780,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86781,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86782,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86783,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86784,room area,3.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86785,room area,3.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86786,room area,21.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86787,room area,21.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86788,room area,870.29,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-01-1-korrus.pdf,86789,room area,870.29,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86790,door count,42,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86791,door count,42,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86792,room count,60,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86793,room count,60,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86794,wall count,156,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86795,wall count,156,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86796,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86797,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86798,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86799,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86800,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86801,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86802,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86803,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86804,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86805,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86806,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86807,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86808,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86809,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86810,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86811,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86812,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86813,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86814,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86815,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86816,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86817,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86818,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86819,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86820,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86821,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86822,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86823,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86824,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86825,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86826,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86827,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86828,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86829,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86830,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86831,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86832,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86833,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86834,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86835,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86836,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86837,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86838,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86839,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86840,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86841,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86842,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86843,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86844,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86845,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86846,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86847,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86848,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86849,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86850,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86851,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86852,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86853,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86854,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86855,room area,5.76,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86856,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86857,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86858,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86859,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86860,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86861,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86862,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86863,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86864,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86865,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86866,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86867,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86868,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86869,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86870,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86871,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86872,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86873,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86874,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86875,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86876,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86877,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86878,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86879,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86880,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86881,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86882,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86883,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86884,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86885,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86886,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86887,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86888,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86889,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86890,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86891,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86892,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86893,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86894,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86895,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86896,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86897,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86898,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86899,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86900,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86901,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86902,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86903,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86904,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86905,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86906,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86907,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86908,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86909,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86910,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86911,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86912,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86913,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86914,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86915,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86916,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86917,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86918,room area,859.31,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-02-2-korrus.pdf,86919,room area,859.31,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86920,door count,42,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86921,door count,42,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86922,room count,60,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86923,room count,60,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86924,wall count,160,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86925,wall count,160,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86926,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86927,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86928,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86929,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86930,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86931,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86932,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86933,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86934,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86935,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86936,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86937,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86938,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86939,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86940,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86941,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86942,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86943,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86944,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86945,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86946,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86947,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86948,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86949,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86950,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86951,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86952,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86953,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86954,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86955,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86956,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86957,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86958,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86959,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86960,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86961,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86962,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86963,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86964,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86965,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86966,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86967,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86968,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86969,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86970,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86971,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86972,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86973,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86974,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86975,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86976,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86977,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86978,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86979,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86980,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86981,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86982,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86983,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86984,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86985,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86986,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86987,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86988,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86989,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86990,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86991,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86992,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86993,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86994,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86995,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86996,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86997,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86998,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,86999,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87000,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87001,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87002,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87003,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87004,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87005,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87006,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87007,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87008,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87009,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87010,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87011,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87012,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87013,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87014,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87015,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87016,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87017,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87018,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87019,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87020,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87021,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87022,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87023,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87024,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87025,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87026,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87027,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87028,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87029,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87030,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87031,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87032,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87033,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87034,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87035,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87036,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87037,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87038,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87039,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87040,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87041,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87042,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87043,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87044,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87045,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87046,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87047,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87048,room area,857.18,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-03-3-korrus.pdf,87049,room area,857.18,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87050,door count,42,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87051,door count,42,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87052,room count,60,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87053,room count,60,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87054,wall count,160,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87055,wall count,160,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87056,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87057,stair count,1,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87058,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87059,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87060,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87061,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87062,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87063,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87064,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87065,room area,3.67,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87066,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87067,room area,20.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87068,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87069,room area,4.2,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87070,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87071,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87072,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87073,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87074,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87075,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87076,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87077,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87078,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87079,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87080,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87081,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87082,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87083,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87084,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87085,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87086,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87087,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87088,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87089,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87090,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87091,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87092,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87093,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87094,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87095,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87096,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87097,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87098,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87099,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87100,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87101,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87102,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87103,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87104,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87105,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87106,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87107,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87108,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87109,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87110,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87111,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87112,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87113,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87114,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87115,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87116,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87117,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87118,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87119,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87120,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87121,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87122,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87123,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87124,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87125,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87126,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87127,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87128,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87129,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87130,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87131,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87132,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87133,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87134,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87135,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87136,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87137,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87138,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87139,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87140,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87141,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87142,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87143,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87144,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87145,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87146,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87147,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87148,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87149,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87150,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87151,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87152,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87153,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87154,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87155,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87156,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87157,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87158,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87159,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87160,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87161,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87162,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87163,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87164,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87165,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87166,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87167,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87168,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87169,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87170,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87171,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87172,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87173,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87174,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87175,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87176,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87177,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87178,room area,857.17,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf,87179,room area,857.17,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87180,door count,39,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87181,door count,39,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87182,room count,55,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87183,room count,55,count,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87184,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87185,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87186,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87187,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87188,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87189,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87190,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87191,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87192,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87193,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87194,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87195,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87196,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87197,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87198,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87199,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87200,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87201,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87202,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87203,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87204,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87205,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87206,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87207,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87208,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87209,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87210,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87211,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87212,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87213,room area,5.83,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87214,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87215,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87216,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87217,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87218,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87219,room area,4.35,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87220,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87221,room area,4.92,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87222,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87223,room area,22.05,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87224,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87225,room area,22.41,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87226,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87227,room area,3.01,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87228,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87229,room area,25.59,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87230,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87231,room area,18.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87232,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87233,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87234,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87235,room area,7.73,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87236,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87237,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87238,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87239,room area,5.52,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87240,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87241,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87242,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87243,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87244,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87245,room area,28.3,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87246,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87247,room area,4.78,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87248,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87249,room area,6.24,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87250,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87251,room area,3.98,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87252,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87253,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87254,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87255,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87256,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87257,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87258,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87259,room area,45.5,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87260,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87261,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87262,room area,58.88,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87263,room area,58.88,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87264,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87265,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87266,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87267,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87268,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87269,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87270,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87271,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87272,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87273,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87274,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87275,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87276,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87277,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87278,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87279,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87280,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87281,room area,25.25,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87282,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87283,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87284,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87285,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87286,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87287,room area,5.1,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87288,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87289,room area,5.58,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87290,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87291,room area,63.84,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87292,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87293,room area,78.4,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87294,room area,859.72,m2,proven,yes
+bsc-esplanades_1807-ep-ar-v18_plan-05-5-korrus.pdf,87295,room area,859.72,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87690,door count,21,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87691,not parsed (count question),"Project: - Site: 74; RefLatitude 42.35861; RefLongitude -71.05667; RefElevation 0.0 Building: Hambakendreef 2a - Gymzaal Hambakendreef; LongName Hambakendreef 2a - Gymzaal Hambakendreef; address Hambakendreef 2A , 5231 RJ, 's-Hertogenbosch, The Netherlands Storeys: 3; spaces: 48",,proven,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87692,window count,69,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87693,not parsed (count question),"Project: - Site: 74; RefLatitude 42.35861; RefLongitude -71.05667; RefElevation 0.0 Building: Hambakendreef 2a - Gymzaal Hambakendreef; LongName Hambakendreef 2a - Gymzaal Hambakendreef; address Hambakendreef 2A , 5231 RJ, 's-Hertogenbosch, The Netherlands Storeys: 3; spaces: 48",,proven,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87694,room count,48,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87695,not parsed (count question),"Project: - Site: 74; RefLatitude 42.35861; RefLongitude -71.05667; RefElevation 0.0 Building: Hambakendreef 2a - Gymzaal Hambakendreef; LongName Hambakendreef 2a - Gymzaal Hambakendreef; address Hambakendreef 2A , 5231 RJ, 's-Hertogenbosch, The Netherlands Storeys: 3; spaces: 48",,proven,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87696,wall count,78,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87697,not parsed (count question),"Project: - Site: 74; RefLatitude 42.35861; RefLongitude -71.05667; RefElevation 0.0 Building: Hambakendreef 2a - Gymzaal Hambakendreef; LongName Hambakendreef 2a - Gymzaal Hambakendreef; address Hambakendreef 2A , 5231 RJ, 's-Hertogenbosch, The Netherlands Storeys: 3; spaces: 48",,proven,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87698,column count,30,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87699,not parsed (count question),"Project: - Site: 74; RefLatitude 42.35861; RefLongitude -71.05667; RefElevation 0.0 Building: Hambakendreef 2a - Gymzaal Hambakendreef; LongName Hambakendreef 2a - Gymzaal Hambakendreef; address Hambakendreef 2A , 5231 RJ, 's-Hertogenbosch, The Netherlands Storeys: 3; spaces: 48",,proven,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87700,beam count,3,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87701,not parsed (count question),"Project: - Site: 74; RefLatitude 42.35861; RefLongitude -71.05667; RefElevation 0.0 Building: Hambakendreef 2a - Gymzaal Hambakendreef; LongName Hambakendreef 2a - Gymzaal Hambakendreef; address Hambakendreef 2A , 5231 RJ, 's-Hertogenbosch, The Netherlands Storeys: 3; spaces: 48",,proven,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87702,sanitary count,22,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87703,not parsed (count question),"Project: - Site: 74; RefLatitude 42.35861; RefLongitude -71.05667; RefElevation 0.0 Building: Hambakendreef 2a - Gymzaal Hambakendreef; LongName Hambakendreef 2a - Gymzaal Hambakendreef; address Hambakendreef 2A , 5231 RJ, 's-Hertogenbosch, The Netherlands Storeys: 3; spaces: 48",,proven,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87704,door count,21,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87705,not parsed (count question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87706,room count,48,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87707,not parsed (count question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87708,column count,15,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87709,not parsed (count question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87710,room area,1.26,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87711,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87712,room area,1.19,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87713,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87714,room area,4.5,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87715,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87716,room area,2.23,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87717,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87718,room area,9.74,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87719,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87720,room area,2.67,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87721,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87722,room area,3.76,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87723,not parsed (area question),"Not available in this model: no property or material matching 'netto', 'vloeroppervlakte', 'ruimte' on any of the 22 sanitary terminals (contained in storey 00 Begane grond) or their types.",,estimate,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87724,room area,36.4,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87725,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87726,room area,19.39,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87727,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87728,room area,42.54,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87729,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87730,room area,266.41,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87731,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87732,room area,3.06,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87733,not parsed (area question),"Not available in this model: no property or material matching 'netto', 'vloeroppervlakte', 'ruimte' on any of the 22 sanitary terminals (contained in storey 00 Begane grond) or their types.",,estimate,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87734,room area,36.71,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87735,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87736,room area,39.29,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87737,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87738,room area,1.12,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87739,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87740,room area,0.87,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87741,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87742,room area,1.6,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87743,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87744,room area,3.95,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87745,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87746,room area,1.97,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87747,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87748,room area,8.06,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87749,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87750,room area,2.67,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87751,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87752,room area,3.19,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87753,not parsed (area question),"Not available in this model: no property or material matching 'netto', 'vloeroppervlakte', 'ruimte' on any of the 22 sanitary terminals (contained in storey 00 Begane grond) or their types.",,estimate,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87754,room area,33.72,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87755,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87756,room area,19.39,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87757,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87758,room area,16.03,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87759,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87760,room area,40.0,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87761,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87762,room area,252.0,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87763,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87764,room area,2.78,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87765,not parsed (area question),"Not available in this model: no property or material matching 'netto', 'vloeroppervlakte', 'ruimte' on any of the 22 sanitary terminals (contained in storey 00 Begane grond) or their types.",,estimate,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87766,room area,34.1,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87767,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87768,room area,35.57,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87769,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87770,room area,1.12,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87771,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87772,room area,1.6,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87773,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87774,room area,3.98,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87775,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87776,room area,1.96,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87777,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87778,room area,8.06,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87779,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87780,room area,2.67,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87781,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87782,room area,3.19,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87783,not parsed (area question),"Not available in this model: no property or material matching 'netto', 'vloeroppervlakte', 'ruimte' on any of the 22 sanitary terminals (contained in storey 00 Begane grond) or their types.",,estimate,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87784,room area,33.72,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87785,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87786,room area,16.03,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87787,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87788,room area,40.15,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87789,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87790,room area,252.53,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87791,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87792,room area,2.78,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87793,not parsed (area question),"Not available in this model: no property or material matching 'netto', 'vloeroppervlakte', 'ruimte' on any of the 22 sanitary terminals (contained in storey 00 Begane grond) or their types.",,estimate,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87794,room area,34.31,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87795,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87796,room area,35.57,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87797,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87798,room area,1401.76,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87799,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87800,wall length,291.802,m,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87801,not parsed (length question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87802,wall area,712.91,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87803,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87804,wall volume,115.561,m3,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87805,wall volume,115.561,m3,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87806,slab volume,94.221,m3,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-01-00-begane-grond.pdf,87807,volume,,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87808,wall count,4,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87809,not parsed (count question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87810,column count,15,count,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87811,not parsed (count question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87812,wall length,67.08,m,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87813,not parsed (length question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87814,wall area,111.51,m2,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87815,not parsed (area question),,,cannot,no
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87816,wall volume,28.301,m3,proven,yes
+bsc-gymzaal-amersfoort_example-project-location_plan-02-01-eerste-verdieping.pdf,87817,wall volume,28.301,m3,proven,yes
+bsc-chesapeake-bay-bridge-tunnel_chesapeake-bay-bridge-tunnel-4x3.ifc,87818,wall count,166,count,proven,yes
+bsc-chesapeake-bay-bridge-tunnel_chesapeake-bay-bridge-tunnel-4x3.ifc,87819,column count,1195,count,proven,yes
+bsc-chesapeake-bay-bridge-tunnel_chesapeake-bay-bridge-tunnel-4x3.ifc,87820,beam count,2221,count,proven,yes
+bsc-chesapeake-bay-bridge-tunnel_chesapeake-bay-bridge-tunnel-4x3.ifc,87821,count,"Not available in this model: no property or material matching 'chesapeake', 'bridge-tunnel', 'test' on any of the 783 light fixtures or their types.",,estimate,no
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89320,door count,16,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89321,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89322,window count,21,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89323,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89324,room count,19,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89325,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89326,wall count,105,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89327,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89328,beam count,10,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89329,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89330,stair count,3,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-01-foundation.pdf,89331,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89332,door count,5,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89333,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89334,room count,8,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89335,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89336,wall count,32,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89337,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89338,stair count,1,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89339,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89340,room area,10.44,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89341,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89342,room area,14.65,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89343,not parsed (area question),space Utility room (-1.2): class IfcSpace; type Utility room -1.2:287712; storey -1; area 14.65 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89344,room area,9.52,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89345,not parsed (area question),space Utility room (-1.3): class IfcSpace; type Utility room -1.3:287715; storey -1; area 9.52 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89346,room area,5.82,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89347,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89348,room area,3.56,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89349,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89350,room area,4.07,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89351,not parsed (area question),"Not available in this model: no property or material matching 'jaka', 'jest', 'powierzchnia', 'netto', 'pomieszczenia', 'kondygnacji' on any of the 8 spaces (contained in storey -1) or their types.",,estimate,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89352,room area,2.33,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89353,not parsed (area question),space Room (-1.7): class IfcSpace; type Room -1.7:288374; storey -1; area 2.33 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89354,room area,4.01,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89355,not parsed (area question),space Room (-1.8): class IfcSpace; type Room -1.8:288377; storey -1; area 4.01 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89356,room area,54.41,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-02-1.pdf,89357,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89358,door count,6,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89359,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89360,wall count,32,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89361,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89362,room area,6.35,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89363,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89364,room area,18.04,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89365,not parsed (area question),space Room (0.3): class IfcSpace; type Room 0.3:288578; storey 0; area 18.03 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89366,room area,7.49,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89367,not parsed (area question),space Room (0.4): class IfcSpace; type Room 0.4:288581; storey 0; area 7.49 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89368,room area,3.38,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89369,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89370,room area,13.26,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89371,not parsed (area question),space Room (0.5): class IfcSpace; type Room 0.5:288612; storey 0; area 13.26 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89372,room area,48.51,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-03-0.pdf,89373,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89374,door count,5,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89375,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89376,window count,6,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89377,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89378,room count,6,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89379,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89380,wall count,27,count,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89381,not parsed (count question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89382,room area,7.34,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89383,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89384,room area,9.97,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89385,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89386,room area,15.47,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89387,not parsed (area question),space Room (1.3): class IfcSpace; type Room 1.3:288636; storey 1; area 15.47 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89388,room area,10.72,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89389,not parsed (area question),space Room (1.4): class IfcSpace; type Room 1.4:288639; storey 1; area 10.72 sq m (geometry footprint),,proven,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89390,room area,3.28,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89391,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89392,room area,2.98,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89393,not parsed (area question),,,cannot,no
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89394,room area,49.76,m2,proven,yes
+bimspeed-gdynia_ruchu-oporu-18_plan-04-1.pdf,89395,not parsed (area question),,,cannot,no
