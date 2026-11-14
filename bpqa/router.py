@@ -22,7 +22,7 @@ from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
-from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, sheet_scale
+from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_scale
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -92,7 +92,7 @@ def candidate_routes(ctx: Context, query: Query | None = None):
         if ctx.pdf_only or not has_twin:
             routes.append(pdf_vector.answer)
     if ctx.q.ext in RASTER_EXT or (ctx.q.ext == "pdf" and not routes):
-        routes.append(raster.answer)
+        routes.append(raster_rooms.answer)    # room-type counts: detector + OCR labels; anything else: raster.answer
     return routes
 
 

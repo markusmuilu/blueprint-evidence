@@ -137,6 +137,41 @@ Dev numbers (`eval.py --split dev`, Nemotron off; before = main at a38fbd0):
 | preview, all four sources (5,245) | 83.0% | 82.9% (the 6 Swiss apartment/floor-total questions above) |
 
 Tests: `tests/test_route_misses.py` (pytest; the QA questions run on the real files when the full set is present).
+## 2026-11-14: room-type detector and raster-rooms route, branch `room-detector`
+
+Problem: kitchens, saunas, bathrooms and bedrooms on CubiCasa scans were counted only from OCR of the room
+labels, which are often missing or unreadable (kitchens 64% exact on the full test split, most of them
+estimates that were about 20% right).
+
+- Room polygons from public CubiCasa5K (`tools/cubicasa_rooms.py`): Space class + NameLabel + fixtures
+  inside. A WC room is a Bath space named "WC"; most saunas are "Space Undefined" holding a sauna stove.
+  The mapping reproduces Stoa's train-split answers on 99.1-100% of images per type.
+- Dataset (`tools/build_rooms_dataset.py`): same allowed plans and the same 624 held-out tune images as the
+  fixture detector; 2,678 train / 161 val images.
+- Training: Modal GPUs need a payment method on the account (not added), so a `yolo26n` at 640 px trained
+  on a Modal CPU container (`tools/train_rooms_modal.py`, mAP50 0.78 after 8 epochs) was the first model;
+  the final `yolo26s` at 896 px trained on the PC GPU (batch 4, about 3 GB VRAM) for 11 epochs (val
+  mAP50 0.867), stopped early when the GPU got busy. Modal spend about $2.4.
+- Route `raster-rooms` (`bpqa/routes/raster_rooms.py`): detector count vs OCR label count; agreement proven
+  under a per-type proof rule, disagreement an estimate with both readings, valued by a per-type preference;
+  all tuned on the tune images only (`tools/tune_rooms.py`). The router sends raster questions to it; it hands
+  every question that is not a room-type count to `raster.answer` unchanged.
+- TTA (eight rotations/mirrors) was tried on the tune images: under 1 point of cross-validated gain per type
+  for 8x the CPU time, so it is off.
+
+Full set test split, exact count (before = main): kitchen 64.0% -> 90.8%, bathroom 87.9% -> 85.3%, WC
+81.2% -> 89.4%, sauna 63.6% -> 93.4%, bedroom 75.1% -> 80.0%, balcony 85.8% -> 85.8%; all six 74.1% ->
+87.8% (10,032 questions). Proven precision: WC 82.0% -> 96.4%, sauna 81.9% -> 96.2%, bedroom 86.4% ->
+95.2%, balcony 87.6% -> 93.6%, kitchen 98.8% both, bathroom 96.8% -> 94.3%. Preview dev (its images are
+tune images): 76.3% -> 87.6%.
+
+Test was run twice. Run 1 used policies tuned without the checking layer and showed bathrooms down; the
+before number had also been understated (61.5%) because the "detected shower" check could not run in that
+eval's environment (CPU-only torch settings), fixed by rerunning with the fixture detector cache filled.
+The tuner was then changed to score policies after the checks (`tools/tune_rooms.py`), retuned on the tune
+images only, and test run once more (run 2, the numbers above; run 1 differed only for bedroom, 81.5%).
+Bathroom still regresses on test; turning the type off (`prefer: "off"`) is left open since it would be
+chosen from the test result.
 
 ## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
 

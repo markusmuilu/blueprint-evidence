@@ -38,7 +38,8 @@ drawing  --> router: cheapest route that can prove the answer
                    pdf-generic  where pdf-vector does not recognise the convention: door swings and printed
                                 room labels; always tier "estimate"
                4. raster        scans: panel segmentation, room labels read by local OCR (Finnish, Swedish,
-                                English, German), a trained detector for fixtures, doors and windows;
+                                English, German), a room-type detector checked against those labels
+                                (raster-rooms), a trained detector for fixtures, doors and windows;
                                 every count in a tier: "proven" or "estimate" (with the reason)
                5. nemotron      last resort only: a vision-language model reads the image and must return the
                                 value plus boxes of what it relied on; validated, drawn, tier "estimate";
@@ -91,6 +92,7 @@ Raster (CubiCasa scans):
 | bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE), a few Swedish ones, and English and German room words (BEDROOM, KITCHEN, BATHROOM, TOILET, BALCONY, SCHLAFZIMMER, KUCHE, BADEZIMMER, BALKON ...; "Bed room" is joined to one word); apartment summaries like "3H+K+S" are skipped |
 | OCR errors | an English or German word of 6+ letters also matches with one letter wrong, missing or extra ("bedrocm3", "bathroon"); such a read is marked fuzzy. The short Finnish abbreviations never match fuzzily |
 | proven or estimate | proven: kitchen, bathroom, sauna when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels. A count that needs a fuzzy read, and a zero on a plan where any label was read only fuzzily, are estimates (the OCR misreads this plan, so a missing label may be misread beyond recognition). Every other count is an estimate |
+| bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies: two readings | `raster-rooms` route: a YOLO room-type detector finds the rooms by what is drawn in them (counters and stove, a toilet room without a shower, sauna benches, beds, the balcony outline), independent of the labels, and its count is set against the OCR label count above. Agreement is proven when the type's tuned rule holds; disagreement is an estimate with both readings, from the reading the type's tuned policy prefers (see "Room-type detector") |
 | rooms labelled 'X' | the readings of that label on the scan (spaces and punctuation ignored, a room number allowed); always an estimate, since no Stoa scan question asks it and there is nothing to tune it on |
 | toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold, over the eight rotations and mirrors of the image; an estimate when boxes score close to the threshold, the views disagree, or the object is one the detector is wrong on more often than right (see "Detector") |
 
@@ -389,6 +391,62 @@ native resolution from the public `F1_original.png`, resized 2x (long side cappe
 into 1,024 px tiles with 192 px overlap (17,596 training tiles), and a `yolo26s` started from
 Ultralytics' pretrained weights. At inference the image gets the same resize and tiling; boxes found
 twice where tiles overlap are merged (same class, IoU >= 0.5 or the smaller box 60% inside the larger).
+
+### Room-type detector (`raster-rooms`)
+
+Kitchens, bathrooms, WC rooms, saunas, bedrooms and balconies on the scans used to rest on the OCR of the
+room labels alone, which fails where a label is missing, mirrored or unreadable (an open kitchen inside
+"OH", an unlabelled sauna). `bpqa/routes/raster_rooms.py` adds a second, label-independent reading.
+
+- **Training data** (`tools/cubicasa_rooms.py`, `tools/build_rooms_dataset.py`): the room polygons in the
+  public CubiCasa5K `model.svg` (`<g class="Space ...">`, with the room's NameLabel and the fixtures inside
+  it), boxed per room type. Mapping, checked against Stoa's train-split answers (agreement on train-split
+  images: bedroom 2019/2020, kitchen 2232/2234, bathroom 1659/1659, WC 1622/1623, sauna 2234/2254,
+  balcony 989/990): `Space Bath*` named "WC" is a WC room, every other `Space Bath*` (KH, KPH, PH,
+  PESUH ...) a bathroom; `Space Bedroom*`; `Space Kitchen*` (kitchenette, open, scullery); `Space Outdoor
+  Balcony*` (incl. glazed); `Space Sauna` or any other space holding a sauna stove (most saunas are
+  `Space Undefined` with a stove). Same plan rules and the same held-out plans as the fixture detector
+  (only `train_clean.txt` plans, test-split matches refused, the 624 tune images never trained on):
+  2,678 training and 161 validation images.
+- **Model**: `yolo26s` from Ultralytics' pretrained weights, 896 px, trained on the PC GPU
+  (`tools/train_detector.py --data .../ds_rooms/data_abs.yaml --weights yolo26s.pt --imgsz 896 --batch 4
+  --time 1.0 --copy-as rooms_s896.pt`, then copied to `models/rooms.pt`). `tools/train_rooms_modal.py` is
+  the same training for a Modal CPU container (Modal GPUs need a payment method on the account); it was
+  used for an earlier `yolo26n` at 640 px. Inference runs on the CPU in the route.
+- **Combination** (tuned per type on the tune images only, `tools/tune_rooms.py` ->
+  `models/rooms_thresholds.json`): rooms counted at or above a score threshold; when the detector count
+  equals the OCR label count the answer is that count, proven when the type's proof rule holds ("agree",
+  "agree_ocr" = the OCR reading is one its own rules prove, "agree_clean" = no room scored near the
+  threshold; the rule with the most proven answers at >= 95% precision on the tune images, else none);
+  when they differ it is an estimate with both readings, valued by the type's preferred reading
+  ("det", "ocr", or "ocr_proven" = OCR when its own rules prove it, else the detector; "off" keeps the
+  OCR route for the type). Policies are scored after the checking layer, which then runs as before.
+- **Evidence**: each counted room boxed and numbered (blue proven, amber estimate), rooms scored near the
+  threshold in grey, the labels read boxed thin and numbered L1, L2 ...
+
+Results, exact count, abstentions counted wrong (accuracy; proven answers and their precision in
+brackets). Before = main (OCR labels + checking layer), after = raster-rooms + the same checking layer.
+Full set test split: 10,032 questions on 1,510 images. Preview dev: 1,048 questions; its images are among
+the tune images, so dev is not held out from the tuning.
+
+| room type | full test before | full test after | preview dev before | preview dev after |
+|---|---|---|---|---|
+| kitchen | 64.0% (1170, 98.8%) | 90.8% (1008, 98.8%) | 61.4% | 85.1% |
+| bathroom | 87.9% (816, 96.8%) | 85.3% (806, 94.3%) | 89.2% | 93.2% |
+| WC room | 81.2% (1278, 82.0%) | 89.4% (1160, 96.4%) | 89.3% | 93.3% |
+| sauna | 63.6% (518, 81.9%) | 93.4% (1218, 96.2%) | 69.4% | 89.2% |
+| bedroom | 75.1% (1276, 86.4%) | 80.0% (1290, 95.2%) | 76.7% | 80.6% |
+| balcony | 85.8% (772, 87.6%) | 85.8% (660, 93.6%) | 87.2% | 87.2% |
+| all six | 74.1% | 87.8% | 76.3% | 87.6% |
+
+Bathrooms got worse on test (87.9% -> 85.3%) although the tune images showed a small gain (90.9% -> 91.3%
+after checks): the OCR route plus the "a detected shower means a bathroom" check was already strong there.
+Setting `prefer: "off"` for bathroom in `models/rooms_thresholds.json` returns that type to the OCR route;
+that choice would be made from the test result, so it is left open. The test split was run twice: first
+with policies tuned without the checking layer (bedroom 81.5% then, bathroom the same 85.3%, every other
+type identical), then once more after the tuner was changed to score policies after the checks, which is
+what is committed. The detector adds about 0.1 s per image on the CPU (plus about 4 s to load the model
+once).
 
 ### Nemotron
 
