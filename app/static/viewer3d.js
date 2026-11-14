@@ -51,7 +51,7 @@ function colors() {
     sel: cssColor(tok("--accent-hi")),
     deducted: cssColor(tok("--warn")),
     room: cssColor(tok("--accent")),
-    dim: cssColor("oklch(0.42 0.012 245)"),
+    dim: cssColor("oklch(0.66 0.012 245)"),
     tones: {},
   };
   return V.colors;
@@ -177,7 +177,7 @@ function paintBase(f) {
   }
   col.needsUpdate = true;
   const m = f.solid.mesh.material;
-  m.opacity = hiOn ? 0.22 : 1;
+  m.opacity = hiOn ? 0.16 : 1;
   m.depthWrite = !hiOn;
   m.needsUpdate = true;
 }
@@ -204,10 +204,11 @@ async function open(path, host) {
   if (!meta || gen !== V.gen) return null;
   V.meta = meta;
   V.timings.geom_bytes = 0;
-  const box = new THREE.Box3();
   const jobs = [];
   for (const entry of meta.storeys) {
-    const f = { i: entry.i, name: entry.name, entry, group: new THREE.Group(), visible: true, z: entry.z };
+    // the site and unassigned group (terrain, site objects) stays at its own height and starts hidden
+    const site = entry.elevation == null;
+    const f = { i: entry.i, name: entry.name, entry, group: new THREE.Group(), visible: !site, site, z: entry.z };
     V.floors.push(f);
     V.scene.add(f.group);
     for (const kind of ["solid", "space"]) {
@@ -237,8 +238,7 @@ async function open(path, host) {
       if (j.kind === "solid") {
         paintBase(j.f);
         mesh.geometry.computeBoundingBox();
-        box.union(mesh.geometry.boundingBox);
-        if (!V.framed) frame(box);
+        if (!V.framed && j.f.visible) frame(worldBox());
       }
       done++;
       busy(`Loading storeys ${done} / ${meta.storeys.length}`, true);
@@ -249,8 +249,7 @@ async function open(path, host) {
   await Promise.all([worker(), worker(), worker(), worker()]);
   if (gen !== V.gen) return null;
   V.timings.geometry_ms = Math.round(performance.now() - V.timings.t0);
-  V.box = box;
-  frame(box, true);
+  frame(worldBox(), true);
   applyHighlight();
   busy(null);
   status();
@@ -265,19 +264,32 @@ function layout() {
   let k = 0;
   for (const f of V.floors) {
     f.group.visible = f.visible;
-    f.group.position.y = f.visible ? k * V.explode * h * 1.6 : 0;
-    if (f.visible) k++;
+    f.group.position.y = f.visible && !f.site ? k * V.explode * h * 1.6 : 0;
+    if (f.visible && !f.site) k++;
   }
   V.needs = true;
+}
+
+// the box of what is on screen, storey offsets included
+function worldBox() {
+  const b = new THREE.Box3();
+  for (const f of V.floors) {
+    if (!f.visible || !f.solid?.mesh) continue;
+    const g = f.solid.mesh.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    const bb = g.boundingBox.clone();
+    bb.min.y += f.group.position.y; bb.max.y += f.group.position.y;
+    b.union(bb);
+  }
+  return b;
 }
 
 function frame(box, final = false) {
   if (box.isEmpty()) return;
   const c = box.getCenter(new THREE.Vector3());
   const s = box.getSize(new THREE.Vector3());
-  const r = Math.max(s.x, s.z, s.y * 1.4 + V.explode * s.y) * 0.5 + 1;
-  const d = r / Math.tan((V.camera.fov * Math.PI) / 360) * 1.05;
-  c.y += V.explode * s.y * 0.4;
+  const r = Math.max(s.x, s.z, s.y) * 0.5 + 1;
+  const d = r / Math.tan((V.camera.fov * Math.PI) / 360) * 1.25;
   V.controls.target.copy(c);
   V.camera.position.set(c.x + d * 0.62, c.y + d * 0.55, c.z + d * 0.62);
   V.camera.near = Math.max(0.05, d / 500);
@@ -486,7 +498,7 @@ function renderPanel() {
     for (const x of V.floors) x.visible = solo ? true : x.i === only;
     layout(); renderPanel();
   }));
-  $("#v3dHome").addEventListener("click", () => { if (V.box) frame(V.box, true); });
+  $("#v3dHome").addEventListener("click", () => frame(worldBox(), true));
 }
 
 function busy(msg, soft = false) {

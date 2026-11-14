@@ -625,6 +625,7 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
 }
 
 /* ------------------------------------------------------------ responsive */
+@media (max-width: 1520px) { .strip-head { flex-wrap: wrap; } }
 @media (max-width: 1280px) {
   .strip-head { flex-wrap: wrap; }
   :root { --picker-w: 260px; --detail-w: 340px; }

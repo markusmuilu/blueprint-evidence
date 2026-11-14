@@ -52,6 +52,8 @@ const OrderSheet = (() => {
 
   function compute(m) {
     let floor = 0, walls = 0, ded = 0, approx = false;
+    // with the answer's own height inputs, show the route's per-room figures as returned
+    const asAnswered = m.ceiling === m.defaults.ceiling && m.tile === m.defaults.tile;
     const rows = m.rows.map((r) => {
       const out = { ...r };
       floor += r.floor || 0;
@@ -69,12 +71,25 @@ const OrderSheet = (() => {
         return { ...o, d };
       });
       out.netC = Math.max(0, out.grossC - out.dedC);
+      if (asAnswered && r.net != null && r.gross != null) {
+        out.band = r.tiled ?? band;
+        out.grossC = r.gross; out.netC = r.net;
+        out.ops = out.ops.map((o) => ({ ...o, d: o.deducted ?? o.d }));
+        out.dedC = out.ops.reduce((acc, o) => acc + (o.d || 0), 0);
+      }
       walls += out.netC; ded += out.dedC;
       return out;
     });
     const useFloor = m.surfaces !== "walls", useWalls = m.surfaces !== "floor" && m.hasWalls;
     const net = (useFloor ? floor : 0) + (useWalls ? walls : 0);
     const waste = net * (m.waste || 0) / 100;
+    const t = m.totals;
+    const defaultSurf = m.hasWalls ? (t && t.floor_m2 > 0 ? "floor+walls" : "walls") : "floor";
+    if (t && asAnswered && m.waste === m.defaults.waste && m.surfaces === defaultSurf && t.order_m2 != null) {
+      // exactly the answer: its totals were summed before rounding, so take them as given
+      return { rows, floor: t.floor_m2 ?? floor, walls: t.walls_m2 ?? walls, ded, net: t.net_m2 ?? net, waste: t.waste_m2 ?? waste,
+               order: t.order_m2, useFloor, useWalls, approx, asAnswer: true };
+    }
     return { rows, floor, walls, ded, net, waste, order: net + waste, useFloor, useWalls, approx };
   }
 
