@@ -336,12 +336,12 @@ async function selectDrawing(path, keepAnswer = false) {
     setup3d(d);
     renderDrawingQuestions(d);
     renderExamples();
-    setHash();
     if (!keepAnswer) {
       state.answer = null;
       renderAnswer(null);
       showDrawing();
     }
+    setHash();          // after the answer reset, so the previous drawing's question is not written into this entry
   } catch (e) {
     toast("Could not open the drawing: " + e.message, true);
   }
