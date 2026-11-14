@@ -206,6 +206,12 @@ Full set, test split, detector questions, final route, same flags as the baselin
 The tune images predicted 88.3%, 79.3%, 77.6%, 59.1% and 50.0%; doors and windows came out 3-4 points
 lower on test. The epoch-22 check had given 69.1% overall on the same questions.
 
+Full set, test split, all CubiCasa questions with the checking layer, final route (27,160 questions):
+73.5% (before this branch 49.0%, cubi2 + tiers + TTA 68.0%); proven 19,884 answers at 84.1%, estimates
+7,276 at 44.6%. Changes against the cubi2 + TTA column above: toilets 88.3%, sinks 78.7%, showers/baths
+76.0%, doors 55.4%, windows 46.4%, and bathrooms 87.9% (the shower check sees more showers). With the
+unchanged other sources: **all 39,807 full-set test questions 80.4% (before 63.7%)**.
+
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
 Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the

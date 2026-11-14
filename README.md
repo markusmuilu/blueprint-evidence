@@ -251,6 +251,10 @@ off), exact count:
 | window | 3020 | 25.0% (63.9%, 39.1%) | 46.4% | 44.8% / 69.0% | 28.0% |
 | **all detector questions** | 14108 | 38.6% (76.8%, 50.2%) | 69.5% | 81.9% / 78.4% | 28.7% |
 
+All 27,160 CubiCasa questions of the full test split with the checking layer: 49.0% before, 73.5% final
+(proven 84.1% precise, estimates 44.6%). With the other sources, unchanged: all 39,807 full-set test
+questions 63.7% before, 80.4% final.
+
 CHANGELOG.md has the per-step numbers (tiers, check values, TTA, tiled model), the tune-image
 comparison per object and the full-test-split numbers for every CubiCasa question type.
 
