@@ -1457,7 +1457,7 @@ function correctedValue(a) {
   if (a.value == null || typeof a.value !== "number") return a.value;
   if (isCount(a)) return a.value - c.removed.size + c.added.length;
   // a removed room takes out its own floor and wall area plus the waste on them (QA 14 Nov: a tiling total did
-  // not change after "Wrong item" (was "Not this one") because the value includes walls and waste, not just the floor area)
+  // not change after "Remove item" (was "Not this one") because the value includes walls and waste, not just the floor area)
   const tot = (a.items || []).find((it) => it && it.totals)?.totals || null;
   const w = tot && tot.waste_pct && tot.waste_in_value !== false ? tot.waste_pct / 100 : 0;
   const floorCounts = !tot || tot.floor_m2 == null || tot.floor_m2 > 0;
@@ -1517,7 +1517,7 @@ function renderStrip() {
       <span class="tl">${measure && r.area != null ? `<span class="mono">${Number(r.area).toFixed(approxDp(a))} m²</span> ` : ""}<span class="tname">${esc(name)}</span></span>
       ${own ? (r.add != null
         ? `<button type="button" class="tx" data-add="${r.add}" aria-label="Remove added item ${esc(r.n)}">Undo</button>`
-        : `<button type="button" class="tx" data-n="${esc(r.n)}" aria-pressed="${removed}" title="${removed ? `Put it back in the ${measure ? "total" : "count"}` : `Remove it from the ${measure ? "total" : "count"}`}" aria-label="${removed ? "Keep" : "Wrong item:"} item ${esc(r.n)}">${removed ? "Keep" : "Wrong item"}</button>`) : ""}`;
+        : `<button type="button" class="tx" data-n="${esc(r.n)}" aria-pressed="${removed}" title="${removed ? `Put it back in the ${measure ? "total" : "count"}` : `Remove it from the ${measure ? "total" : "count"}`}" aria-label="${removed ? "Keep" : "Remove item:"} item ${esc(r.n)}">${removed ? "Keep" : "Remove item"}</button>`) : ""}`;
     list.appendChild(li);
     drawThumb(li.querySelector("canvas"), img, r.rect, removed, r.mark && r.mark.kind === "poly" ? { pts: r.mark.pts, off, tone: r.tone } : null);
     const t = li.querySelector(".thumb");
@@ -2072,7 +2072,7 @@ function renderWitnesses(a, w) {
       <span class="wf">${esc(r.format)}</span>
       <span class="wr"><span>${esc(FMT_NAME[r.format] || r.format)}</span><span class="meta">${esc(r.route_name || r.route || "")}</span></span>
       <span class="wv mono${ring}${r.value == null ? " na" : ""}">${esc(vtxt)}</span>
-      <span class="wt ${st}" aria-label="${st === "none" ? "abstained" : st}">${st === "none" ? "" : icon(st === "proven" ? "proven" : "estimate")}</span>
+      <span class="wt ${st}" aria-label="${st === "none" ? "cannot answer" : st}">${st === "none" ? "" : icon(st === "proven" ? "proven" : "estimate")}</span>
     </button></li>`;
   }).join("");
   const paged = w.witnesses.filter((r) => (r.disputed || []).length).map((r) => r.format);
@@ -2112,7 +2112,7 @@ async function loadCosts() {
   if (b) body += `<tr class="base"><td>Nemotron, plain prompt <span class="dim">baseline</span></td><td class="num">${num(b.n)}</td><td class="num">-</td><td class="num">${fmtSec(b.latency_median_s)}</td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num" colspan="2">${fmtUsd(b.usd_per_1000)} at measured tokens</td></tr>`;
   el.innerHTML = head + "<tbody>" + (body || `<tr><td colspan="9" class="dim">${esc(c.missing || "No measurements yet.")}</td></tr>`) + "</tbody>";
   $("#costNote").textContent = `Assumed prices, not quotes: $${as.cpu_vcpu_hour_usd} per vCPU-hour, $${as.gpu_hour_usd} per GPU-hour (L4 or A10G class)${b ? `, and $${b.price_in_per_mtok} / $${b.price_out_per_mtok} per million input / output tokens for Nemotron, applied to its measured ${num(Math.round(b.prompt_tokens_mean))} input and ${num(Math.round(b.completion_tokens_mean))} output tokens per question (${b.source})` : ""}. `
-    + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off . CPU seconds count every thread; a cold question is the first one on its drawing; a question every route abstained on is booked under the first route tried.` : "") + " " + FX_NOTE;
+    + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off . CPU seconds count every thread; a cold question is the first one on its drawing; a question no route could answer is booked under the first route tried.` : "") + " " + FX_NOTE;
 }
 const ROUTE_LABEL = { "dxf-geometry": "DXF geometry", "dxf-generic": "DXF layers, generic", ifc: "IFC model", "ifc-props": "IFC properties", "pdf-text": "PDF text layer", "pdf-vector": "PDF linework", "pdf-generic": "PDF, convention-free", "raster-detector": "Scan, symbol detector", "raster-ocr-labels": "Scan, room labels", "raster-cv": "Scan, panel analysis", "raster-cv-fixtures": "Scan, outlines", "raster-area": "Scan, printed areas" };
 function datasetName(p) { return /preview/.test(p || "") ? "Stoa preview set" : /junction-dataset/.test(p || "") ? "Stoa full set" : (p || "dataset"); }
@@ -2870,7 +2870,7 @@ function renderTiles() {
   const tiles = [];
   if (run) {
     tiles.push(`<div class="tile" title="${esc(run.source || "")}"><p class="tile-k">Correct, ${esc(run.set.replace(/^Stoa /, ""))}</p>
-      <p class="tile-v">${pct(run.accuracy)}</p>${tileBar(run.accuracy)}<p class="tile-s">${num(run.n)} questions, abstentions counted as wrong</p></div>`);
+      <p class="tile-v">${pct(run.accuracy)}</p>${tileBar(run.accuracy)}<p class="tile-s">${num(run.n)} questions; a question it cannot answer (no number given) counts as wrong</p></div>`);
     if (run.proven_precision != null) tiles.push(`<div class="tile" title="${esc(run.source || "")}"><p class="tile-k">Proven answers right</p>
       <p class="tile-v">${pct(run.proven_precision)}</p>${tileBar(run.proven_precision)}<p class="tile-s">${num(run.proven)} answers marked Proven on the same split</p></div>`);
   }
