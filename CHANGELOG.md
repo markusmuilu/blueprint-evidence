@@ -3,6 +3,27 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: question types for the final evaluation, branch `new-qtypes` (not merged)
+
+Stoa's list of tricky types on unreleased drawings: baseboard linear metres, slab area by type with thickness and bars, piping.
+
+- Baseboards (`bpqa/baseboard.py`): perimeter minus door openings, per room, on IFC, Swiss DXF and scans.
+- Slabs (`bpqa/slabs.py`): area by type and thickness from IfcSlab quantities; computed footprint is an estimate; rebar questions are
+  "cannot prove" because no dataset model has reinforcement objects.
+- Piping (`bpqa/piping.py`, text route): total pipe length, by system or diameter, pipe segment count, fittings. Read from quantities it is
+  proven; a segment without a length is computed from its geometry and the answer becomes an estimate that says so. Read lengths are
+  compared with the geometry of up to 200 segments. IFC2x3 plumbing models export pipes as IfcFlowSegment: `ifc_props.ents` now maps
+  IfcPipeSegment / IfcPipeFitting to them too. Piping without an IFC model is "cannot prove" with the reason.
+- Hand checks: duplex plumbing 151.44 m (231 segments), 227 fittings; clinic plumbing 3246.91 m (2893 segments), 3282 fittings (about 5 min);
+  fzk-haus slabs 384.96 m2, baseboard 136.19 m.
+- Regression: question parses over all 6789 distinct dataset questions differ in one (the skirting question, which the rules did not read
+  before).
+- `eval.py --split dev` on Swiss, ifc_models and ifc_bench (28839 questions) against main: answers and correctness identical on every
+  question except 7, all in ifc_bench: the duplex skirting question (abstained, now answered 317.13 m, gold is another quantity so it
+  stays wrong) and 6 sixty5_plumbing property questions, which now see the model's IFC2x3 pipes and fittings (before: "No pipe
+  elements in this model"; one more correct, none lost). Overall 27819 correct against 27818. Swiss and ifc_models unchanged.
+  Type and breakdown questions ("pipe fitting types and quantities") are kept off the piping route and stay with ifc-props.
+
 ## 2026-11-14: area approximation on scans that print no areas, branch `scale-approximation` (ON)
 
 His decision: ship the area approximation switched on, as long as the answer shows clearly where the number comes
