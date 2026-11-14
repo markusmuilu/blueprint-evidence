@@ -133,7 +133,8 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
                        "height_m": round(w["height"], 2), "height_source": w["height_src"],
                        "tiled_height_m": round(w["band"], 2), "gross_wall_m2": round(w["gross"], 2),
                        "openings": [{"kind": d["kind"], "id": d.get("id"), "width_m": round(d["width"], 2),
-                                     "deducted_m2": round(d["area"], 2), "source": d.get("src", "")} for d in w["deductions"]],
+                                     "deducted_m2": round(d["area"], 2), "source": d.get("src", ""),
+                                     "z0_m": round(d["z0"], 3), "z1_m": round(d["z1"], 3)} for d in w["deductions"]],
                        "openings_m2": round(w["openings_area"], 2), "net_wall_m2": round(w["net"], 2)})
             if r.get("model_net_wall") is not None:
                 it["model_net_wall_m2"] = round(r["model_net_wall"], 2)

@@ -30,6 +30,7 @@
     <symbol id="i-proven" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M5.5 8.25l1.75 1.75 3.25-3.5"/></symbol>
     <symbol id="i-estimate" viewBox="0 0 16 16"><path d="M8 2.5l5.75 10.25H2.25z"/><path d="M8 6.75v2.5M8 11.1v.15"/></symbol>
     <symbol id="i-cannot" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5"/></symbol>
+    <symbol id="i-sheet" viewBox="0 0 16 16"><path d="M3 2.75h10v10.5H3z"/><path d="M3 6h10M3 9.25h10M7 6v7.25"/></symbol>
     <symbol id="i-status" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M8 7.25v4M8 4.9v.15"/></symbol>
   </defs>
 </svg>
@@ -116,7 +117,23 @@
           <p class="mono meta" id="busyText">Reading the drawing</p>
         </div>
 
+        <div class="v3d" id="view3d" hidden>
+          <canvas id="v3dCanvas" aria-label="3D model. Drag to orbit, right-drag to pan, scroll to zoom, click an element for its details."></canvas>
+          <aside class="v3d-panel" id="v3dPanel" aria-label="Storeys and highlights"></aside>
+          <div class="v3d-card" id="v3dCard" hidden aria-live="polite"></div>
+          <p class="v3d-status mono" id="v3dStatus"></p>
+          <div class="viewer-busy v3d-busy" id="v3dBusy" hidden role="status" aria-live="polite">
+            <div class="busy-bar"><span></span></div>
+            <p class="mono meta" id="v3dBusyText">Loading the model geometry</p>
+          </div>
+          <div class="viewer-empty" id="v3dFail" hidden></div>
+        </div>
+
         <div class="viewer-tools" role="toolbar" aria-label="Viewer">
+          <div class="seg mode-seg" id="modeSeg" role="radiogroup" aria-label="View" hidden>
+            <button type="button" role="radio" aria-checked="true" data-mode="plan">Plan</button>
+            <button type="button" role="radio" aria-checked="false" data-mode="3d">3D</button>
+          </div>
           <span class="layer-tag mono" id="layerTag">Drawing</span>
           <button class="tool" id="zoomOut" aria-label="Zoom out"><svg class="ico"><use href="#i-minus"/></svg></button>
           <output class="zoom mono" id="zoomLvl" aria-live="off">100%</output>
@@ -226,6 +243,16 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <div class="popover" id="statusPop" hidden></div>
 
+<dialog class="sheet-dlg" id="orderDlg" aria-labelledby="osTitle"></dialog>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script src="ordersheet.js"></script>
 <script src="app.js"></script>
+<script type="module" src="viewer3d.js"></script>
 </body>
 </html>
