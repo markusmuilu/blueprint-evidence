@@ -86,10 +86,10 @@
       </div>
       <!-- END ask-several -->
 
-      <label class="drop" id="drop">
+      <label class="drop" id="drop" title="Drop several at once: each becomes its own drawing, except a PDF and DXF with the same name, which are used together.">
         <input type="file" id="fileInput" multiple accept=".pdf,.dxf,.ifc,.png,.jpg,.jpeg,.tif,.tiff,.svg,.dwg">
         <svg class="ico"><use href="#i-upload"/></svg>
-        <span><strong>Upload a drawing</strong><br><span class="meta">PDF, DXF, IFC, PNG, JPEG, TIFF or SVG, up to 200 MB each. Drop several at once: each becomes its own drawing, except a PDF and DXF with the same name, which are used together.</span></span>
+        <span><strong>Upload a drawing</strong><br><span class="meta">PDF, DXF, IFC, PNG, JPEG, TIFF or SVG, up to 200 MB each; several at once is fine.</span></span>
       </label>
       <div class="uploads" id="uploadList" hidden></div>
 
@@ -228,8 +228,11 @@
   <section class="view view-compare" id="view-compare" hidden>
     <div class="compare">
       <header class="compare-head">
-        <h1 class="h-page">Compare</h1>
-        <p class="meta">The same question about the same drawing, answered two ways: the drawing sent as an image to a large vision model, and read by Blueprint Evidence. Prepared examples; nothing here calls a model live.</p>
+        <div>
+          <h1 class="h-page">Compare</h1>
+          <p class="meta">Same drawing, same question: a large vision model alone, and Blueprint Evidence. Prepared examples, no live model calls.</p>
+        </div>
+        <button class="btn back-draw" type="button" data-back-draw>Back to drawing</button>
       </header>
       <div id="compareBody"><p class="meta">Loading</p></div>
     </div>
@@ -237,6 +240,7 @@
   <!-- END compare-tab -->
 
   <!-- ============================================================ RESULTS -->
+  <!-- results-totals (BM, 14 Nov): headline tiles first, then the chart and the per-source table, the fine print folded -->
   <section class="view view-results" id="view-results" hidden>
     <div class="results">
       <header class="results-head">
@@ -244,75 +248,84 @@
           <h1 class="h-page">Results</h1>
           <p class="meta" id="runHeader"></p>
         </div>
-        <div class="field field-inline">
-          <label for="runSel" class="label">Eval run</label>
-          <select id="runSel"></select>
+        <div class="results-acts">
+          <button class="btn back-draw" type="button" data-back-draw>Back to drawing</button>
         </div>
       </header>
 
-      <section class="panel" aria-labelledby="hOverview">
-        <h2 class="h-panel" id="hOverview">Results by test set</h2>
-        <div class="table-wrap"><table class="tbl" id="overviewTable"></table></div>
-        <p class="meta">Each number names the questions it was measured on and the file it was read from. The tables below show one eval run at a time.</p>
-      </section>
-
-      <section class="panel" aria-labelledby="hCost">
-        <h2 class="h-panel" id="hCost">Cost and latency per route</h2>
-        <div class="table-wrap"><table class="tbl" id="costTable"><tbody><tr><td class="dim">Loading</td></tr></tbody></table></div>
-        <p class="meta" id="costNote"></p>
-      </section>
-
-      <section class="panel" aria-labelledby="hWitSum">
-        <h2 class="h-panel" id="hWitSum">Witness agreement and correctness</h2>
-        <div class="table-wrap"><table class="tbl" id="witTable"><tbody><tr><td class="dim">Loading</td></tr></tbody></table></div>
-        <div class="table-wrap"><table class="tbl" id="witTable2"></table></div>
-        <p class="meta" id="witNote"></p>
-      </section>
-
-      <p class="headline" id="runHeadline"></p>
+      <section class="tiles" id="resTiles" aria-label="Headline results"><p class="meta">Loading</p></section>
 
       <div class="results-grid">
-        <section class="panel" aria-labelledby="hSrc">
-          <h2 class="h-panel" id="hSrc">By source and question type</h2>
-          <div class="table-wrap"><table class="tbl" id="srcTable"></table></div>
+        <section class="panel" aria-labelledby="hChart">
+          <div class="panel-head">
+            <h2 class="h-panel" id="hChart">Accuracy by source</h2>
+            <div class="seg" role="radiogroup" aria-label="Measure" id="measureSeg">
+              <button role="radio" aria-checked="true" data-m="accuracy">Accuracy</button>
+              <button role="radio" aria-checked="false" data-m="coverage">Coverage</button>
+              <button role="radio" aria-checked="false" data-m="precision">Precision</button>
+            </div>
+          </div>
+          <div class="chart" id="chart"></div>
+          <div class="tip mono" id="chartTip" hidden></div>
         </section>
 
-        <div class="results-side">
-          <section class="panel" aria-labelledby="hChart">
-            <div class="panel-head">
-              <h2 class="h-panel" id="hChart">Accuracy by source</h2>
-              <div class="seg" role="radiogroup" aria-label="Measure" id="measureSeg">
-                <button role="radio" aria-checked="true" data-m="accuracy">Accuracy</button>
-                <button role="radio" aria-checked="false" data-m="coverage">Coverage</button>
-                <button role="radio" aria-checked="false" data-m="precision">Precision</button>
-              </div>
-            </div>
-            <div class="chart" id="chart"></div>
-            <div class="tip mono" id="chartTip" hidden></div>
-          </section>
-
-          <section class="panel panel-baseline" aria-labelledby="hBase">
-            <h2 class="h-panel" id="hBase">Naive AI baseline</h2>
-            <div id="baselineBody">
-              <p class="value-na">Not measured yet</p>
-              <p class="meta">The same test questions sent straight to a general vision model with the drawing attached, scored the same way, with cost per question. It appears here when out/baseline_nemotron.json exists.</p>
-            </div>
-          </section>
-        </div>
+        <section class="panel panel-baseline" aria-labelledby="hBase">
+          <h2 class="h-panel" id="hBase">Naive AI baseline</h2>
+          <div id="baselineBody">
+            <p class="value-na">Not measured yet</p>
+            <p class="meta">The same test questions sent straight to a general vision model with the drawing attached, scored the same way, with cost per question. It appears here when out/baseline_nemotron.json exists.</p>
+          </div>
+        </section>
       </div>
 
-      <section class="panel" aria-labelledby="hObj">
+      <section class="panel" aria-labelledby="hSrc">
         <div class="panel-head">
-          <h2 class="h-panel" id="hObj">By object</h2>
+          <h2 class="h-panel" id="hSrc">By source and question type</h2>
           <div class="field field-inline">
-            <label for="objSource" class="label">Source</label>
-            <select id="objSource"></select>
+            <label for="runSel" class="label">Eval run</label>
+            <select id="runSel"></select>
           </div>
         </div>
-        <div class="table-wrap"><table class="tbl" id="objTable"></table></div>
+        <p class="headline" id="runHeadline"></p>
+        <div class="table-wrap"><table class="tbl src-tbl" id="srcTable"></table></div>
       </section>
 
-      <p class="foot meta">Accuracy counts an abstention as wrong. Coverage is the share of questions answered. Precision is correct answers divided by answered ones. Counts must be exact; areas, lengths and volumes within 2%.</p>
+      <details class="fine" id="resFine">
+        <summary>Fine print: every test set, cost per route, witnesses, by object</summary>
+        <div class="fine-body">
+          <section class="panel" aria-labelledby="hOverview">
+            <h2 class="h-panel" id="hOverview">Results by test set</h2>
+            <div class="table-wrap"><table class="tbl" id="overviewTable"></table></div>
+            <p class="meta">Each number names the questions it was measured on and the file it was read from. The other tables show one eval run at a time.</p>
+          </section>
+
+          <section class="panel" aria-labelledby="hCost">
+            <h2 class="h-panel" id="hCost">Cost and latency per route</h2>
+            <div class="table-wrap"><table class="tbl" id="costTable"><tbody><tr><td class="dim">Loading</td></tr></tbody></table></div>
+            <p class="meta" id="costNote"></p>
+          </section>
+
+          <section class="panel" aria-labelledby="hWitSum">
+            <h2 class="h-panel" id="hWitSum">Witness agreement and correctness</h2>
+            <div class="table-wrap"><table class="tbl" id="witTable"><tbody><tr><td class="dim">Loading</td></tr></tbody></table></div>
+            <div class="table-wrap"><table class="tbl" id="witTable2"></table></div>
+            <p class="meta" id="witNote"></p>
+          </section>
+
+          <section class="panel" aria-labelledby="hObj">
+            <div class="panel-head">
+              <h2 class="h-panel" id="hObj">By object</h2>
+              <div class="field field-inline">
+                <label for="objSource" class="label">Source</label>
+                <select id="objSource"></select>
+              </div>
+            </div>
+            <div class="table-wrap"><table class="tbl" id="objTable"></table></div>
+          </section>
+
+          <p class="foot meta">Accuracy counts an abstention as wrong. Coverage is the share of questions answered. Precision is correct answers divided by answered ones. Counts must be exact; areas, lengths and volumes within 2%.</p>
+        </div>
+      </details>
     </div>
   </section>
 </div>

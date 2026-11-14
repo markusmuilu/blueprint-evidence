@@ -69,7 +69,7 @@ function showView(name) {
     if (b.dataset.view === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   }
   $("#view-ask").hidden = name !== "ask";
-  $("#pickerToggle").hidden = name !== "ask";
+  backDrawLabel();                                      // results-compare: the library stays one press away
   $("#view-results").hidden = name !== "results";
   $("#view-compare").hidden = name !== "compare";      // compare-tab
   if (name === "compare") loadCompare();
@@ -78,8 +78,26 @@ function showView(name) {
 }
 document.querySelectorAll(".rail-btn[data-view]").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 
+/* results-compare (BM, 14 Nov): Results and Compare keep a way back to the library and the open drawing, with its
+   answer: the Ask view is only hidden there, so showing it again restores both. */
+function backDrawLabel() {
+  const d = state.drawing;
+  const t = d ? (d.title && d.title !== d.name ? d.title : d.name) : "";
+  document.querySelectorAll("[data-back-draw]").forEach((b) => {
+    b.textContent = d ? "Back to drawing" : "Back to the library";
+    b.title = d ? `Back to ${t}${state.answer ? " and its answer" : ""}` : "Back to the drawing library";
+  });
+}
+document.querySelectorAll("[data-back-draw]").forEach((b) => b.addEventListener("click", () => showView("ask")));
+
 $("#pickerToggle").addEventListener("click", (e) => {
   const v = $("#view-ask");
+  if (v.hidden) {                                       // on Results or Compare: go back with the library open
+    v.classList.remove("no-picker");
+    e.currentTarget.setAttribute("aria-expanded", "true");
+    showView("ask");
+    return;
+  }
   const open = v.classList.toggle("no-picker") === false;
   e.currentTarget.setAttribute("aria-expanded", String(open));
   requestAnimationFrame(() => viewer.fit());
@@ -350,6 +368,7 @@ function drawItem(d) {
   b.className = "draw-item";
   b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
   b.dataset.path = d.path; b.dataset.name = d.name; b.dataset.ext = d.ext;
+  if (d.title && d.title !== d.name) b.dataset.title = d.title;      // ask-several: the readable name in chips and the table
   b.innerHTML = `<span class="box" aria-hidden="true"></span>${nameHtml(d)}
     <span class="sub"><span>${esc(SOURCE_NAMES[d.source] || d.source)}</span><span>${esc(d.ext.toUpperCase())}</span><span>${d.n_questions} questions</span>${splitTag(d.split)}</span>`;
   b.addEventListener("click", (e) => pickOrOpen(b, e));       // ask-several block: select, or open
@@ -390,22 +409,26 @@ function renderUploads() {
   const items = uploadStore.read();
   box.hidden = !items.length;
   if (!items.length) { box.innerHTML = ""; return; }
-  box.innerHTML = '<h3 class="h-group">Your uploads</h3><ul></ul>';
+  /* compact (BM, 14 Nov): a fold with a capped, scrolling list, so at 1280x800 the search results below stay visible */
+  const open = box.querySelector("details")?.open ?? true;
+  box.innerHTML = `<details class="uploads-fold"${open ? " open" : ""}><summary class="h-group"><span class="up-t">Your uploads (${items.length})</span><span class="meta">kept 24 h</span></summary><ul></ul></details>`;
   const ul = box.querySelector("ul");
   for (const d of items) {
     const li = document.createElement("li");
     const b = document.createElement("button");
     b.className = "draw-item";
-    b.dataset.path = d.path;
+    b.dataset.path = d.path; b.dataset.name = d.name || d.path.split("/").pop(); b.dataset.ext = d.ext || "";
     b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
-    b.innerHTML = `<span class="nm nm-file mono" title="${esc(d.name)}">${esc(d.name)}</span>
-      <span class="sub"><span>${esc(d.ext.toUpperCase())}</span><span>Deleted 24 hours after upload</span></span>`;
-    b.addEventListener("click", () => selectDrawing(d.path));
+    b.innerHTML = `<span class="box" aria-hidden="true"></span><span class="nm nm-file mono" title="${esc(b.dataset.name)}">${esc(b.dataset.name)}</span>
+      <span class="sub"><span>${esc(b.dataset.ext.toUpperCase())}</span><span>Upload</span></span>`;
+    b.addEventListener("click", (e) => pickOrOpen(b, e));       // ask-several block: select, or open
+    b.addEventListener("dblclick", () => { if (batch.on) selectDrawing(d.path); });
+    paintPick(b);
     li.appendChild(b);
     ul.appendChild(li);
   }
 }
-renderUploads();      // after uploadStore exists (a call above it stopped the whole script, 14 Nov)
+queueMicrotask(renderUploads);      // after the whole script has run: it needs uploadStore and the ask-several state (a call above either stopped the script, 14 Nov)
 
 async function upload(fileList) {
   const files = [...fileList];
@@ -2281,6 +2304,10 @@ const batchActive = () => batch.on && batch.sel.size >= 2;
 const plural = (n, w) => !w || n === 1 ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : /(s|x|ch|sh)$/.test(w) ? w + "es" : w + "s";
 const nDrawings = (n) => `${n} drawing${n === 1 ? "" : "s"}`;
 
+/* the selection keeps the file name, its readable title if it has one, and never an empty name (upload chips were blank) */
+const baseName = (p) => String(p || "").split(/[\/]/).pop();
+function pickInfo(x) { return { name: x.dataset.name || baseName(x.dataset.path), ext: x.dataset.ext || "", title: x.dataset.title || "" }; }
+const pickLabel = (path, d) => (d && (d.title || d.name)) || baseName(path);
 function paintPick(b) {
   const on = batch.on && batch.sel.has(b.dataset.path);
   if (batch.on) { b.setAttribute("role", "checkbox"); b.setAttribute("aria-checked", String(on)); }
@@ -2295,7 +2322,7 @@ function batchChanged() {
   const n = batch.sel.size;
   $("#multiCount").textContent = n ? `${n} selected` : "None selected";
   $("#multiList").innerHTML = [...batch.sel].map(([p, d]) =>
-    `<li><span class="nm" title="${esc(p)}">${esc(d.name)}</span><button type="button" class="x" data-path="${esc(p)}" aria-label="Remove ${esc(d.name)} from the selection">×</button></li>`).join("");
+    `<li><span class="nm${d.title ? " titled" : ""}" title="${esc(d.name || baseName(p))}${d.title ? "" : "\n" + esc(p)}">${esc(pickLabel(p, d))}</span><button type="button" class="x" data-path="${esc(p)}" aria-label="Remove ${esc(pickLabel(p, d))} from the selection">×</button></li>`).join("");
   const note = $("#multiNote");
   note.hidden = !batch.on;
   note.textContent = n >= 2 ? `Asks all ${n} selected drawings, one after another.` : n === 1 ? "One drawing selected. Select another to ask across several." : "No drawings selected. Tick two or more in the library.";
@@ -2312,7 +2339,8 @@ function setMulti(on) {
   if (on === batch.on) return;
   batch.on = on;
   if (on) {
-    if (state.drawing) batchPick(state.drawing.path, { name: state.drawing.name, ext: state.drawing.ext }, true);
+    if (state.drawing) batchPick(state.drawing.path, { name: state.drawing.name || baseName(state.drawing.path), ext: state.drawing.ext,
+      title: state.drawing.title && state.drawing.title !== state.drawing.name ? state.drawing.title : "" }, true);
     batch.anchor = state.drawing ? state.drawing.path : null;
   } else {
     if (batch.results) batch.results.stop = true;
@@ -2324,14 +2352,14 @@ function setMulti(on) {
   batchChanged();
 }
 function pickOrOpen(b, e) {
-  const path = b.dataset.path, info = { name: b.dataset.name, ext: b.dataset.ext };
+  const path = b.dataset.path, info = pickInfo(b);
   const withKey = e.ctrlKey || e.metaKey || e.shiftKey;
   if (!batch.on && !withKey) { selectDrawing(path); return; }
   if (!batch.on) setMulti(true);
   const items = [...document.querySelectorAll(".draw-item")].filter((x) => x.offsetParent !== null);
   const from = items.findIndex((x) => x.dataset.path === batch.anchor), to = items.indexOf(b);
   if (e.shiftKey && from >= 0 && to >= 0) {
-    for (const x of items.slice(Math.min(from, to), Math.max(from, to) + 1)) if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
+    for (const x of items.slice(Math.min(from, to), Math.max(from, to) + 1)) if (!batchPick(x.dataset.path, pickInfo(x), true)) break;
   } else {
     batchPick(path, info, !batch.sel.has(path));
   }
@@ -2341,7 +2369,7 @@ function pickOrOpen(b, e) {
 function batchAddUploaded(res) {
   if (!batch.on) return;
   const list = Array.isArray(res.drawings) && res.drawings.length ? res.drawings : [{ path: res.path, name: res.name, ext: res.ext }];
-  for (const d of list) if (!batchPick(d.path, { name: d.name, ext: d.ext }, true)) break;
+  for (const d of list) if (!batchPick(d.path, { name: d.name || baseName(d.path), ext: d.ext, title: "" }, true)) break;
   batchChanged();
 }
 $("#multiToggle").addEventListener("click", () => setMulti(!batch.on));
@@ -2350,7 +2378,7 @@ $("#multiShown").addEventListener("click", () => {
   const shown = [...document.querySelectorAll(".draw-item")].filter((x) => x.offsetParent !== null);
   /* every group folded (the first visit starts so): say what to do instead of silently selecting nothing (QA 14 Nov) */
   if (!shown.length) { toast("No drawings are listed yet. Open a group or search, then Select shown picks the listed ones.", true); return; }
-  for (const x of shown) if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
+  for (const x of shown) if (!batchPick(x.dataset.path, pickInfo(x), true)) break;
   batchChanged();
 });
 $("#multiList").addEventListener("click", (e) => {
@@ -2363,7 +2391,7 @@ async function askMany() {
   const q = $("#question").value.trim();
   if (!q) { $("#question").focus(); return; }
   const run = { question: q, pdf_only: $("#pdfOnly").checked, stop: false, seq: ++batchSeq,
-    rows: [...batch.sel].map(([path, d]) => ({ path, name: d.name, st: "wait" })) };
+    rows: [...batch.sel].map(([path, d]) => ({ path, name: d.name || baseName(path), title: d.title || "", st: "wait" })) };
   batch.results = run;
   showBatchView();
   const btn = $("#askBtn");
@@ -2445,7 +2473,7 @@ function renderBatch() {
   const cur = run.rows.find((r) => r.st === "run");
   const s = batchSummary(run);
   const rows = run.rows.map((r) => {
-    const link = `<button type="button" class="rowlink mono" data-path="${esc(r.path)}" title="Open ${esc(r.path)} with its evidence">${esc(r.name)}</button>`;
+    const link = `<button type="button" class="rowlink${r.title ? "" : " mono"}" data-path="${esc(r.path)}" title="${esc(r.name)}\nOpen with its evidence">${esc(r.title || r.name)}</button>`;
     if (r.st === "wait") return `<tr class="dimrow"><td>${link}</td><td class="num">-</td><td></td><td class="dim">Waiting</td></tr>`;
     if (r.st === "run") return `<tr><td>${link}</td><td class="num">-</td><td></td><td class="dim">Reading...</td></tr>`;
     if (r.st === "skip") return `<tr class="dimrow"><td>${link}</td><td class="num">-</td><td></td><td class="dim">Not run</td></tr>`;
@@ -2460,7 +2488,7 @@ function renderBatch() {
   const totalRow = s.total == null ? "" :
     `<tr class="total"><td>${run.finished ? "Total" : "Total so far"}, ${s.used.length} of ${n} drawings</td><td class="num">${s.about ? '<span class="about">about </span>' : ""}${esc(fmtValue(s.total))}</td><td class="unit">${esc(s.unit === "count" ? "count" : fmtUnit(s.unit))}</td><td class="status ${s.est ? "estimate" : "proven"}">${s.est ? "Includes estimates" : "All proven"}</td></tr>`;
   const sentence = s.pending && !run.finished ? "" : batchSentence(run, s);
-  const prog = `${finished} of ${n} done` + (run.finished ? (run.stop ? ", stopped" : "") : cur ? `, reading ${esc(cur.name)}` : "");
+  const prog = `${finished} of ${n} done` + (run.finished ? (run.stop ? ", stopped" : "") : cur ? `, reading ${esc(cur.title || cur.name)}` : "");
   box.innerHTML = `
     <div class="ans-head">
       <h2 class="h-panel">Answers across ${esc(nDrawings(n))}</h2>
@@ -2559,7 +2587,7 @@ async function loadRun(id) {
     : d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
   const flags = d.flags && d.flags.length ? ` (${esc(d.flags.join("; "))})` : "";
   $("#runHeadline").innerHTML = all
-    ? `On ${where}${flags}, <strong>${pct(all.accuracy)}</strong> of ${num(all.n)} questions were answered correctly. The system answered <strong>${pct(all.coverage)}</strong> of them and was right on <strong>${pct(all.precision)}</strong> of those, at <strong>${fmtUsd(all.cost_per_q || 0)}</strong> per question.`
+    ? `On ${where}${flags}, <strong>${pct(all.accuracy)}</strong> of ${num(all.n)} questions were answered correctly. The system answered <strong>${pct(all.coverage)}</strong> of them and was right on <strong>${pct(all.precision)}</strong> of those${all.cost_per_q ? `, at <strong>${fmtUsd(all.cost_per_q)}</strong> per question` : ""}.`
     : "";
   renderSrcTable(d);
   renderChart(d);
@@ -2589,35 +2617,67 @@ async function loadOverview() {
       <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td></tr>`;
   }).join("");
   $("#overviewTable").innerHTML = head + "<tbody>" + body + "</tbody>";
+  tileData.ov = items; renderTiles();
+}
+
+/* ---- headline tiles (results-totals, BM 14 Nov): the totals first, read from /api/overview and /api/baseline.
+   The cost per 1,000 questions is the one number no endpoint serves: it is the blended figure measured in the README
+   (route mix of the full test split plus the question reader at its 0.74% share), kept here with its source. */
+const COST_BLENDED_USD_PER_1000 = 0.168;
+const COST_SOURCE = "README, cost section: CPU time per route at an assumed $0.05 per vCPU-hour, weighted by the full test split's route mix, plus the question reader on the 0.74% of questions the rules flag";
+const tileData = { ov: null, base: null };
+function tileBar(v, cls = "") { return `<span class="tile-bar ${cls}" aria-hidden="true"><i style="width:${Math.max(0, Math.min(1, v || 0)) * 100}%"></i></span>`; }
+function renderTiles() {
+  const box = $("#resTiles");
+  const items = tileData.ov || [], b = tileData.base;
+  const run = items.find((it) => /^Stoa full set/.test(it.set) && !it.missing) || items.find((it) => /^Stoa preview set/.test(it.set) && !it.missing);
+  const tiles = [];
+  if (run) {
+    tiles.push(`<div class="tile" title="${esc(run.source || "")}"><p class="tile-k">Correct, ${esc(run.set.replace(/^Stoa /, ""))}</p>
+      <p class="tile-v">${pct(run.accuracy)}</p>${tileBar(run.accuracy)}<p class="tile-s">${num(run.n)} questions, abstentions counted as wrong</p></div>`);
+    if (run.proven_precision != null) tiles.push(`<div class="tile" title="${esc(run.source || "")}"><p class="tile-k">Proven answers right</p>
+      <p class="tile-v">${pct(run.proven_precision)}</p>${tileBar(run.proven_precision)}<p class="tile-s">${num(run.proven)} answers marked Proven on the same split</p></div>`);
+  }
+  tiles.push(`<div class="tile" title="${esc(COST_SOURCE)}"><p class="tile-k">Cost per 1,000 questions</p>
+    <p class="tile-v">about ${fmtUsd(COST_BLENDED_USD_PER_1000)}</p>
+    <p class="tile-s">${b && b.cost_per_q ? `Nemotron alone: about ${fmtUsd(b.cost_per_q * 1000)} at its measured tokens` : "CPU time at an assumed cloud price"}</p></div>`);
+  if (b) tiles.push(`<div class="tile tile-vs" title="${esc(b.ours_source || "")}"><p class="tile-k">Against a vision model alone</p>
+    <div class="vs"><span class="vs-n">Ours</span>${tileBar(b.ours_accuracy)}<span class="vs-v">${pct(b.ours_accuracy)}</span>
+      <span class="vs-n">Nemotron</span>${tileBar(b.nemo_accuracy, "dim")}<span class="vs-v dim">${pct(b.nemo_accuracy)}</span></div>
+    <p class="tile-s">The same ${num(b.n)} test questions, scored the same way</p></div>`);
+  box.innerHTML = tiles.join("");
 }
 
 async function loadBaseline() {
   let b;
-  try { b = await api("/api/baseline"); } catch (e) { return; }      // keeps the "not measured" text
+  try { b = await api("/api/baseline"); } catch (e) { renderTiles(); return; }      // keeps the "not measured" text
+  tileData.base = b; renderTiles();
   const rows = b.by_source.map((s) => `<tr><td>${esc(SOURCE_NAMES[s.source] || s.source)}, ${esc(s.type)}</td><td class="num">${s.n}</td>
     <td class="num">${s.nemo_correct}</td><td class="num">${s.ours_correct}</td></tr>`).join("");
   const price = b.price_assumption ? `an assumed ${b.price_assumption[0]} / ${b.price_assumption[1]} USD per million input / output tokens` : "an assumed list price";
   $("#baselineBody").innerHTML = `
-    <p class="value-na">Nemotron ${pct(b.nemo_accuracy)} vs router ${pct(b.ours_accuracy)}</p>
-    <div class="table-wrap"><table class="tbl"><thead><tr><th>Questions</th><th class="num">n</th><th class="num">Nemotron</th><th class="num">Router</th></tr></thead>
+    <p class="value-na">Nemotron ${pct(b.nemo_accuracy)} vs ours ${pct(b.ours_accuracy)}</p>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Questions</th><th class="num">n</th><th class="num">Nemotron</th><th class="num">Ours</th></tr></thead>
     <tbody>${rows}<tr class="total"><td>All</td><td class="num">${b.n}</td><td class="num">${b.nemo_correct}</td><td class="num">${b.ours_correct}</td></tr></tbody></table></div>
-    <p class="meta">Sample: Stoa preview set, test split, ${num(b.n)} questions (${esc(b.sample)}). Nemotron got the drawing as one image and was asked for just the number: no regions, no checks. Median latency ${esc(b.latency_median_s)} s; about ${fmtUsd(b.cost_per_q || 0)} per question at ${esc(price)} (free on NVIDIA Build). Router: €0 in model calls, ${esc(b.ours_source)}. ${FX_NOTE}</p>`;
+    <details class="fine-note"><summary>How this was measured</summary>
+    <p class="meta">Sample: Stoa preview set, test split, ${num(b.n)} questions (${esc(b.sample)}). Nemotron got the drawing as one image and was asked for just the number: no regions, no checks. Median latency ${esc(b.latency_median_s)} s; about ${fmtUsd(b.cost_per_q || 0)} per question at ${esc(price)} (free on NVIDIA Build). Router: €0 in model calls, ${esc(b.ours_source)}. ${FX_NOTE}</p></details>`;
 }
 
 function renderSrcTable(d) {
-  const head = `<thead><tr><th>Source</th><th>Type</th><th class="num">n</th><th class="num">Accuracy</th><th class="num">Coverage</th><th class="num">Precision</th><th class="num">€ per 1,000</th></tr></thead>`;
+  const costed = d.rows.some((r) => r.cost_per_q);       // a run with no model cost recorded: no column of €0 (the tiles carry the cost)
+  const head = `<thead><tr><th>Source</th><th>Type</th><th class="num">n</th><th class="num">Accuracy</th><th class="num">Coverage</th><th class="num">Precision</th>${costed ? '<th class="num">€ per 1,000</th>' : ""}</tr></thead>`;
   const rows = [];
   const bySrc = {};
   for (const r of d.rows) (bySrc[r.source] = bySrc[r.source] || []).push(r);
   const order = Object.keys(bySrc).filter((s) => s !== "ALL");
   const line = (r, cls, first) => `<tr class="${cls}"><td>${first}</td><td>${r.type === "ALL" ? "all" : esc(r.type)}</td><td class="num">${num(r.n)}</td>
       <td class="num">${pct(r.accuracy)}</td><td class="num${r.answered ? "" : " dim"}">${pct(r.coverage)}</td>
-      <td class="num${r.answered ? "" : " dim"}">${r.answered ? pct(r.precision) : "-"}</td><td class="num">${fmtUsd((r.cost_per_q || 0) * 1000)}</td></tr>`;
+      <td class="num${r.answered ? "" : " dim"}">${r.answered ? pct(r.precision) : "-"}</td>${costed ? `<td class="num">${fmtUsd((r.cost_per_q || 0) * 1000)}</td>` : ""}</tr>`;
   for (const s of order) {
     const rs = bySrc[s];
     const total = rs.find((r) => r.type === "ALL");
     const parts = rs.filter((r) => r.type !== "ALL");
-    if (total) rows.push(line(total, "group", esc(SOURCE_NAMES[s] || s)));
+    if (total) rows.push(line(total, "group", `<span class="src-nm">${esc(SOURCE_NAMES[s] || s)}</span>`));
     if (parts.length > 1 || !total) for (const r of parts) rows.push(line(r, "", ""));
   }
   if (bySrc.ALL) rows.push(line(bySrc.ALL[0], "total", "All sources"));
@@ -2626,7 +2686,7 @@ function renderSrcTable(d) {
 
 function renderChart(d) {
   const rows = d.rows.filter((r) => r.type === "ALL").sort((a, b) => (a.source === "ALL") - (b.source === "ALL") || b.n - a.n);
-  const W = 460, rowH = 30, left = 128, right = 64, top = 8, H = top + rows.length * rowH + 22;
+  const W = 460, rowH = 30, left = 116, right = 92, top = 8, H = top + rows.length * rowH + 22;
   const xw = W - left - right;
   const sx = (v) => left + v * xw;
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${measure} by source">`;
@@ -2639,8 +2699,9 @@ function renderChart(d) {
     const v = measure === "precision" ? (r.answered ? r.precision : null) : r[measure];
     const w = v == null ? 0 : Math.max(v * xw, v > 0 ? 2 : 0);
     const name = r.source === "ALL" ? "All sources" : SOURCE_NAMES[r.source] || r.source;
+    const short = name.replace(/\s*\(.*\)\s*$/, "");       // "IFC-Bench (free-text ...)" ran over the next row at 1280 px
     s += `<g data-i="${i}">`;
-    s += `<text class="lbl" x="${left - 10}" y="${y + rowH / 2 + 4}" text-anchor="end"${r.source === "ALL" ? ' style="font-weight:600;fill:var(--fg)"' : ""}>${esc(name)}</text>`;
+    s += `<text class="lbl" x="${left - 10}" y="${y + rowH / 2 + 4}" text-anchor="end"${r.source === "ALL" ? ' style="font-weight:600;fill:var(--fg)"' : ""}><title>${esc(name)}</title>${esc(short)}</text>`;
     s += `<rect class="hit" x="0" y="${y}" width="${W}" height="${rowH}"/>`;
     s += `<rect class="bar" x="${left}" y="${y + 8}" width="${w}" height="${rowH - 16}" rx="2"/>`;
     s += `<text class="val" x="${left + w + 6}" y="${y + rowH / 2 + 4}">${v == null ? "none answered" : pct(v)}</text>`;
@@ -2734,10 +2795,30 @@ async function loadCompare() {
     box.innerHTML = `<p class="meta">The comparison data is missing (app/static/compare.json, made by tools/build_compare.py).</p>`;
     return;
   }
-  // which example drawings exist in this library: "Open in Ask" is offered only for those
-  const here = await Promise.all(compareData.examples.map((x) => api("/api/drawing?path=" + encodeURIComponent(x.path)).then(() => true, () => false)));
-  box.innerHTML = compareData.examples.map((x, i) => compareExample(x, i, here[i])).join("") + compareTotals(compareData.totals);
+  /* results-compare (BM, 14 Nov): the page renders at once. It used to wait for an /api/drawing check per example
+     first, which on a busy server (right after the tour's question) held the whole page on "Loading". The check now
+     runs afterwards and only takes away "Open in Ask" for a drawing this library does not have. */
+  box.innerHTML = compareTiles(compareData.totals) + compareData.examples.map((x, i) => compareExample(x, i, true)).join("") + compareTotals(compareData.totals);
   box.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => compareOpen(compareData.examples[+b.dataset.open])));
+  compareData.examples.forEach((x, i) => api("/api/drawing?path=" + encodeURIComponent(x.path)).catch(() => {
+    const b = box.querySelector(`[data-open="${i}"]`);
+    if (b) b.outerHTML = `<p class="meta">This drawing is not in this library.</p>`;
+  }));
+}
+
+function compareTiles(t) {
+  const b = t.bakeoff, c = t.cost;
+  const vs = (k, ours, theirs, them, sub) => `<div class="tile tile-vs"><p class="tile-k">${k}</p>
+    <div class="vs"><span class="vs-n">Ours</span>${tileBar(ours)}<span class="vs-v">${Math.round(ours * 100)}%</span>
+      <span class="vs-n">${them}</span>${tileBar(theirs, "dim")}<span class="vs-v dim">${Math.round(theirs * 100)}%</span></div>
+    <p class="tile-s">${sub}</p></div>`;
+  return `<section class="tiles cmp-tiles" aria-label="Totals">
+    ${vs("Accuracy", t.ours_accuracy, t.nemotron_accuracy, "Nemotron", `${num(t.questions)} test questions, both scored the same way`)}
+    ${b ? vs("Against the best of other vision models", b.ours_accuracy, b.best_accuracy, "Best other", `${b.models} hosted models on ${b.n} of our weakest scan questions; small sample`) : ""}
+    ${c ? `<div class="tile"><p class="tile-k">Cost per 1,000 questions</p>
+      <p class="tile-v">${fmtUsd(c.ours_usd_per_1000)}</p>
+      <p class="tile-s">Nemotron alone: about ${fmtUsd(c.nemotron_usd_per_1000)}, on the same ${num(t.questions)} questions</p></div>` : ""}
+  </section>`;
 }
 
 function compareExample(x, i, here) {
@@ -2753,23 +2834,22 @@ function compareExample(x, i, here) {
         <h3 class="h-group">Nemotron 3.5 Super VL alone</h3>
         <p class="cmp-ans ${n.correct ? "ok" : "bad"}">${esc(nAns)}</p>
         <p class="cmp-verdict ${n.correct ? "ok" : "bad"}">${esc(nWhy)}</p>
-        <dl class="kv"><dt>Time</dt><dd>${esc(cmpSec(n.latency_s))}, recorded</dd><dt>Evidence</dt><dd>none</dd></dl>
+        <p class="meta">${esc(cmpSec(n.latency_s))}  ·  no evidence</p>
       </div>
       <div class="cmp-col cmp-right">
         <h3 class="h-group">Blueprint Evidence</h3>
         <p class="cmp-ans ${o.correct ? "ok" : "bad"}">${esc(oAns)}</p>
         <p class="cmp-verdict ${o.correct ? "ok" : "bad"}">${o.correct ? "Right" : "Wrong"}  ·  ${esc(CMP_STATUS[o.status] || o.status)}</p>
-        <dl class="kv"><dt>Time</dt><dd>${esc(cmpSec(o.time_s))}, first question, not cached</dd><dt>Read from</dt><dd>${esc(o.route)}</dd></dl>
+        <p class="meta" title="First question on the drawing, not cached">${esc(cmpSec(o.time_s))}  ·  read from ${esc(o.route)}</p>
         ${here ? `<button type="button" class="btn" data-open="${i}">Open in Ask</button>` : `<p class="meta">This drawing is not in this library.</p>`}
       </div>
-      <div class="cmp-col cmp-evi">${o.evidence ? `<img class="cmp-thumb" src="${esc(o.evidence)}" alt="Evidence image for ${esc(x.kind)}: the drawing with the items our answer is built from" loading="lazy">` : ""}</div>
+      <div class="cmp-col cmp-evi">${o.evidence ? `<img class="cmp-thumb" src="${esc(o.evidence)}" alt="Evidence image for ${esc(x.kind)}: the drawing with the items our answer is built from" loading="lazy" decoding="async">` : ""}</div>
     </div></section>`;
 }
 
 function compareTotals(t) {
   const b = t.bakeoff, c = t.cost;
-  return `<section class="cmp cmp-totals" aria-labelledby="cmp-tot">
-    <h2 class="h-panel cmp-tot-h" id="cmp-tot">Totals</h2>
+  return `<details class="fine cmp-totals"><summary id="cmp-tot">How the totals were measured</summary>
     <table class="tbl"><tbody>
       <tr><th scope="row">Accuracy</th><td>${num(t.questions)} test questions: Nemotron alone ${pct(t.nemotron_accuracy)}, Blueprint Evidence ${pct(t.ours_accuracy)}</td>
         <td class="dim">${t.nemotron_correct} and ${t.ours_correct} of ${t.questions} correct. Preview test split, seeded sample; both scored the same way.</td></tr>
@@ -2777,7 +2857,7 @@ function compareTotals(t) {
         <td class="dim">${b.best_correct} of ${b.n} for the best one (mistral-large-4, which finished ${b.n} of the 110 weak-spot questions); ours on the same ${b.n}: ${b.ours_correct}. Scan doors, windows and room types; small sample, read it as direction. Details in docs/model_bakeoff.md.</td></tr>
       <tr><th scope="row">Cost</th><td>€${Math.round(c.nemotron_usd_per_1000 / c.usd_per_eur)} against under ${fmtUsd(0.1 * c.usd_per_eur)} per 1,000 questions</td>
         <td class="dim">Nemotron at its measured tokens and an assumed list price of $${c.price_in_out_usd_per_mtok[0]} and $${c.price_in_out_usd_per_mtok[1]} per million tokens in and out (NVIDIA Build itself was free); ours at measured CPU time on the same ${num(t.questions)} questions, ${fmtUsd(c.ours_usd_per_1000)} per 1,000. ${esc(FX_NOTE)}</td></tr>
-    </tbody></table></section>`;
+    </tbody></table></details>`;
 }
 
 async function compareOpen(x) {
