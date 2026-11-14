@@ -126,7 +126,7 @@ def message(j: dict) -> str:
     if j["state"] == "error":
         return "Reading the drawing in the background failed; questions still work, the first one is slower."
     if j["kind"] == "scan":
-        return "Reading the drawing in the background (a few seconds); you can ask now."
+        return "Reading the drawing in the background (up to a minute or two for a scan); you can ask now."
     if j["state"] == "queued":
         return "Reading the drawing in the background, about 1 to 2 minutes for a large sheet; you can ask now."
     st = j["stage"]

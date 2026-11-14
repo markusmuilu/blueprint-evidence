@@ -2461,7 +2461,7 @@ function renderBatch() {
       <div class="batch-prog" role="status">
         <p class="meta">${prog}</p>
         ${run.finished ? "" : `<div class="bar" aria-hidden="true"><span style="width:${Math.round((finished / n) * 100)}%"></span></div>
-        <p class="meta">A drawing seen for the first time takes about 20 s; one already read, about a second.</p>`}
+        <p class="meta">The first question on a new scan can take up to a minute or two while it is read; after that, about a second. CAD, PDF and IFC answer in about a second.</p>`}
       </div>
     </div>
     <section class="sec">
@@ -2938,7 +2938,7 @@ async function compareOpen(x) {
     const step = STEPS[idx], waiting = !!step.wait?.();
     const hadFocus = bubble.contains(document.activeElement) || document.activeElement === document.body;
     bubble.innerHTML = `<p>${esc(step.text())}</p>
-      ${waiting ? '<p class="meta tour-wait">Answering... the first question on a drawing takes about 15 s.</p>' : ""}
+      ${waiting ? '<p class="meta tour-wait">Answering... the first question on a new scan can take up to a minute or two while it is read; after that, about a second. CAD, PDF and IFC answer in about a second.</p>' : ""}
       <div class="tour-act"><span class="tour-step">Step ${idx + 1} of ${STEPS.length}</span>
         <button type="button" class="btn btn-quiet" data-a="skip">Skip tour</button></div>`;
     bubble.setAttribute("aria-label", `Tour, step ${idx + 1} of ${STEPS.length}`);
