@@ -517,7 +517,7 @@ const viewer = (() => {
     const dx = e.deltaX * unit, dy = e.deltaY * unit;
     const cx = e.clientX - r.left, cy = e.clientY - r.top;
     if (e.ctrlKey || e.metaKey) {
-      zoomAt(Math.exp(-Math.max(-60, Math.min(60, dy)) * 0.02), cx, cy);
+      zoomAt(Math.exp(-Math.max(-25, Math.min(25, dy)) * 0.02), cx, cy);   // capped per event so a fast pinch cannot jump
     } else if (e.deltaMode !== 0 || (dx === 0 && Math.abs(dy) >= 50)) {
       zoomAt(Math.exp(-Math.sign(dy) * Math.min(Math.abs(dy), 150) * 0.0027), cx, cy);   // one notch: about 1.3x
     } else {
