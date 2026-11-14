@@ -212,8 +212,7 @@ def detected_count(file, obj):
     c = detector.config(obj)
     if not c:
         return None
-    model = detector.REPO / "models" / c["model"]
-    views = detector.detect_views(Path(file), model=model, imgsz=c["imgsz"], tile=c["tile"], tta=c["tta"])
+    views = detector.views_for(Path(file), c)
     if views is None:
         return None
     return detector.count_views(views, detector.combine(views), obj, c)[0]

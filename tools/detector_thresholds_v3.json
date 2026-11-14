@@ -1,0 +1,138 @@
+{
+ "_tuned_on": "624 Stoa train-split images",
+ "_picked_from": [
+  "th_cubi2_base",
+  "th_cubi2_tta",
+  "th_tiles",
+  "th_tiles_tta",
+  "th_tiles_s3_tta (door, window)"
+ ],
+ "toilet": {
+  "model": "detector_tiles.pt",
+  "imgsz": 1280,
+  "tile": {
+   "tile": 1024,
+   "scale": 2.0,
+   "overlap": 192,
+   "max_side": 4096
+  },
+  "tta": true,
+  "conf": 0.55,
+  "band": 0.05,
+  "max": 5,
+  "max_unsure": 99,
+  "max_spread": 2,
+  "agg": "median",
+  "precision": 0.894,
+  "precision_estimate": 0.0,
+  "enabled": true
+ },
+ "sink": {
+  "model": "detector_tiles.pt",
+  "imgsz": 1280,
+  "tile": {
+   "tile": 1024,
+   "scale": 2.0,
+   "overlap": 192,
+   "max_side": 4096
+  },
+  "tta": true,
+  "conf": 0.45,
+  "band": 0.1,
+  "max": 8,
+  "max_unsure": 2,
+  "max_spread": 99,
+  "agg": "fuse",
+  "precision": 0.817,
+  "precision_estimate": 0.316,
+  "enabled": true
+ },
+ "shower_or_bath": {
+  "model": "detector_tiles.pt",
+  "imgsz": 1280,
+  "tile": {
+   "tile": 1024,
+   "scale": 2.0,
+   "overlap": 192,
+   "max_side": 4096
+  },
+  "tta": true,
+  "conf": 0.15,
+  "band": 0.1,
+  "max": 6,
+  "max_unsure": 3,
+  "max_spread": 2,
+  "agg": "median",
+  "precision": 0.79,
+  "precision_estimate": 0.294,
+  "enabled": true
+ },
+ "door": {
+  "model": "detector_tiles.pt",
+  "imgsz": 1280,
+  "tile": [
+   {
+    "tile": 1024,
+    "scale": 2.0,
+    "overlap": 192,
+    "max_side": 4096
+   },
+   {
+    "tile": 1024,
+    "scale": 1.5,
+    "overlap": 192,
+    "max_side": 4096
+   },
+   {
+    "tile": 1024,
+    "scale": 1.25,
+    "overlap": 192,
+    "max_side": 4096
+   }
+  ],
+  "tta": true,
+  "conf": 0.4,
+  "band": 0.1,
+  "max": 26,
+  "max_unsure": 2,
+  "max_spread": 2,
+  "agg": "fuse",
+  "precision": 0.754,
+  "precision_estimate": 0.328,
+  "enabled": true
+ },
+ "window": {
+  "model": "detector_tiles.pt",
+  "imgsz": 1280,
+  "tile": [
+   {
+    "tile": 1024,
+    "scale": 2.0,
+    "overlap": 192,
+    "max_side": 4096
+   },
+   {
+    "tile": 1024,
+    "scale": 1.5,
+    "overlap": 192,
+    "max_side": 4096
+   },
+   {
+    "tile": 1024,
+    "scale": 1.25,
+    "overlap": 192,
+    "max_side": 4096
+   }
+  ],
+  "tta": true,
+  "conf": 0.5,
+  "band": 0.05,
+  "max": 88,
+  "max_unsure": 99,
+  "max_spread": 1,
+  "agg": "fuse",
+  "precision": 0.773,
+  "precision_estimate": 0.333,
+  "enabled": true
+ }
+}

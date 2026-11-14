@@ -98,6 +98,104 @@ Regression: preview dev for swiss_dwellings, ifc_models, opening_design and ifc_
 with the `polish` run (`out/after2/dev/answers.jsonl` there): 0 questions that were right are wrong now, and no
 answer value changed for swiss_dwellings or ifc_models (swiss 99.4%, ifc_models 94.3%, as before). CubiCasa
 was not re-run: the changes reach raster questions only through takeoff wall questions, which abstained before.
+## 2026-11-14: doors and windows, error analysis and detector v3, branch `detector-v3`
+
+### Error analysis (tune images only, `tools/det_errors.py`)
+
+Main's door and window counts (the policy in `models/detector_thresholds.json`: tiled `yolo26s`, doors
+without TTA at 0.40, windows with TTA fused at 0.50) on the 624 held-out train-split tune images: doors
+59.6% exact (445 images with a door question), windows 50.0% (624). For each wrong image the counted
+boxes were matched to the public CubiCasa5K annotation of the same plan (Stoa's counts are the
+annotation counts: 99.6-100% agreement on train-split images, `count_check.json`), and each unmatched
+box got a cause. The image's cause is the one with most boxes. The sample is the first 60 wrong images
+per object by a stable hash; every sampled image has a sheet (annotation green, counted blue,
+below-threshold amber) in `out/det_errors/<object>/`, and the boxes were looked at by eye.
+
+| cause | letter | doors: sample of 60 (boxes) | doors: all 180 wrong | windows: sample of 60 (boxes) | windows: all 312 wrong |
+|---|---|---|---|---|---|
+| detector misses the object (no box at all) | a | 9 (12) | 26 | 7 (18) | 40 |
+| false positive on an annotated wall or room | b | 18 (31) | 62 | 1 (11) | 19 |
+| false positive off the annotated unit (neighbouring flat, stairwell, cut-off edge) | c | 19 (38) | 45 | 9 (31) | 34 |
+| one box over two annotated objects (merge) | c | 1 (2) | 3 | 16 (50) | 58 |
+| two boxes over one annotated object (split) | c | 0 (0) | 0 | 9 (30) | 44 |
+| annotated object scored below the threshold (more than 0.15 under) | d | 6 (10) | 15 | 14 (33) | 63 |
+| box within 0.15 of the threshold (either side) | d | 7 (25) | 28 | 4 (37) | 54 |
+| annotation count differs from Stoa's answer | c | 0 | 1 | 0 | 0 |
+| direction of the error | | 43 over, 17 under | 131 over, 49 under | 20 over, 40 under | 114 over, 198 under |
+
+What the boxes are, by eye:
+
+- Doors, false positives on the unit (30 boxes): 16 are openings in a wall with no leaf or swing drawn
+  (Stoa's wording: "open doorways without a door leaf do not count"), 7 are hand edits on the scan
+  (doors crossed out in red or blue, a swing drawn in by hand), 3 are real doors on one plan whose
+  annotation is offset, 2 are cut off at the image edge or in a storage room, 1 is a window mark, 1 unclear.
+- Doors off the annotated unit (20 boxes): real hinged doors with swings in a neighbouring flat, the
+  stairwell or a second apartment on the same sheet (one sheet shows flats B51 and B52, only B52 is
+  annotated). Stoa counts the one annotated unit, so these are definition mismatches the detector
+  cannot see on a 1,024 px tile.
+- Windows, merge and split (25 of 60 images): the annotation's pane convention. On some plans one frame
+  with a mullion is annotated as two windows and the detector draws one box; on others a three-pane
+  window is one annotated window and the detector draws three. Both directions occur, so no counting
+  rule fixes it (see below).
+- Windows below the threshold (15 boxes): small windows (4), interior glass (shower and sauna glass
+  walls, 3), balcony glazing (1-2), and windows in unusual wall styles (thick black or hatched walls).
+
+The checks of open doorways and of the other rules are below; none of them won on the tune images.
+
+### Counting rules tried (step 2), none kept
+
+Each rule was fitted on the tune images together with the threshold and measured by the same 2-fold
+cross-validation as `tune_detector.py` (fit on one half, count on the other), against the plain
+threshold fitted the same way. Gains under about 2 points on 445-624 images are within the noise of
+the split, and none of these reached that.
+
+| rule | object | cv exact: rule | cv exact: plain threshold |
+|---|---|---|---|
+| door leaf check: a counted box needs a drawn swing arc or straight leaf next to the opening unless it scores high (thresholds tuned) | door | 58.4% | 58.2% |
+| cross-model support: a tiled box without a whole-image `cubi2` box on it needs a higher score | door | 59.8% | 58.2% |
+| the same with `cubi2` over eight rotations and mirrors | door | 58.2% | 58.2% |
+| the same | window | 49.7% | 49.4% |
+| split a window box longer than f x the plan's median window length (f tuned) | window | 49.4% | 49.4% |
+| seam merging only across tiles (same-tile boxes merged only at IoU >= 0.7) | door, window | no change (first 230 images) | |
+
+Why the leaf check fails: the annotation (and so Stoa) counts many openings drawn with no leaf at all,
+and many Finnish plans draw the leaf as a short diagonal without an arc; 2.3% of correctly counted
+doors have no leaf evidence against 15% of the false positives, so dropping them costs about as many
+right answers as it fixes. The window pane convention goes both ways (merge 58 images, split 44), so a
+split rule fixes some plans and breaks others. The off-unit false positives are real doors and windows;
+a counting rule cannot tell which unit the annotation covers.
+
+### Several tile scales fused (`tile` may be a list in the thresholds file)
+
+The error table says doors and windows fail on context: the off-unit doors, the pane convention and the
+interior glazing all need more of the plan than a 1,024 px tile at 2x shows. The same `yolo26s` tile
+model was run at other resize factors (training saw 2x with +-30% scale augmentation), and the views of
+several scales fused like the eight TTA views (`bpqa/tiling.fuse_views`; the route and checks read the
+views through `detector.views_for`). Tuned on the 624 tune images, 2-fold cross-validated exact count:
+
+| policy (tiled `yolo26s`) | toilet | sink | shower/bath | door | window |
+|---|---|---|---|---|---|
+| 2x, one view (main's door policy) | 87.5% | 78.2% | 72.4% | 59.1% | 44.7% |
+| 1.5x, one view | 87.0% | 74.9% | 70.3% | 59.1% | 48.4% |
+| 1.25x, one view | 86.9% | 75.2% | 63.8% | 57.8% | 45.8% |
+| 1x, one view | 83.5% | 67.6% | 63.1% | 54.6% | 45.5% |
+| 2.5x, one view | 85.7% | 78.2% | 75.9% | 56.2% | 45.0% |
+| 2x + 1.5x, one view each | 87.7% | 79.1% | 72.4% | 59.3% | 48.4% |
+| 2x, TTA (main's policy for the other four) | 88.3% | 79.3% | 77.6% | 58.2% | 50.0% |
+| 1.5x, TTA | 87.7% | 79.1% | 75.2% | 61.6% | 51.3% |
+| 1.25x, TTA | 87.7% | 77.7% | 71.4% | 60.0% | 47.1% |
+| 2x + 1.5x, TTA | 88.8% | 79.5% | 77.1% | 62.9% | 51.3% |
+| 1.5x + 1.25x, TTA | 88.3% | 79.1% | 74.5% | 63.1% | 51.6% |
+| **2x + 1.5x + 1.25x, TTA (24 views)** | 88.1% | 80.5% | 75.2% | **64.3%** | **52.6%** |
+| larger tiles, 1,536 px at 1.5x / 2x, one view | 88.3% / 88.3% | 76.2% / 78.2% | 72.8% / 71.6% | 59.8% / 57.1% | 48.1% / 47.1% |
+
+Main on the same images: door 59.1%, window 50.0%. The three-scale TTA policy is kept for doors
+(+5.2 points) and windows (+2.6). Toilet, sink and shower/bath keep main's policy: the best variant
+there is within 1.5 points of main, inside the noise of choosing among a dozen variants on 624 images.
+Cost: 24 views instead of 8 (doors had 1), about 3x the detector time per image for those two objects.
+
+To use it: copy `tools/detector_thresholds_v3.json` to `models/detector_thresholds.json` (main's policy
+for toilet, sink and shower/bath, the three-scale policy for door and window; same `detector_tiles.pt`).
 
 ## 2026-11-14 morning: English and German room labels, evidence colours, app tiers and results, branch `polish`
 
