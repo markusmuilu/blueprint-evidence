@@ -56,7 +56,7 @@ PREVIEW_CACHE = APP_OUT / "preview"
 UPLOADS = Path(tempfile.gettempdir()) / "blueprint-evidence" / "uploads"
 UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff", "svg", "dwg"}
 MAX_UPLOAD = 200 * 1024 * 1024
-CACHE_VERSION = "5"       # 5: approximations on scans without printed areas (approx field); 4: wall openings z0_m / z1_m
+CACHE_VERSION = "6"       # 6: integration fixes (stated heights and waste in Finnish, whole-flat area, room lists); 5: approximations on scans without printed areas (approx field); 4: wall openings z0_m / z1_m
 
 for d in (EVIDENCE_DIR, RENDER_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
     d.mkdir(parents=True, exist_ok=True)
@@ -368,8 +368,23 @@ def _evidence_geometry(ev: Path, src: Path | None) -> dict:
 def _cache_key(root: Path, rel: str, question: str, pdf_only: bool) -> str:
     f = root / rel
     st = f.stat()
-    raw = json.dumps([CACHE_VERSION, str(f), st.st_size, int(st.st_mtime), question.strip(), pdf_only])
+    raw = json.dumps([CACHE_VERSION, CODE_FINGERPRINT, str(f), st.st_size, int(st.st_mtime), question.strip(), pdf_only])
     return hashlib.sha1(raw.encode()).hexdigest()[:20]
+
+
+def _code_fingerprint() -> str:
+    """Hash of the answering code (bpqa/, its .py and .json files). It is part of every answer cache key, so an answer
+    cached by older code is never served after a merge or a deploy, also when nobody bumped CACHE_VERSION (14 Nov:
+    merged fixes looked lost because the old answers were still served)."""
+    h = hashlib.sha1()
+    base = REPO / "bpqa"
+    for p in sorted(list(base.rglob("*.py")) + list(base.rglob("*.json"))):
+        h.update(p.relative_to(base).as_posix().encode())
+        h.update(p.read_bytes().replace(b"\r\n", b"\n"))
+    return h.hexdigest()[:12]
+
+
+CODE_FINGERPRINT = _code_fingerprint()
 
 
 class AskBody(BaseModel):

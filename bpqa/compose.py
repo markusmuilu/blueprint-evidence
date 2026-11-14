@@ -114,6 +114,9 @@ def plan(question: str) -> dict | None:
     rooms = bool(types) or bool(ROOMS_ANY.search(f))
     if not rooms or MATERIAL.search(f):
         return None
+    from .walls import _parse_inputs
+    if _parse_inputs(question).get("waste_pct") is not None:
+        return None                        # "hukkaa kymmenen prosenttia" is a takeoff's waste, not a share
     if PER_APT.search(f) and not re.search(r"\bhow many (apartments|flats|units)\b", f):
         return {"kind": "per_apartment", "types": types}
     if SHARE.search(f) and types:
@@ -137,7 +140,18 @@ def plan(question: str) -> dict | None:
     if LIST_Q.search(f) and re.search(r"\b(areas?|sizes?|how big|how large|m2|square|big|large|pinta-ala\w*|koko|koot|"
                                       r"flache\w*|grosse\w*|yta|ytor|storlek\w*)\b", f):
         return {"kind": "list", "types": types}
+    if (LIST_VERB.search(f) or ROOMS_THERE.search(f)) and not re.search(r"\btypes?\b|\btyyp\w*|\btyp(en)?\b", f):
+        # "list the rooms", "what rooms are there": the same rows, by name (with the area where the route has one).
+        # A model's own space list (ifc-props) answers first (router._composite). "list the room types" is not this
+        return {"kind": "list", "types": types}
     return None
+
+
+LIST_VERB = re.compile(r"\b(list|enumerate|itemi[sz]e|tabulate|luettele\w*|listaa|liste|auflist\w*|lista|listan)\b")
+ROOMS_THERE = re.compile(r"\b(what|which)\s+(rooms|spaces)\s+(are there|are shown|are drawn|does (it|the \w+|this \w+) have|"
+                         r"are (on|in) (this|the) (plan|drawing|floor ?plan|sheet|apartment|flat))\b|"
+                         r"\bmita (huoneita|tiloja)\s+(on|siina on|asunnossa on)\b|\bwelche (raume|zimmer) (gibt es|hat)\b|"
+                         r"\bvilka rum (finns|har)\b")
 
 
 # a clause that asks on its own: a count cue or a size cue ("..., und wie viele Fenster gibt es?")

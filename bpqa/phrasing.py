@@ -382,7 +382,8 @@ def normalise(d, question: str) -> tuple[dict | None, str]:
                 out["surface"] = s
         inputs = {}
         w = _num(d.get("waste_pct"), 0, 60)
-        if w is not None and ((w == 0 and NO_WASTE.search(f)) or (w > 0 and _in_text(w, f))):
+        from .walls import spelled_percent        # "ten percent", "kymmenen prosenttia" are in the text too
+        if w is not None and ((w == 0 and NO_WASTE.search(f)) or (w > 0 and _in_text(w, spelled_percent(f)))):
             inputs["waste_pct"] = w
         c = _num(d.get("ceiling_m"), 1.5, 12)
         if c is not None and _in_text(c, f, (1, 100, 1000)):
@@ -733,8 +734,8 @@ _NUMBER_INPUT = re.compile(r"\d+(?:[.,]\d+)?\s*(?:%|cm\b|mm\b|m\b|metr)")
 
 def _unused_numbers(question: str, tk: dict) -> bool:
     """A takeoff question with a percentage or a length that walls.parse_inputs did not pick up."""
-    from .walls import _parse_inputs
-    f = fold(strip_quoted(question))
+    from .walls import _parse_inputs, spelled_percent
+    f = spelled_percent(fold(strip_quoted(question)))
     if not _NUMBER_INPUT.search(f):
         return False
     got = _parse_inputs(question)

@@ -117,8 +117,36 @@ ROOM_WORD = re.compile(r"\brooms?\b|\bzimmer\b|\braume\b|\bhuone(?!isto)\w*|\bru
 LARGEST_ROOM = re.compile(r"\b(biggest|largest)\b(?:\s+\w+)?\s+(rooms?|spaces?)\b|\b(suurin|isoin)\s+huone\w*|"
                           r"\b(grosste\w*|groesste\w*)\s+(zimmer|raum)\b|\bstorsta\s+rum\w*|\bplus grande piece\b|"
                           r"\bstanza piu grande\b")
-# "the whole floor" (a gross floor area of the building is not a sum of rooms, so "gross / total floor area" stays out)
+# "the whole floor" (a gross floor area of the building is not a sum of rooms, so "gross floor area" stays out)
 WHOLE_FLOOR = re.compile(r"\b(whole|entire) (floor|storey|level|flat|apartment)\b(?! plan)|\bkoko kerroks\w*")
+# "what is the total floor area?", "paljonko neliöitä on yhteensä?", "mikä on asunnon pinta-ala?": the floor area of
+# what the drawing shows, read as the total of its rooms (the reading the language model gives too), so a scan's
+# printed flat summary (routes/raster_summary.py) is reached without the model. Never for the building, a gross
+# area, a facade or roof, or a breakdown: those stay with the property routes or the reader.
+FLAT_AREA_CUE = re.compile(r"\b(total|overall|altogether|in total|in all|combined|yhteensa|yhteenlaskettu|kokonais\w*|"
+                           r"insgesamt|gesamt\w*|totalt|sammanlagt)\b|\bfloor ?area\b|\bliving area\b|\bliving space\b|"
+                           r"\b\w*pinta-?ala\w*|\bwohnflache\b|\bboyta\b|\bboarea\b")
+FLAT_AREA_UNIT = re.compile(r"\bsquare met\w*|\bm2\b|\bsqm\b|\bnelio\w*|\bquadratmeter\w*|\bkvadratmeter\w*|\bkvm\b")
+FLAT_AREA_NOT = re.compile(r"\b(gross|brutto|bgf|net usable|building'?s?|rakennu\w*|gebaude\w*|byggnad\w*|facade|fa.ade|"
+                           r"julkisivu\w*|fassade|roofs?|katto\w*|dach\w*|footprint|site|plot|tontti\w*|grundstuck\w*|"
+                           r"parking|each|every|per|breakdown|broken|by|ratio|function\w*|duct\w*|material\w*|finish\w*|"
+                           r"walls?|seina\w*|windows?|ikkun\w*|doors?|ov(?:i|e)\w*|slabs?|zones?|department\w*|"
+                           r"clinic|ward|percent\w*|share|%)\b")
+
+
+# "list the rooms", "list all rooms", "luettele huoneet", "liste die Räume": the rooms by name (a text question)
+LIST_ROOMS = re.compile(r"\b(list|lists|listing|enumerate|itemi[sz]e|luettele\w*|listaa|listaus\w*|liste|auflist\w*|"
+                        r"lista|listan)\b")
+
+
+def whole_flat_area(f_obj: str, measure: str | None) -> bool:
+    """True for an area question about the whole drawing that names no object: read as the total of the rooms."""
+    if FLAT_AREA_NOT.search(f_obj):
+        return False
+    if measure == "area":
+        return bool(FLAT_AREA_CUE.search(f_obj))
+    # "paljonko neliöitä yhteensä", "how many square metres in total": the unit makes it an area question
+    return measure in (None, "count") and bool(FLAT_AREA_UNIT.search(f_obj)) and bool(FLAT_AREA_CUE.search(f_obj))
 
 
 _FRAGMENT = re.compile(r"^\s*[\w\-]+(?:\s+[\w\-]+){0,3}\s*[?.!]?\s*$")
@@ -279,11 +307,19 @@ class RuleParser(QueryParser):
                           fold(question), re.I)
             if m:
                 q.apartment = m.group(1).upper()
+        # "what is the total area of the apartment?" (one apartment, no letter): the floor area of the flat the drawing
+        # shows, read as the total of its rooms like "total floor area?". "apartment A" is set back below
+        if q.measure == "area" and apt_scope and not qs and not FLAT_AREA_NOT.search(f_obj):
+            q.obj = "room"
         # ("what is the largest room" asks which room: it stays a text question)
         if not qs and q.obj in (None, "room") and q.measure in (None, "area") and LARGEST_ROOM.search(f_obj):
             q.measure, q.obj, q.variant = "area", "room", "max"    # "biggest room?", "suurin huone"
         if not qs and q.obj is None and q.measure in ("area", None) and WHOLE_FLOOR.search(f_obj):
             q.measure, q.obj = "area", "room"                       # "floor area of the whole floor"
+        if q.measure is None and q.obj == "room" and LIST_ROOMS.search(f_obj):
+            q.measure = "text"                                      # "list the rooms", "luettele huoneet"
+        if not qs and q.obj is None and whole_flat_area(f_obj, q.measure):
+            q.measure, q.obj = "area", "room"                       # "total floor area?", "neliöitä yhteensä?"
         # "what is the scale of this drawing?": the drawing scale (read off the sheet)
         if q.obj is None and q.measure in ("text", None) and SCALE_Q.search(f_obj):
             q.measure, q.obj = "text", "scale"

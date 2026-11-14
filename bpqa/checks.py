@@ -73,10 +73,12 @@ def facts(file: str) -> dict:
     f = Path(file)
     toks = ocr_image(f, allow_run=True) or []
     d = dedupe(toks)
-    out = {"labels": {}, "numbered": {}, "words": 0, "summaries": [], "floors": set(), "stairs": "", "panels": None}
+    out = {"labels": {}, "labels_exact": {}, "numbered": {}, "words": 0, "summaries": [], "floors": set(), "stairs": "",
+           "panels": None}
     for o in ROOM_TYPES:
         hits = find_rooms(toks, o)
         out["labels"][o] = [h["text"] for h in hits]
+        out["labels_exact"][o] = [h["text"] for h in hits if not h.get("fuzzy")]
         nums = [int(m.group(1)) for h in hits for m in [re.fullmatch(r"[A-Z]+(\d)", h["part"])] if m]
         out["numbered"][o] = max(nums) if nums else 0
     out["words"] = sum(is_word(t["text"]) for t in d)
@@ -195,8 +197,13 @@ def check_fixture_bounds(F, obj, v):
                          f"{kh} bathroom and {kn} kitchen label(s) read ({kh} + {k} sinks implied: a kitchen counts once, "
                          f"a repeated K can be a stray read); answer {v}", "lower", lo))
     if obj == "shower_or_bath" and kh:
+        # the check's count replaces the answer (ADOPT), so it rests only on labels read exactly: a one-error read
+        # ("PESUIHUONE" for PESUHUONE) makes the answer an estimate but never changes it (high_quality-14334: 0 drawn)
+        kx = len(F.get("labels_exact", {}).get("bathroom", F["labels"].get("bathroom", [])))
+        fz = f" ({kh - kx} of them a one-error read)" if kx < kh else ""
         out.append(Check("showers>=bathrooms", "pass" if v >= kh else "fail",
-                         f"{kh} bathroom label(s) read, each implies a shower or bath; answer {v}", "abstain", kh))
+                         f"{kh} bathroom label(s) read{fz}, each implies a shower or bath; answer {v}", "abstain",
+                         kx or None))
     if obj == "door" and F["words"] >= 3:
         lo = F["words"] - 1
         out.append(Check("doors>=rooms-1", "pass" if v >= lo else "fail",

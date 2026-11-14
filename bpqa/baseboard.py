@@ -34,10 +34,7 @@ ALL_ROOMS_RE = re.compile(
     r"\balle (?:raume|zimmer)\b|\bin allen (?:raumen|zimmern)\b|\bsamtliche\w* (?:raume|zimmer)\b|\bjeden raum\b|"
     r"\balla rum\b|\bi alla rum\b|\bvarje rum\b|"
     r"\btoutes les (?:pieces|chambres)\b|\bchaque piece\b|\btutte le (?:stanze|camere)\b|\btodas las habitaciones\b")
-_WASTE = (r"(\d+(?:[.,]\d+)?)\s*%\s*(?:of\s*)?(?:waste|cutting|allowance|extra|spare|reserve|hukka\w*|lisaa|varaa|varaus\w*|"
-          r"verschnitt|zuschlag|svinn|spill|tillagg|de chutes?|de perte|chutes?|pertes?|marge)")
-_WASTE_BEFORE = r"(?:waste|allowance|hukka|verschnitt|zuschlag|svinn|spill|chutes?|pertes?)\s*(?:of|=|:|von|av|de)?\s*(\d+(?:[.,]\d+)?)\s*%"
-_NO_WASTE = r"\b(no|without|zero|ilman|ohne|utan|kein|keinen|sans|zero)\s+(waste|allowance|cutting|hukkaa?|verschnitt|spill|svinn|chutes?|pertes?)"
+from .walls import WASTE_AFTER as _WASTE, WASTE_BEFORE as _WASTE_BEFORE, NO_WASTE as _NO_WASTE   # one waste vocabulary
 
 # types an "all rooms" baseboard covers: every indoor room type; a balcony or terrace has no baseboard
 OUTDOOR = {"balcony"}

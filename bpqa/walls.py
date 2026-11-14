@@ -34,10 +34,45 @@ WINDOW_H_M, WINDOW_SILL_M = 1.2, 0.9
 WET = {"bathroom", "wc", "sauna"}
 
 _NUM = r"(\d+(?:[.,]\d+)?)"
+# a length unit, abbreviated or written out in any inflection ("1,2 metrin korkeuteen", "120 Zentimeter", "1.2 metres")
+_UNIT = (r"(mm|cm|m|millimet\w*|millimeter\w*|sentti\w*|centimet\w*|zentimeter\w*|centimeter\w*|"
+         r"metri\w*|meter\w*|metre\w*)")
+# a percentage, with the sign or the word ("10 %", "10 percent", "10 prosentin")
+_PCT = r"\s*(?:%|percent\b|per cent\b|prosent\w*|prozent\w*|procent\w*)"
+# waste words after / before the percentage, in every language the rules read. Finnish inflects the stem
+# (hukka, hukkaa, hukalla, hukan; varaus, varauksella). bpqa/baseboard.py uses the same patterns.
+WASTE_AFTER = (rf"{_NUM}{_PCT}\s*(?:of\s*)?(?:waste|cutting|allowance|extra|spare|reserve|huk(?:ka|a)\w*|lisaa|varaa|"
+               r"varau\w*|verschnitt|zuschlag|svinn|spill|tillagg|de chutes?|de perte|chutes?|pertes?|marge)")
+WASTE_BEFORE = (r"(?:waste|allowance|huk(?:ka|a)\w*|reserve|verschnitt|zuschlag|svinn|spill|chutes?|pertes?)"
+                rf"\s*(?:of|=|:|von|av|de|on)?\s*{_NUM}{_PCT}")
+NO_WASTE = (r"\b(no|without|zero|ilman|ohne|utan|kein|keinen|sans)\s+(waste|allowance|cutting|hukkaa?|verschnitt|spill|"
+            r"svinn|chutes?|pertes?)")
+
+
+# a percentage written in words ("ten percent", "kymmenen prosenttia", "zehn Prozent") or as "10pct": rewritten to
+# digits before the rules read it, so the waste rules and the check on the language model's reading both see it
+_PCT_WORDS = {"five": 5, "ten": 10, "twelve": 12, "fifteen": 15, "twenty": 20, "viisi": 5, "viiden": 5,
+              "kymmenen": 10, "kahdentoista": 12, "kaksitoista": 12, "viisitoista": 15, "viidentoista": 15,
+              "kaksikymmenta": 20, "kahdenkymmenen": 20, "funf": 5, "zehn": 10, "zwolf": 12, "funfzehn": 15,
+              "zwanzig": 20, "fem": 5, "tio": 10, "tolv": 12, "femton": 15, "tjugo": 20}
+_PCT_WORD_RE = re.compile(r"\b(" + "|".join(sorted(_PCT_WORDS, key=len, reverse=True)) + r")\s*"
+                          r"(?=(?:%|percent\b|per cent\b|prosent\w*|prozent\w*|procent\w*))")
+
+
+def spelled_percent(f: str) -> str:
+    """Folded text with percentages in words or 'pct' rewritten to digits; unchanged otherwise."""
+    f = re.sub(r"(\d)\s*pct\b", r"\1 %", f)
+    return _PCT_WORD_RE.sub(lambda m: f"{_PCT_WORDS[m.group(1)]} ", f)
 
 
 def _f(s: str) -> float:
     return float(s.replace(",", "."))
+
+
+def _metres(v: str, unit: str) -> float:
+    u = unit.lower()
+    div = 1000 if u.startswith(("mm", "milli")) else 100 if u.startswith(("c", "s", "z")) else 1
+    return _f(v) / div
 
 
 def parse_inputs(question: str, tk: dict | None = None) -> dict:
@@ -54,30 +89,29 @@ def parse_inputs(question: str, tk: dict | None = None) -> dict:
 
 
 def _parse_inputs(question: str) -> dict:
-    f = fold(question)
+    f = spelled_percent(fold(question))
     out = {}
-    m = re.search(rf"(?:ceiling|room|wall)?\s*heights?\s*(?:of|is|=|:)?\s*{_NUM}\s*(m|cm|mm)\b", f) or \
-        re.search(rf"{_NUM}\s*(m|cm|mm)\s*(?:high|tall|ceilings?|ceiling height|korkea|korkuinen)", f) or \
-        re.search(rf"(?:huonekorkeus|raumhohe|deckenhohe|takhojd|rumshojd)\s*(?:on|ist|ar|von)?\s*{_NUM}\s*(m|cm|mm)", f)
+    m = re.search(rf"(?:ceiling|room|wall)?\s*heights?\s*(?:of|is|=|:)?\s*{_NUM}\s*{_UNIT}\b", f) or \
+        re.search(rf"{_NUM}\s*{_UNIT}\s*(?:high|tall|ceilings?|ceiling height|korkea|korkuinen)", f) or \
+        re.search(rf"(?:huonekorkeus|raumhohe|deckenhohe|takhojd|rumshojd)\s*(?:on|ist|ar|von)?\s*{_NUM}\s*{_UNIT}", f)
     if m:
-        v = _f(m.group(1)) / {"m": 1, "cm": 100, "mm": 1000}[m.group(2)]
+        v = _metres(m.group(1), m.group(2))
         if 1.5 <= v <= 12:
             out["ceiling_m"] = v
-    m = re.search(rf"(?:tiles?|tiling|tiled|laatoitus|laatat?)\s*(?:up\s*)?(?:to|until|asti|korkeuteen)\s*(?:a\s*height\s*of\s*)?{_NUM}\s*(m|cm|mm)", f) or \
-        re.search(rf"(?:tiling|tile|tiled)\s*height\s*(?:of|=|:)?\s*{_NUM}\s*(m|cm|mm)", f) or \
+    m = re.search(rf"(?:tiles?|tiling|tiled|laatoitus|laatat?)\s*(?:up\s*)?(?:to|until|asti|korkeuteen)\s*(?:a\s*height\s*of\s*)?{_NUM}\s*{_UNIT}", f) or \
+        re.search(rf"(?:tiling|tile|tiled)\s*height\s*(?:of|=|:)?\s*{_NUM}\s*{_UNIT}", f) or \
         (re.search(r"\btil(e|es|ing|ed)\b|laat|fliese|kakel|klinker|carrelage", f) and (
-            re.search(rf"\b(?:up\s*to|until|bis|asti|till|upp till)\s*(?:a\s*height\s*of\s*)?{_NUM}\s*(m|cm|mm)\b", f) or
-            re.search(rf"{_NUM}\s*(m|cm|mm)\s*(?:korkeuteen|asti|hohe|hojd)", f)))
+            re.search(rf"\b(?:up\s*to|until|bis|asti|till|upp till)\s*(?:a\s*height\s*of\s*)?{_NUM}\s*{_UNIT}\b", f) or
+            re.search(rf"{_NUM}\s*{_UNIT}\s*(?:korkeu\w*|asti|hohe|hojd)", f)))
     if m:
-        out["tile_m"] = _f(m.group(1)) / {"m": 1, "cm": 100, "mm": 1000}[m.group(2)]
+        out["tile_m"] = _metres(m.group(1), m.group(2))
     if re.search(r"\bfull[- ]height\b|floor to ceiling|kattoon asti", f):
         out["tile_m"] = None
         out["full_height"] = True
-    if re.search(r"\b(no|without|zero|ilman|ohne|utan|kein|keinen)\s+(waste|allowance|cutting|hukkaa?|verschnitt|spill|svinn)", f):
+    if re.search(NO_WASTE, f):
         out["waste_pct"] = 0.0
     else:
-        m = re.search(rf"{_NUM}\s*%\s*(?:of\s*)?(?:waste|cutting|allowance|extra|reserve|spare|hukka|lisaa|verschnitt|spill|svinn)", f) or \
-            re.search(rf"(?:waste|allowance|hukka|reserve|verschnitt|spill)\s*(?:of|=|:)?\s*{_NUM}\s*%", f)
+        m = re.search(WASTE_AFTER, f) or re.search(WASTE_BEFORE, f)
         if m:
             out["waste_pct"] = _f(m.group(1))
     # The value is an order quantity (waste included) when the question says order/buy, states a waste, or asks
