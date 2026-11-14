@@ -950,7 +950,10 @@ async function loadWitnessSummary() {
   const body = w.rows.map((r) => `<tr class="${r.level === "total" ? "total" : ""}"><td>${esc(r.label)}</td><td class="num">${num(r.n)}</td><td class="num">${pct(r.share)}</td>
     <td class="num">${r.router_correct == null ? "-" : `${pct(r.router_correct)} <span class="dim">(${r.router_correct_n})</span>`}</td>
     <td class="num">${r.majority_correct == null ? "-" : `${pct(r.majority_correct)} <span class="dim">(${r.majority_correct_n})</span>`}</td></tr>`).join("");
+  const wr = (w.witness_rows || []).map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${num(r.n)}</td><td class="num">${pct(r.correct)} <span class="dim">(${r.correct_n})</span></td>
+    <td class="wrap dim">${Object.entries(r.by_format).map(([f, v]) => `${f} ${v.correct} of ${v.n}`).join(", ")}</td></tr>`).join("");
   el.innerHTML = head + "<tbody>" + body + "</tbody>";
+  $("#witTable2").innerHTML = wr ? `<thead><tr><th>Each witness answer</th><th class="num">Answers</th><th class="num">Correct</th><th>By format</th></tr></thead><tbody>${wr}</tbody>` : "";
   $("#witNote").textContent = w.note || "";
 }
 

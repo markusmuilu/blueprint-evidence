@@ -40,8 +40,14 @@ def main():
     ap.add_argument("--per-drawing", type=int, default=12)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--out", default=str(REPO / "out" / "witness"))
+    ap.add_argument("--summarize-only", action="store_true", help="rebuild summary.json from records.jsonl")
     args = ap.parse_args()
     root = data_root(args.data)
+    if args.summarize_only:
+        out = Path(args.out)
+        recs = [json.loads(x) for x in (out / "records.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
+        old = json.loads((out / "summary.json").read_text(encoding="utf-8")) if (out / "summary.json").exists() else {}
+        return write_summary(recs, out, root, args, old.get("elapsed_s", 0))
     qs = [q for q in load_questions(root) if (args.split == "all" or split_of(q.path) == args.split) and q.type != "text"]
     by_path = defaultdict(list)
     for q in qs:
@@ -119,8 +125,28 @@ def write_summary(recs, out, root, args, elapsed):
             pf[0] += 1
             pf[1] += w["value"] is not None
             pf[2] += bool(w["correct"])
+    # per witness: is a format's answer right more often when another format gives the same value?
+    by_agree = defaultdict(lambda: [0, 0])
+    for r in recs:
+        for w in r["witnesses"]:
+            if w["value"] is None or w["agrees"] is None:
+                continue
+            g = "alone" if r["n_answered"] == 1 else "in" if w["agrees"] else "out"
+            k = g + ":" + w["format"]
+            by_agree[k][0] += 1
+            by_agree[k][1] += bool(w["correct"])
+            k = g
+            by_agree[k][0] += 1
+            by_agree[k][1] += bool(w["correct"])
+    witness_rows = []
+    for key, label in (("in", "A format's answer when another format matches it"), ("out", "A format's answer when another format answers differently"),
+                       ("alone", "A format's answer when no other format answers")):
+        n_, c_ = by_agree.get(key, [0, 0])
+        per = {f: by_agree.get(f"{key}:{f}", [0, 0]) for f in ("DXF", "IFC", "PDF", "PNG")}
+        witness_rows.append({"key": key, "label": label, "n": n_, "correct": c_ / n_ if n_ else None, "correct_n": c_,
+                             "by_format": {f: {"n": v[0], "correct": v[1]} for f, v in per.items() if v[0]}})
     summary = {
-        "split": args.split, "data": str(root), "questions": n, "elapsed_s": round(elapsed, 1), "rows": rows,
+        "split": args.split, "witness_rows": witness_rows, "data": str(root), "questions": n, "elapsed_s": round(elapsed, 1), "rows": rows,
         "corroborated": {"n": len(a_yes), "router_correct": rate([bool(r["router"]["correct"]) for r in a_yes])[0]},
         "uncorroborated": {"n": len(a_no), "router_correct": rate([bool(r["router"]["correct"]) for r in a_no])[0]},
         "by_source": {k: dict(v) for k, v in by_source.items()},

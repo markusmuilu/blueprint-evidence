@@ -390,7 +390,8 @@ eval outputs), `--gpu` (by default the detector runs on the CPU).
   (cached detections in `out/det/` still answer); the rail's status button says what is missing.
 - API: `POST /api/ask {path, question, pdf_only}`, `POST /api/upload`, `GET /api/drawings`,
   `GET /api/drawing`, `GET /api/preview`, `GET /api/evidence/<id>.png`, `GET /api/results[/<run>]`,
-  `GET /api/overview`, `GET /api/baseline`,
+  `GET /api/overview`, `GET /api/baseline`, `POST /api/witnesses {path, question}`,
+  `POST /api/corrections`, `GET /api/corrections[.csv]`, `GET /api/costs`, `GET /api/witness_summary`,
   `GET /api/status`; docs at `/api/docs`. The design system is in `DESIGN.md`.
 
 Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG) and
@@ -413,6 +414,80 @@ set T=--stoa ../data/stoa-full/junction-dataset --images ../data/detector/ds_cub
 Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG), `python tests/test_tiling.py`
 (tiles, seam merging, rotated and mirrored views mapped back) and
 `python tools/test_overlap.py --work <scratch folder>` (overlap tool on the preview).
+
+### Verify in seconds
+
+Every counted answer gets a verification strip under the drawing: one cropped thumbnail per counted
+item, numbered like the overlay, blue when the route proved it and amber when it needs a check. Select a
+thumbnail and the viewer zooms to that item with the reticle on it. "Not this one" strikes an item out
+and "Add missed item" lets you click the drawing where one was missed; the count in the answer panel
+changes as you go, "Save correction" appends the correction to `out/app/corrections.jsonl` and
+"Export" downloads all of them as CSV (`GET /api/corrections.csv`). Area answers list each room with
+its polygon crop, its area and the scale source; striking a room out takes its area off the total.
+
+Pins work for every route, including DXF and IFC answers drawn in model coordinates. `bpqa/evidence.py`
+records every numbered box and every filled room polygon a route draws, in the pixels of the evidence
+image, and saves them next to the PNG as `<stem>.marks.json` (with the world-to-pixel transform for
+DXF and IFC canvases). The app pins, crops and numbers items from that file, so no route has to convert
+its own coordinates and the numbers always match the overlay.
+
+Timing, measured with Playwright on 10 answers (Swiss DXF doors and windows, CubiCasa detector windows,
+WC seats and doors, IFC doors on two models, one Swiss apartment area; 154 items in all). "Without the
+strip" means selecting each item in the answer panel list so the viewer zooms to it, and capturing the
+viewer; "with the strip" means capturing the strip, one capture per screenful of thumbnails:
+
+| | views to look at | app time, total | app time per answer |
+|---|---:|---:|---:|
+| without the strip | 154 (15.4 per answer) | 29.2 s | 2.9 s |
+| with the strip | 26 (2.6 per answer) | 4.9 s | 0.5 s |
+
+These times are the app's render and capture time under automation, not a person's looking time, which
+was not measured. What the strip changes is the number of views: one screenful shows about seven items
+side by side instead of one item per zoom. The script is `tools/verify_timing.js`.
+
+### Three witnesses: cross-format agreement
+
+When the same drawing exists in more than one format, the app asks the question of each format on its
+own (`bpqa/witnesses.py`, `POST /api/witnesses`): the DXF layers, the IFC model, the PDF alone (twins
+hidden) and the PNG (OCR labels and the symbol detector, twins hidden). Nemotron is off for witnesses, so
+they share no reading and cost $0 in model calls. The answer panel shows them side by side with the
+agreement ("2 of 3 formats agree on 36; PNG differs") and circles the values that disagree. Selecting a
+witness shows its own evidence and strip. When two witnesses are drawn on the same page (a Swiss PDF and
+its PNG render have the same page frame), their boxes are matched by position and the items only one of
+them counted are circled on the drawing, so a disagreement points at the doors to look at, not just at a
+number.
+
+WITNESS_RESULTS
+
+### Cost and latency, measured
+
+`/api/ask` records wall seconds and CPU seconds (process time, all threads) for every answer;
+`tools/cost_eval.py` measures them per route on a sample. Cost per 1,000 questions uses ASSUMED prices,
+not quotes: $0.05 per vCPU-hour (a general-purpose cloud vCPU) and $1.00 per GPU-hour (an L4 or A10G
+class GPU). The detector ran on the CPU; for the detector route, the last column books its wall time on the assumed
+GPU price instead. A question that every route abstained on is booked under the first route tried (13 of
+the 14 `pdf-text` rows are IFC-plan and OpeningDesign questions that abstained). The answer panel shows the same numbers as a small cost meter next to the baseline.
+
+Preview set, dev split, 89 questions (up to 10 drawings per source, file type and question type, two
+questions per drawing), evidence rendering on, Nemotron off, 16-thread CPU:
+
+| route | questions | answered | median wall | p90 wall | cold median | CPU s, mean | $ per 1,000, CPU | $ per 1,000, detector on a GPU |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `dxf-geometry` | 40 | 40 | 65 ms | 260 ms | 129 ms | 0.09 | $0.0013 | - |
+| `ifc` | 15 | 15 | 231 ms | 2.4 s | 161 ms | 0.73 | $0.0101 | - |
+| `pdf-text` | 14 | 1 | 1 ms | 610 ms | 1 ms | 0.13 | $0.0018 | - |
+| `raster-detector` | 13 | 13 | 1.6 s | 7.6 s | 6.1 s | 30.28 | $0.42 | $1.13 |
+| `raster-ocr-labels` | 5 | 5 | 93 ms | 3.5 s | 3.2 s | 10.03 | $0.14 | - |
+| `raster-cv` | 2 | 2 | 4.3 s | 6.5 s | 4.3 s | 34.00 | $0.47 | - |
+| all sampled questions | 89 | 76 | 82 ms | 2.8 s | 175 ms | 5.93 | $0.0824 | - |
+| Nemotron, plain prompt (baseline) | 150 | - | 24.8 s | - | - | - | $101.04 at measured tokens | |
+
+The Nemotron baseline row uses the tokens measured on 150 preview test questions
+(`out/baseline_nemotron.json`: 1,596 input and 6,417 output tokens per question on average, most of them
+reasoning) at an assumed $3 / $15 per million input / output tokens: about $101 per 1,000 questions,
+against $0.08 per 1,000 for the routes on this sample at the assumed CPU price. The detector's CPU mean is
+dominated by the first question on each drawing (model load, detection and the OCR the checks read);
+later questions on the same drawing take a median 0.08 s because detections are cached per drawing.
 
 ### Split
 
