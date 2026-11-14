@@ -596,19 +596,21 @@ model the 3D panel says why and the plan view and answer are unaffected. three.j
 jsDelivr by an import map; nothing is vendored. Fill the cache ahead of time with
 `.venv\Scripts\python -m app.ifc3d <model.ifc> ...`.
 
-Measured on this PC (8 threads, RTX 5070; server build inside the running app; browser times with
-the cache warm, local server):
+Measured on this PC (8 threads, RTX 5070; server build inside the running app, first request for the
+model; browser times from opening the 3D view to the first storey drawn and to all storeys drawn, fresh
+browser profile, local server, model cache built, three runs each):
 
 | model | IFC size | elements | triangles | geometry gz | server build | browser: first storey / all storeys |
 |---|---|---|---|---|---|---|
-| FZK-Haus | 2.5 MB | 83 | 22k | 0.12 MB | 2.0 s | 20 ms / 0.2 s |
-| Esplanades | 9.6 MB | 1,958 | 158k | 1.0 MB | 10.1 s | 0.2 s / 0.2 s to 0.5 s |
-| Molio | 74 MB | 3,498 | 728k | 4.1 MB | 26.3 s (16.7 s standalone) | 0.15 to 0.23 s / 0.3 to 0.4 s |
+| FZK-Haus | 2.6 MB | 83 | 22k | 0.12 MB | 2.0 s | 49 to 51 ms / 53 to 64 ms |
+| Esplanades | 12.1 MB | 1,958 | 158k | 1.0 MB | 10.1 s | 65 to 74 ms / 85 to 108 ms |
+| Molio | 74 MB | 3,498 | 728k | 4.1 MB | 26.3 s (16.7 s standalone) | 79 ms / 146 to 162 ms |
 | duplex (IFC-Bench) | 1.7 MB | 215 | 27k | 0.15 MB | 1.2 s | - |
 | ac20 (IFC-Bench) | 10.9 MB | 702 | 44k | 0.22 MB | 4.3 s | - |
 | Smiley West | 6.1 MB | 832 | 186k | 0.96 MB | 7.5 s | - |
 
-The Molio build peaks at about 0.7 GB above the process baseline.
+The Molio build peaks at about 0.7 GB above the process baseline. Over the network the geometry
+transfer is added (4.1 MB for Molio).
 
 Takeoff answers (floor and wall tiling, room-area sums) get an Order section in the answer panel and an
 order sheet (`app/static/ordersheet.js`): one row per room with floor area, perimeter, height, tiled
