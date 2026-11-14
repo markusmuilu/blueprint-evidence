@@ -405,11 +405,46 @@ def base_canvas(fl: SwissFloor) -> VectorCanvas:
     return cv
 
 
+# rooms that count as a "Zimmer" in a room count: living rooms, bedrooms and generic rooms (the Swiss listing
+# convention); kitchen, bath, WC, corridor, storage, balcony and stair are listed but not counted
+ZIMMER_TYPES = {"living", "bedroom", "room", "dining", "office"}
+
+
+def apartment_room_count(fl, letter: str | None) -> dict:
+    """'How many rooms in apartment A', 'Wieviele Zimmer hat die Wohnung?': the rooms inside one apartment outline whose
+    label is a living room, bedroom or generic room. Without a letter the floor must have exactly one apartment."""
+    units = sorted({r["unit"] for r in fl.rooms if r.get("unit")})
+    if not units:
+        return {"why": "no apartment outlines on this floor, so rooms cannot be assigned to an apartment"}
+
+    def habitable(u):
+        return [r for r in fl.rooms if r.get("unit") == u and fl.counts_as_indoor(r)
+                and takeoff.room_types(r["name"]) & ZIMMER_TYPES]
+    if letter is None:
+        if len(units) != 1:
+            per = ", ".join(f"{u}: {len(habitable(u))}" for u in units)
+            return {"why": f"this floor has {len(units)} apartments ({', '.join(units)}); name one. Rooms counted as "
+                           f"living room, bedroom or generic room per apartment: {per}", "final": True}
+        letter = units[0]
+    if letter not in units:
+        return {"why": f"apartment {letter} not found on this floor (apartments: {', '.join(units)})", "final": True}
+    used = habitable(letter)
+    others = sorted({r["name"] for r in fl.rooms if r.get("unit") == letter and r["name"] and r not in used})
+    names = ", ".join(sorted(r["name"] for r in used))
+    return {"rooms": used, "value": len(used),
+            "note": f"rooms inside apartment {letter} labelled as living room, bedroom or generic room ({names}); "
+                    f"not counted: {', '.join(others) or 'none'}",
+            "estimate": "a room count follows a convention: living rooms and bedrooms are counted, kitchen, bathrooms, "
+                        "corridor, storage and balconies are not"}
+
+
 def answer(ctx, q) -> Answer:
     dxf = ctx.sibling("dxf")
     if dxf is None:
         return abstain(ROUTE, "no DXF sibling")
     if not swiss_scheme(str(dxf)):
+        if q.extra.get("apartment_scope"):
+            return abstain(ROUTE, "this DXF has no apartment outlines, so rooms cannot be assigned to one apartment")
         from . import dxf_generic
         return dxf_generic.answer(ctx, q, dxf)
     fl = load(str(dxf))
@@ -441,6 +476,13 @@ def answer(ctx, q) -> Answer:
             rooms_used = [r for r in fl.rooms if r["name"] == q.label]
             value = len(rooms_used)
             note = f"room outlines labelled '{q.label}'"
+        elif q.obj == "room" and q.extra.get("apartment_scope"):
+            rc = apartment_room_count(fl, q.apartment)
+            if rc.get("why"):
+                a = abstain(ROUTE, rc["why"])
+                a.final = rc.get("final", False)
+                return a
+            rooms_used, value, note, tier_reason = rc["rooms"], rc["value"], rc["note"], rc["estimate"]
         elif q.obj in takeoff.COUNT_TYPES:
             rt = takeoff.count_room_type(fl.rooms, q.obj, fixtures=lambda r: swiss_room_fixtures(fl, r))
             if rt["value"] is None:
@@ -462,9 +504,17 @@ def answer(ctx, q) -> Answer:
             if not rooms_used:
                 return abstain(ROUTE, f"apartment {q.apartment} not found")
             note = f"indoor rooms inside apartment {q.apartment} outline"
-        elif q.variant == "net_indoor_total":
+        elif q.variant in ("net_indoor_total", "total"):
             rooms_used = [r for r in fl.rooms if fl.counts_as_indoor(r) and not fl.is_shaft(r)]
             note = "numbered indoor rooms (named, or unnamed with a fixture inside or wider than 1 m; outdoor, shafts and voids excluded)"
+        elif q.variant == "max":
+            indoor = [r for r in fl.rooms if fl.counts_as_indoor(r) and not fl.is_shaft(r)]
+            if not indoor:
+                return abstain(ROUTE, "no indoor room outlines on this floor")
+            big = max(indoor, key=fl.room_area)
+            rooms_used = [big]
+            note = (f"largest of the {len(indoor)} indoor room outlines: {big['name'] or 'unnamed room'} {big['number'] or ''}"
+                    + (f" (apartment {big['unit']})" if big.get("unit") else "")).strip()
         elif q.label:
             rooms_used = [r for r in fl.rooms if r["name"] == q.label]
             note = f"rooms labelled '{q.label}'"

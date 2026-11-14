@@ -61,7 +61,10 @@ INTENTS: dict[str, tuple[str, str | None, str | None, str]] = {
     "count_beam": ("count", "beam", None, "beams"),
     "count_stair": ("count", "stair", None, "stairs, staircases"),
     "count_slab": ("count", "slab", None, "slabs"),
+    "count_office": ("count", "office", None, "offices (rooms used as an office)"),
+    "count_meeting_room": ("count", "meeting_room", None, "meeting rooms, conference rooms"),
     "area_room_total": ("area", "room", "total", "the total floor area of ALL rooms together"),
+    "area_room_largest": ("area", "room", "max", "the area of the biggest / largest room"),
     "area_room_named": ("area", "room", None, "the area of ONE room given by name (name) or number (room_no)"),
     "area_apartment": ("area", "apartment", None, "the area of one apartment given by its letter (apartment)"),
     "area_rooms_of_type": ("area", "room", "type_sum", "floor area summed over the rooms of given types "
@@ -76,14 +79,15 @@ INTENTS: dict[str, tuple[str, str | None, str | None, str]] = {
 }
 COUNT_OBJS = {v[1] for k, v in INTENTS.items() if k.startswith("count_")}
 ROOM_TYPES = ["bathroom", "wc", "sauna", "kitchen", "bedroom", "living", "dining", "hall", "utility", "storage",
-              "balcony", "stair", "wet"]
+              "balcony", "stair", "office", "meeting", "wet"]
 MATERIALS = ["tiles", "flooring", "paint", "waterproofing", "screed"]
 SURFACES = ["floor", "walls", "floor+walls", "ceiling"]
 
 _OBJ_TO_INTENT = {v[1]: k for k, v in INTENTS.items() if k.startswith("count_")}
 # a count object the rules know but the routes treat as a room type: "bedroom" -> takeoff type bedroom
 _OBJ_TO_TYPE = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bathroom", "sauna": "sauna",
-                "balcony": "balcony", "wc_room": "wc"}
+                "balcony": "balcony", "wc_room": "wc", "office": "office", "meeting_room": "meeting"}
+_TYPE_TO_COUNT = {v: k for k, v in _OBJ_TO_TYPE.items()}
 
 TYPE_SYN = {
     "bedroom": "bedroom", "bedrooms": "bedroom", "bed room": "bedroom", "sleeping room": "bedroom", "mh": "bedroom",
@@ -100,6 +104,8 @@ TYPE_SYN = {
     "balcony": "balcony", "balconies": "balcony", "terrace": "balcony", "balcony / terrace": "balcony",
     "stair": "stair", "stairs": "stair", "staircase": "stair",
     "wet": "wet", "wet room": "wet", "wet rooms": "wet", "wet areas": "wet",
+    "office": "office", "offices": "office", "meeting": "meeting", "meeting room": "meeting",
+    "meeting rooms": "meeting", "conference room": "meeting", "sitting room": "living",
 }
 MATERIAL_SYN = {
     "tiles": "tiles", "tile": "tiles", "tiling": "tiles", "ceramic": "tiles", "tiles_floor": "tiles",
@@ -127,6 +133,9 @@ INTENT_ALIAS = {
     "count_stairs": "count_stair", "count_staircases": "count_stair", "count_slabs": "count_slab",
     "count_showers": "count_shower", "count_bathtubs": "count_bathtub", "count_baths": "count_bathtub",
     "count_shower_or_bathtub": "count_shower_or_bath", "count_showers_and_bathtubs": "count_shower_or_bath",
+    "count_offices": "count_office", "count_meeting_rooms": "count_meeting_room", "count_meeting": "count_meeting_room",
+    "area_largest_room": "area_room_largest", "area_biggest_room": "area_room_largest", "largest_room": "area_room_largest",
+    "biggest_room": "area_room_largest", "area_room_max": "area_room_largest",
     "count_restroom": "count_wc_room", "count_wc_rooms": "count_wc_room", "count_toilet_rooms": "count_wc_room",
     "area_total": "area_room_total", "area_all_rooms": "area_room_total", "total_room_area": "area_room_total",
     "area_rooms_total": "area_room_total", "area_room": "area_room_named", "area_named_room": "area_room_named",
@@ -165,6 +174,9 @@ EXAMPLES = [
      {"intent": "area_room_named", "name": "Studio 4", "level": "L2"}),
     ("Which fire rating do the doors have?", {"intent": "other"}),
     ("kuinka monta kerrosta talossa on", {"intent": "count_storey"}),
+    ("how many offices", {"intent": "count_office"}),
+    ("biggest room?", {"intent": "area_room_largest"}),
+    ("how many server rooms are there", {"intent": "other"}),
 ]
 
 
@@ -185,7 +197,9 @@ def prompt(question: str) -> str:
         "tiles go up to in metres; order: true when the person wants the quantity to buy or order.\n"
         "name, room_no, apartment, level: copy exactly as written in the question, only when it names one.\n"
         "Rules: 'the area of the bedrooms / living room / kitchen / bathrooms' is area_rooms_of_type, not "
-        "area_room_named. 'Total area of all rooms' is area_room_total. Use other when no intent fits.\n\n"
+        "area_room_named. 'Total area of all rooms' is area_room_total. Never drop a room type the question names: "
+        "count_room and area_room_total are only for rooms of any kind; a room type with no count intent is other. "
+        "Use other when no intent fits.\n\n"
         f"{ex}\n\nQ: {question}\nA:")
 
 
@@ -295,8 +309,37 @@ def normalise(d, question: str) -> tuple[dict | None, str]:
     intent = canonical_intent(d.get("intent")) or (_legacy_intent(d) if "intent" not in d else None)
     if intent is None:
         return None, f"unknown intent {d.get('intent')!r}"
-    out: dict = {"intent": intent}
     f = fold(question)
+    # a room type the question names is never dropped (QA 14 Nov: "how many offices" read as count_room counted all
+    # 13 spaces): count_room / area_room_total become the typed intent, or the reading is rejected
+    named = _named_types(question)
+    unknown = unknown_room_modifier(question)
+    if intent == "count_room":
+        if len(named) == 1 and next(iter(named)) in _TYPE_TO_COUNT:
+            intent = _OBJ_TO_INTENT[_TYPE_TO_COUNT[next(iter(named))]]
+        elif named:
+            return None, f"count of rooms, but the question names room type(s) {sorted(named)} that no count filters by"
+        elif unknown:
+            return None, f"count of rooms, but the question names '{unknown}', a room type the vocabulary does not know"
+        elif not GENERIC_ROOM.search(strip_quoted(f)):
+            return None, "count of rooms of any kind, but the question names no generic room word"
+    if intent == "area_room_largest" and re.search(r"\b(which|what|welche\w*|vilk\w*|mika|mita|quel\w*|quale)\b", f):
+        intent = "other"                      # "Welcher Raum ist der groesste?" asks which room, not its area
+    if intent in ("area_room_total", "area_room_largest"):
+        if named and intent == "area_room_total":
+            intent, d = "area_rooms_of_type", {**d, "types": sorted(named)}
+        elif unknown:
+            return None, f"area of all rooms, but the question names '{unknown}', a room type the vocabulary does not know"
+    if intent == "area_room_named" and not quotes(question) and not d.get("room_no"):
+        nm = d.get("name") or d.get("label")
+        t = TK.room_types(nm) - {"room"} if isinstance(nm, str) and fold(nm).strip() in f else set()
+        if not t and isinstance(nm, str) and fold(nm).strip() in f:    # "bastun" (the sauna), "keittiota"
+            t = {k for k in named if TK._Q_TYPE_RE[k].search(fold(nm))}
+        if t:                                   # "kuinka iso kylpyhuone on" -> name 'kylpyhuone' is a room type
+            intent, d = "area_rooms_of_type", {**d, "types": sorted(t), "name": None, "label": None}
+    if intent == "area_rooms_of_type" and unknown and not named:
+        return None, f"the question names '{unknown}', a room type the vocabulary does not know"
+    out: dict = {"intent": intent}
     for key in ("name", "room_no", "apartment", "level"):
         v = d.get(key if key != "name" else "name", d.get("label") if key == "name" else None)
         if v is None or v == "":
@@ -497,7 +540,16 @@ def _llm_reading(question: str) -> tuple[dict | None, str, float, float]:
     try:
         if path.exists():
             d = json.loads(path.read_text(encoding="utf-8"))
-            _mem[key] = (d["reading"], d["why"], d.get("cost", 0.0), d.get("latency", 0.0))
+            reading, why = d["reading"], d["why"]
+            # the cache holds a validated reading; validate it again so a stricter normaliser applies to old entries
+            # (the raw reply, kept since 14 Nov, is validated afresh)
+            if d.get("raw") is not None:
+                reading, why = normalise(d["raw"], question)
+            elif reading is not None:
+                again = {k: v for k, v in reading.items() if k != "inputs"}
+                again.update(reading.get("inputs") or {})
+                reading, why = normalise(again, question)
+            _mem[key] = (reading, why, d.get("cost", 0.0), d.get("latency", 0.0))
             return _mem[key]
     except (OSError, ValueError, KeyError):
         pass
@@ -514,7 +566,8 @@ def _llm_reading(question: str) -> tuple[dict | None, str, float, float]:
     _mem[key] = out
     try:
         PARSE_CACHE.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"reading": out[0], "why": out[1], "cost": cost, "latency": lat}), encoding="utf-8")
+        path.write_text(json.dumps({"reading": out[0], "why": out[1], "cost": cost, "latency": lat, "raw": d},
+                                   ensure_ascii=False, default=str), encoding="utf-8")
     except OSError:
         pass
     return out
@@ -559,7 +612,7 @@ def shape_known(q: Query) -> bool:
     if m == "count":
         return o in COUNT_OBJS
     if m == "area":
-        return (o == "room" and (v in ("total", "net_indoor_total", "type_sum") or bool(q.label or q.room_no))) or \
+        return (o == "room" and (v in ("total", "net_indoor_total", "type_sum", "max") or bool(q.label or q.room_no))) or \
                o == "apartment" or (o == "wall" and v == "side_area") or (o == "room" and bool(q.label))
     if m == "length":
         return o == "wall"
@@ -576,10 +629,58 @@ def _named_types(question: str) -> set[str]:
     return {t for t, rx in TK._Q_TYPE_RE.items() if t != "wet" and rx.search(f)}
 
 
+# words for a room of any kind (folded): a count_room reading needs one of them in the question
+GENERIC_ROOM = re.compile(r"\brooms?\b|\bspaces?\b|huone(?!isto)\w*|\btil(a|oja|oj\w+|at|aa)\b|zimmer\w*|\braum\w*|"
+                          r"\brum(men|met|mene)?\b|\bpieces?\b|\blocal[ei]\b|\bstanz[ae]\b|\bruum\w*|vaerelse\w*")
+# "<word> rooms": words that leave the room type open ("all rooms", "numbered rooms", "the indoor spaces")
+_ROOM_MOD = re.compile(r"\b([a-z]+)[ -](rooms?|spaces?)\b")
+_GENERIC_MODS = set("""a all an and any are as at both different each empty enclosed entire every few for free gross habitable
+heated how in individual indoor interior internal its main many more my named net numbered of on open or other our outdoor
+exterior external residential separate several single such that the their there these this those total two three four
+unheated usable what which whole with your number big bigger biggest large larger largest small smaller smallest
+different labelled labeled listed existing remaining have has can finish complete schedule listing including containing showing""".split())
+
+
+def unknown_room_modifier(question: str) -> str | None:
+    """'meeting rooms' before the vocabulary knew it, 'lab rooms', 'server rooms': a word that types the rooms but is
+    not a room type of bpqa/takeoff.py. Returns the phrase, or None. Reading it as 'all rooms' would be wrong."""
+    f = fold(strip_quoted(question))
+    for m in _ROOM_MOD.finditer(f):
+        w = m.group(1)
+        if w in _GENERIC_MODS or w.isdigit():
+            continue
+        if any(rx.search(m.group(0)) for rx in TK._Q_TYPE_RE.values()):
+            continue
+        return m.group(0)
+    return None
+
+
+# casual spellings the rules do not read ("how big r the bedrooms", "how many dooors"): rewritten before parsing
+_CASUAL = [(re.compile(r"(?i)\b(r)\b(?=\s+(?:the|there|they|these|those|all|my|our)\b)"), "are"),
+           (re.compile(r"(?i)\bhw\s+many\b|\bhowmany\b|\bhow\s+meny\b|\bhow\s+mny\b"), "how many"),
+           (re.compile(r"(?i)\bwhats\b"), "what is"),
+           (re.compile(r"(?i)\bhow\s+(?:mnay|mant|amny)\b"), "how many"),
+           (re.compile(r"(?i)\b(?:motna|mointa|montaa)\b"), "monta"),
+           (re.compile(r"(?i)\b(?:kuinak|kunka|kuika)\b"), "kuinka"),
+           (re.compile(r"(?i)\b(?:montaako|montakko|mntako)\b"), "montako"),
+           (re.compile(r"([^\W\d_])\1{2,}"), r"\1\1")]
+
+
+def casual(question: str) -> str:
+    """The question with casual spellings and stretched letters normalised; unchanged for ordinary text."""
+    s = question
+    for rx, rep in _CASUAL:
+        s = rx.sub(rep, s)
+    return re.sub(r"\s{2,}", " ", s).strip() if s != question else question
+
+
 def weak(q: Query, question: str) -> str | None:
     """Why the rule parse is not good enough to stand alone (the LLM reading is asked for), or None."""
     if not q.ok():
         return "the rules read no measurable question"
+    if (q.obj == "room" and q.measure in ("count", "area") and not q.label and not q.room_no
+            and q.variant not in ("type_sum", "net_indoor_total") and unknown_room_modifier(question)):
+        return BLOCKING[0] + f" ('{unknown_room_modifier(question)}')"
     if q.measure == "count" and UNIT_WORDS.search(fold(strip_quoted(question))):
         return "a count was read, but the question asks in units of area or volume"
     if quotes(question) or '"' in question:
@@ -588,10 +689,10 @@ def weak(q: Query, question: str) -> str | None:
         return "the apartment is the scope of the question, not the thing counted"
     if not shape_known(q):
         return f"no route answers {q.measure} of {q.obj}"
-    if q.measure == "area" and q.obj == "room" and q.variant == "total" and _named_types(question):
-        return "the question names a room type the rule parse ignored"
+    if q.measure == "area" and q.obj == "room" and q.variant in ("total", "max") and _named_types(question):
+        return BLOCKING[1]
     if q.measure == "count" and q.obj == "room" and _named_types(question) - {"stair"}:
-        return "the question names a room type the rule parse ignored"
+        return BLOCKING[1]
     f = fold(question)
     if q.measure == "area" and q.obj == "apartment" and not q.apartment and APARTMENT_LETTER.search(question):
         return "an apartment letter is named but the rule parse dropped it"
@@ -628,20 +729,35 @@ def _unused_numbers(question: str, tk: dict) -> bool:
     return n_read < n_given
 
 
+# weak() reasons where the rule parse would answer the wrong question (all rooms instead of the rooms of a type): when
+# the language model does not give a valid reading either, the router abstains instead of answering the rule parse
+BLOCKING = ("the question names a room type the vocabulary does not know; all rooms would be counted or summed",
+            "the question names a room type the rule parse ignored")
+
+
 def read(question: str, use_llm: bool = True) -> Query:
-    """Rules first; the LLM reading only for a missing, unanswerable or weak rule parse."""
+    """Rules first; the LLM reading only for a missing, unanswerable or weak rule parse. The question first goes
+    through `casual()` ("how big r the bedrooms", "dooors"); ordinary text is unchanged."""
+    raw = question
+    question = casual(question)
     q = RuleParser().parse(question)
+    q.raw = raw
     why = weak(q, question)
     if why is None or not use_llm:
         if why is not None:
             q.extra["weak"] = why
+            if why.startswith(BLOCKING):
+                q.extra["blocked"] = why
         return q
     q2 = llm_parse(question)
     if q2.ok():
         q2.extra["rule_parse"] = q.as_dict() if q.ok() else None
         q2.extra["llm_reason"] = why
+        q2.raw = raw
         return q2
     q.extra["weak"] = why
+    if why.startswith(BLOCKING):
+        q.extra["blocked"] = why
     if q2.extra.get("llm_rejected"):
         q.extra["llm_rejected"] = q2.extra["llm_rejected"]
     if q2.extra.get("parse_cost_orig_usd"):          # the call was made and paid for even though the reading was dropped

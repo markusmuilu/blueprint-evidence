@@ -68,7 +68,7 @@ OBJECTS: list[tuple[str, str]] = [
     ("apartment", r"apartment|wohnung|appartement|appartament|residential unit|unite abitativ|lagenhet|huoneisto|\basuntoa?\b"),
     ("door", r"\bdoors?\b|turen|\bportes?\b|\bporte\b|\bdore\b|\bust\b|\bovea\b|\bovet\b|\bovi|"
              r"\b(?:palo|liuku|lasi|pari|sisa|ulko|etu|paa)-?ov(?:i\w*|e\w*)\b|\w*dorr(?:ar|en)?\b"),
-    ("window", r"windows?|fenster|fenetres|finestre|vinduer|akent|ikkuna|fonster"),
+    ("window", r"windows?|fenster|fenetres|finestre|vinduer|akent|ikkuna|ikkuno|fonster"),
     ("wall", r"walls?\b|wande|vaegge|vaegge|vagge|seina|\bvagg"),
     ("column", r"columns|saojler|sojler|posti\b|stutzen|saulen|pelare|pilari|pilareit"),
     ("beam", r"beams|bjaelker|bjelker|tala\b|trager|balkar|palkki|unterzu"),
@@ -83,7 +83,7 @@ OBJECTS: list[tuple[str, str]] = [
 # FR IT) mapped to the count objects the routes know. Only used when no object above matched, or only
 # the generic "room".
 COUNT_ROOM_TYPES = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bathroom", "sauna": "sauna",
-                    "balcony": "balcony", "wc": "wc_room"}
+                    "balcony": "balcony", "wc": "wc_room", "office": "office", "meeting": "meeting_room"}
 # "toilets" alone is ambiguous: the fixture (Swiss and CubiCasa questions: "toilets (WC)", "toilet bowls")
 # or the room (IFC questions: "how many toilets on the ground floor" answered with WC spaces). It is read as
 # the object toilet with extra["toilet_ambiguous"]; each route applies its dataset's convention. A named
@@ -94,6 +94,50 @@ STOREY_COUNT = re.compile(r"\b(floors|levels|storeys|stories|stockwerke|geschoss
                           r"\bhur manga plan\b|\bkerrosten\b|\bkerroksia\b")
 COUNT_BREAKDOWN = re.compile(r"\b(types?|distribut\w*|by|per|each|across|grouped|along|and what|and how)\b")
 SCALE_Q = re.compile(r"\bscale\b|massstab|\bechelle\b|\bscala\b|mittakaava|maalestik|\bmalestok|skala\b")
+
+
+# "paljonko ikkunoita" (colloquial Finnish "how much / how many"): a count only for an object that is counted; a size
+# word ("paljonko tilaa", "kuinka paljon neliöitä") keeps it an area question (bpqa/takeoff.py AREA_WORD)
+# also "laske pesualtaat", "count doors", "Fensteranzahl bitte", "show me the toilets" (QA 14 Nov, box round 1)
+CASUAL_COUNT = re.compile(r"(\b(paljonko|kuinka paljon|laske|laskekaa|count|zahle|zaehle|rakna|show me|nayta|zeig\w*|"
+                          r"maara|lukumaara)\b"
+                          r"|anzahl\b)(?!.*\b(tilaa|pinta-ala\w*|nelio\w*|alaa|m2|area|flache|size)\b)")
+COUNTABLE = {"door", "window", "toilet", "sink", "washbasin", "shower", "bathtub", "shower_or_bath", "sauna", "kitchen",
+             "bedroom", "bathroom", "balcony", "wc_room", "apartment", "column", "beam", "stair", "wall", "slab",
+             "office", "meeting_room"}
+# "bedrooms?", "doors?", "ulko-ovet?": one to three words and a question mark, the last word a plural (en -s, fi -t,
+# de / sv -en -er -ar); no question word, superlative or size word ("biggest room?" is not a count)
+_BARE = re.compile(r"^\s*[\w\-]+(?:\s+[\w\-]+){0,2}\s*\?\s*$")
+_BARE_NOT = re.compile(r"\b(what|which|where|why|how|biggest|largest|smallest|big|large|size|area|total|"
+                       r"mika|missa|suurin|isoin|pienin|grosste|groesste|kleinste|storsta|minsta)\b|"
+                       r"\btotal\w*|\bsumm?\w*|\blang\w*|\blangd\w*|\bpituu\w*|\bvolu\w*|\byhteis\w*|\bkubik\w*|\bkvadrat\w*")
+
+
+ROOM_WORD = re.compile(r"\brooms?\b|\bzimmer\b|\braume\b|\bhuone(?!isto)\w*|\brum\b|\bpieces?\b|\blocali\b|\bstanze\b")
+LARGEST_ROOM = re.compile(r"\b(biggest|largest)\b(?:\s+\w+)?\s+(rooms?|spaces?)\b|\b(suurin|isoin)\s+huone\w*|"
+                          r"\b(grosste\w*|groesste\w*)\s+(zimmer|raum)\b|\bstorsta\s+rum\w*|\bplus grande piece\b|"
+                          r"\bstanza piu grande\b")
+# "the whole floor" (a gross floor area of the building is not a sum of rooms, so "gross / total floor area" stays out)
+WHOLE_FLOOR = re.compile(r"\b(whole|entire) (floor|storey|level|flat|apartment)\b(?! plan)|\bkoko kerroks\w*")
+
+
+_FRAGMENT = re.compile(r"^\s*[\w\-]+(?:\s+[\w\-]+){0,3}\s*[?.!]?\s*$")
+_PLURAL = re.compile(r"(s|t|en|er|ar)$")
+
+
+def bare_plural_question(question: str) -> bool:
+    """'bedrooms?' (the last word a plural, with a question mark) or 'windows whole house' / 'ikkunat koko talo' (a
+    fragment of up to four words that starts with a plural noun): read as a count of that noun."""
+    f = fold(question)
+    if _BARE_NOT.search(f):
+        return False
+    words = re.findall(r"[\w\-]+", f)
+    if _BARE.match(f) and _PLURAL.search(words[-1]):
+        return True
+    if len(words) == 1 and _PLURAL.search(words[0]):       # "ikkunat", "WCs"
+        return True
+    # a fragment: the first word a nominative plural only (en -s, fi -t), not a genitive ("suihkujen", "vaggarnas")
+    return bool(_FRAGMENT.match(f) and len(words) >= 2 and re.search(r"(?<!na)(?<!ar)(?<!er)s$|t$", words[0]))
 
 
 def storey_count_obj(q, f_obj: str) -> str | None:
@@ -150,7 +194,10 @@ WHOLE_MODEL = re.compile(
     r"\b(model|modell?\w*|modelo|modele|modello|mudel\w*|malli\w*)\b"
     r"|\b(in|of|throughout|across|within|inside) (the |this )?(whole |entire |complete |overall )?building\b"
     r"|\b(whole|entire|complete|overall|total) building\b|\ball (the )?(floors|storeys|levels)\b"
-    r"|\b(gebouw\w*|gebaude\w*|gebaeude\w*|edificio\w*|batiment\w*|bygning\w*|rakennu\w*|hoone\w*|kogu maja)\b")
+    r"|\b(gebouw\w*|gebaude\w*|gebaeude\w*|edificio\w*|batiment\w*|bygning\w*|rakennu\w*|hoone\w*|kogu maja)\b"
+    # "whole house", "koko talo", "im ganzen Haus", "hela huset" (QA 14 Nov: read as the sheet's storey only)
+    r"|\b(whole|entire|complete) (house|home)\b|\bkoko (talo|talon|talossa|talosta)\b"
+    r"|\b(ganz|gesamt)\w* haus\w*\b|\bhela (huset|byggnaden)\b|\bhele huset\b|\btoute la maison\b|\btutta la casa\b")
 
 
 def whole_model_asked(question: str) -> bool:
@@ -202,6 +249,16 @@ class RuleParser(QueryParser):
             if q.obj:
                 break
 
+        # "paljonko ikkunoita", "bedrooms?", "ulko-ovet?": a count when an object that is counted is named
+        if q.measure is None and (CASUAL_COUNT.search(f) or bare_plural_question(question)):
+            if q.obj in COUNTABLE:
+                q.measure = "count"
+            elif q.obj in (None, "room"):
+                obj, amb = count_room_type(f_obj)
+                if obj:
+                    q.measure, q.obj = "count", obj
+                    if amb:
+                        q.extra["toilet_ambiguous"] = True
         # "how many floors does the building have": storeys, only for a plain count that names no other object
         q.obj = storey_count_obj(q, f_obj) or q.obj
         # "how many bathrooms does the apartment have": the apartment is the scope, not the object
@@ -214,6 +271,19 @@ class RuleParser(QueryParser):
                 q.obj = obj
                 if amb:
                     q.extra["toilet_ambiguous"] = True
+        # "how many rooms in apartment A", "Wieviele Zimmer hat die Wohnung?": rooms counted inside one apartment
+        if q.measure == "count" and q.obj == "apartment" and apt_scope and ROOM_WORD.search(f_obj) and not qs:
+            q.obj = "room"
+            q.extra["apartment_scope"] = True
+            m = re.search(r"\b(?:apartment|flat|wohnung|appartement|appartamento|lagenhet|huoneisto|asunto)\s+([A-Z])\b",
+                          fold(question), re.I)
+            if m:
+                q.apartment = m.group(1).upper()
+        # ("what is the largest room" asks which room: it stays a text question)
+        if not qs and q.obj in (None, "room") and q.measure in (None, "area") and LARGEST_ROOM.search(f_obj):
+            q.measure, q.obj, q.variant = "area", "room", "max"    # "biggest room?", "suurin huone"
+        if not qs and q.obj is None and q.measure in ("area", None) and WHOLE_FLOOR.search(f_obj):
+            q.measure, q.obj = "area", "room"                       # "floor area of the whole floor"
         # "what is the scale of this drawing?": the drawing scale (read off the sheet)
         if q.obj is None and q.measure in ("text", None) and SCALE_Q.search(f_obj):
             q.measure, q.obj = "text", "scale"
@@ -252,7 +322,7 @@ class RuleParser(QueryParser):
             q.label = q.label or room_quote
             if not PLURAL_SCOPE.search(fold(strip_quoted(question))) and not re.search(r"\brooms\b", f_obj):
                 q.extra["single_room"] = True
-        if q.obj == "room" and q.measure == "area" and not q.room_no and not q.label:
+        if q.obj == "room" and q.measure == "area" and not q.room_no and not q.label and q.variant != "max":
             q.variant = "total"
         if re.search(r"numbered indoor|nummerierten innen|interieures numerotees|interni numerati", f):
             q.obj, q.variant = "room", "net_indoor_total"

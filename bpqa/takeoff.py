@@ -27,7 +27,7 @@ TYPE_NAMES = {
     "bathroom": "bathroom", "wc": "WC / toilet room", "sauna": "sauna", "kitchen": "kitchen",
     "bedroom": "bedroom", "living": "living room", "dining": "dining", "hall": "hall / corridor",
     "utility": "utility / laundry", "storage": "storage / closet", "balcony": "balcony / terrace",
-    "stair": "stair", "room": "generic room",
+    "stair": "stair", "office": "office", "meeting": "meeting room", "room": "generic room",
 }
 # Groups a question can name. "wet rooms" follows the Finnish usage of marka-tila for the rooms with
 # a floor drain that are tiled: bathroom, WC, sauna. A utility room (KHH) is listed but not included.
@@ -39,7 +39,7 @@ LABEL_RE = {
     "bathroom": r"bad|badezimmer|bain|bains|salle de bains?|salle d'eau|bagno|bagni|bathroom\s*\d*|bath|"
                 r"shower(\s*room)?|dusche|douche(ruimte)?|badkamer|badevaerelse|badrum|vannituba|dushiruum|"
                 r"kh\d?|kph\d?|ph\d?|pe|pesuh(uone)?\d?|sh\d?|kylpyhuone|pesuhuone|suihkuhuone|ban|bano|aseo|"
-                r"salle de douche|doccia|bagno di servizio",
+                r"salle de douche|doccia|bagno di servizio|ba",
     "wc": r"(m\.|w\.|staff|specimen|public|men'?s|women'?s)?\s*(toilet|toilets|toilette|toiletten|wc\d?|w\.c\.|"
           r"restroom|lavatory|tualett(ruum)?|tualettruum|vessa|sanitair|toilet(ruimte)?|toilettes|gabinetto|"
           r"servizio igienico|servizi igienici)",
@@ -50,11 +50,12 @@ LABEL_RE = {
     "bedroom": r"schlafzimmer|chambre( a coucher)?|chambre a coucher|camera( da letto)?|camera da letto|"
                r"bedroom\s*\d*|slaapkamer|sovevaerelse|soverum|sovrum|magamistuba|mh\d?|makuuhuone\d?|hab\d?|"
                r"kinderzimmer|elternzimmer|gastezimmer|chambre d'enfants?|chambre parentale|chambre d'amis|"
-               r"camera matrimoniale|camera singola|camera doppia|cameretta",
+               r"camera matrimoniale|camera singola|camera doppia|cameretta|br",
     "living": r"wohnen|wohnzimmer|sejour|sjour|salon|soggiorno|living( room)?|woonkamer|stue|opholdsrum|"
-              r"elutuba|oh|olohuone|sal|salle de sejour|salotto|wohnraum|wohnstube|stube",
+              r"elutuba|oh|olohuone|sal|salle de sejour|salotto|wohnraum|wohnstube|stube|"
+              r"lounge|sitting( room)?|family room|drawing room|lounge ?/ ?diner|vardagsrum|lr",
     "dining": r"essen|repas|pranzo|dining|eetkamer|spisestue|rt|ruokailu(tila)?|ruokailuh|esszimmer|"
-              r"salle a manger|sala da pranzo",
+              r"salle a manger|sala da pranzo|dr",
     "hall": r"korridor|flur|diele|eingang|entree|couloir|corridoio|disimpegno|ingresso|corridor|hall|hallway|"
             r"foyer|entrance|gang|esik|et|eteinen|aula|tk|tuulikaappi|dist|kaytava|halle|eingangshalle|vestibule|"
             r"hall d'entree|degagement|anticamera|atrio",
@@ -66,6 +67,13 @@ LABEL_RE = {
     "balcony": r"balkon|balcon|balcone|balcony|loggia|terrasse|terrazza|terrace|sitzplatz|parveke\d?|"
                r"terassi|lasitettu parveke|altan|veranda",
     "stair": r"treppenhaus|treppe|cage d'escalier|vano scala|stair(s|case)?|trappe(rum)?|trepikoda|porras",
+    # offices and meeting rooms (QA 14 Nov: "how many offices" on Molio counted all 13 spaces): Danish Kontor,
+    # Mode / Moderum (Mode from Møde), and the same words in the other languages of the data
+    "office": r"kontor|kontorer|office|offices|buro|bureau|ufficio|toimisto|toimistohuone|tyohuone|arbetsrum|"
+              r"kantoor|kabinet|kabinett|cabinet",
+    "meeting": r"mode|moderum|modelokale|meeting( room)?|conference( room)?|besprechung(sraum|szimmer)?|"
+               r"konferenz(raum)?|sitzungszimmer|salle de reunion|sala riunioni|neuvotteluhuone|neuvottelu|"
+               r"kokoushuone|motesrum|konferensrum|vergaderruimte|vergaderzaal|noupidamisruum",
     "room": r"zimmer|piece|pice|stanza|room|raum|local|locale|huone|ruum",
 }
 _LABEL_RE = {k: re.compile(rf"(?:{v})") for k, v in LABEL_RE.items()}
@@ -118,7 +126,8 @@ Q_TYPE_RE = {
     "sauna": r"saunas?|saunaan|saunan|saunoihin|saunoj|loylyhuone|saunen|bastu",
     "kitchen": r"kitchens?|kitchenette|keittio|keittokomero|\bkuche|cuisines?|cucin[ae]|cucinin[oi]|\bkoo?gi?\b|\bkook|kokken|\bkok(et|en)?\b",
     "bedroom": r"bedrooms?|makuuhuone|schlafzimmer|kinderzimmer|magamistub|sovevaerelse|chambres?( a coucher)?|camer[ae] da letto|sovrum",
-    "living": r"living ?rooms?|lounge|olohuone|wohnzimmer|sejour|soggiorn[oi]|\bsalons?\b|salott[oi]\b|vardagsrum",
+    "living": r"living ?rooms?|lounge|sitting ?rooms?|family ?rooms?|olohuone|wohnzimmer|sejour|soggiorn[oi]|\bsalons?\b|"
+              r"salott[oi]\b|vardagsrum",
     "dining": r"dining ?rooms?|esszimmer|salles? a manger|sale da pranzo|sala da pranzo",
     "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|eteinen|eteise|kaytav|korridor|\bflur|couloir|"
             r"corridoi|ingress[oi]\b|vestibules?\b|disimpegn",
@@ -126,6 +135,11 @@ Q_TYPE_RE = {
     "storage": r"storage|store ?rooms?|closets?|walk-in|varasto|vaatehuone|abstellraum|reduit|ripostigli|"
                r"cantin[ae]\b|kellerabteil|debarras",
     "balcony": r"balcon(y|ies|s|e|i)?\b|terraces?|parveke|parvekkee|balkon|terrass",
+    "office": r"\boffices?\b|\bkontor(er|et|erne)?\b|\bburos?\b|\bbueros?\b|\bbureaux?\b|\buffic[io]\b|toimisto|"
+              r"tyohuone|arbetsrum|\bkantor(en)?\b|\bkantoor",
+    "meeting": r"meeting ?rooms?|conference ?rooms?|board ?rooms?|moderum|modelokale|besprechungs\w*|konferenzr\w*|"
+               r"salles? de reunion|sal[ae] riunion[ei]|neuvotteluhuone|kokoushuone|motesrum|konferensrum|"
+               r"vergaderruimte|vergaderzal",
 }
 _Q_TYPE_RE = {k: re.compile(v) for k, v in Q_TYPE_RE.items()}
 # Finnish plan abbreviations, matched case-sensitively on the original question
@@ -152,6 +166,10 @@ AREA_WORD = re.compile(r"pinta-ala|\barea\b|\bareas\b(?=.*\b(?:combined|together
                        r"\bhow (?:big|large) (?:is|are|was)\b|\b(?:kuinka|miten) (?:iso|suuri|suuria|isoja) (?:on|ovat)\b|"
                        r"\bwie gross (?:ist|sind)\b|\bhur stor[at]? (?:ar)\b|"
                        r"\b\w+(?:iden|jen|ien|den|tten|en)\s+koko\b|"
+                       # "keittion koko" (genitive singular, the size of the kitchen); "koko talon" stays out
+                       r"\b(?!koko\b)\w{4,}n\s+koko\b|"
+                       # "kuinka iso kylpyhuone on" (the verb after the room word)
+                       r"\b(?:kuinka|miten) (?:iso|suuri|isoja|suuria|isot|suuret)\s+\w+\s+(?:on|ovat)\b|"
                        r"how much|kuinka paljon|paljonko|wie viel|"
                        # one named room: "how big is the kitchen", "what size is the bathroom", "kuinka iso on keittio"
                        r"\bhow (?:big|large) is (?:the|this|that|our)\b|\bwhat(?: size|'s the size| is the size) (?:is|of) (?:the|this|that)\b|"
@@ -282,7 +300,7 @@ def precheck(tk: dict) -> str | None:
 
 # count objects of the query parser -> room type of a drawing label
 COUNT_TYPES = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bathroom", "wc_room": "wc",
-               "sauna": "sauna", "balcony": "balcony"}
+               "sauna": "sauna", "balcony": "balcony", "office": "office", "meeting_room": "meeting"}
 # Types a generic room label ("Zimmer", "Piece", "Stanza", "Room") may stand for. Swiss plans label a room
 # either by its use ("Schlafzimmer", "Chambre a coucher") or generically ("Zimmer", "Piece", "Stanza"). Of the
 # 178 floors in the full dataset that use "Piece", one also has a "Chambre a coucher", and 64 label no living room,
