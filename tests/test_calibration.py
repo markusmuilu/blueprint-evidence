@@ -185,3 +185,15 @@ def test_qa_cases_are_estimates(monkeypatch):
                                            evidence=False, nemotron=False))
         assert a.answered and a.tier == "estimate", (q.path, q.question, a.value, a.tier)
         assert a.tier_reason
+
+
+def test_text_lookups_proven_only_where_measured():
+    from types import SimpleNamespace
+    from bpqa import calibration
+    a = SimpleNamespace(tier_cell="extreme:width:door")
+    cell = calibration.text_key("ifc_props", a, SimpleNamespace(measure="text", obj="door"))
+    assert cell == "text:ifc_props|extreme:width:door"
+    why = calibration.text_reason(cell)
+    assert why and "each value is read from the file" in why          # measured on too few dev drawings
+    assert "not been measured" in calibration.text_reason("text:pdf_text|nothing:here")
+    assert calibration.text_reason("raster-detector|door") is None    # only lookup cells

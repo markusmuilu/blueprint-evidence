@@ -3,6 +3,19 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: text lookups calibrated like scan routes, branch `ifc-text-tiers`
+
+Free-text / property lookups (ifc-props, pdf-text, piping via router._try_text) were proven whenever they answered;
+on dev ifc-props proven answers were right in 37 of 61 ifc_bench questions and 0 of 16 ifc_models ones. They are now
+proven only for a kind of lookup (intent, attribute, element) measured at 98% over 100+ dev drawings
+(bpqa/text_calibration.json, tools/calibrate_text_tiers.py); no kind reaches that yet, so they are estimates whose
+reason says so. constraints.py: a question asking several things ("..., and how many are doors versus windows",
+"breakdown by bathroom") or asking "which ..." is not answered with one number; a length asked is not answered with an
+area; a room-number repair no longer turns a non-area question into a room area. ifc_bench dev proven 61 at 60.7% ->
+8 at 25.0% (accuracy 33.5% both); test 67 at 37.3% -> 11 at 54.5% (accuracy 27.8% both). ifc_models dev proven 1705
+at 98.9% -> 1689 at 99.8%; opening_design dev 36 at 100% -> 32 at 100% (4 correct pdf-text answers now estimates);
+swiss_dwellings dev (first 1500) and the demo gate unchanged.
+
 ## 2026-11-14: tiling means one thing, cheap abstains, branch `tiling-abstains`
 
 Tiling: "floor" (lattia in any inflection, Boden, golv) means floor only on every route, "on this floor" is a storey,

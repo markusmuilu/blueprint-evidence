@@ -1,0 +1,130 @@
+{
+ "_about": "How often free-text / property lookups answered what was asked, on dev questions (tools/calibrate_text_tiers.py). A kind keeps the proven tier only at >= 98% over >= 100 drawings.",
+ "_sources": [
+  "textcal/ifc_bench/answers.jsonl",
+  "textcal/ifc_models/answers.jsonl",
+  "textcal/opening_design/answers.jsonl",
+  "textcal/swiss_first1500/answers.jsonl"
+ ],
+ "cells": {
+  "text:ifc_props|element:-:space": {
+   "n": 1,
+   "correct": 0,
+   "drawings": 1,
+   "precision": 0.0,
+   "proven": false
+  },
+  "text:ifc_props|extreme:area:space": {
+   "n": 4,
+   "correct": 4,
+   "drawings": 4,
+   "precision": 1.0,
+   "proven": false
+  },
+  "text:ifc_props|extreme:area:window": {
+   "n": 1,
+   "correct": 0,
+   "drawings": 1,
+   "precision": 0.0,
+   "proven": false
+  },
+  "text:ifc_props|extreme:height:space": {
+   "n": 3,
+   "correct": 3,
+   "drawings": 3,
+   "precision": 1.0,
+   "proven": false
+  },
+  "text:ifc_props|extreme:width:door": {
+   "n": 5,
+   "correct": 3,
+   "drawings": 4,
+   "precision": 0.6,
+   "proven": false
+  },
+  "text:ifc_props|extreme:width:window": {
+   "n": 2,
+   "correct": 2,
+   "drawings": 1,
+   "precision": 1.0,
+   "proven": false
+  },
+  "text:ifc_props|fire:-:door": {
+   "n": 7,
+   "correct": 5,
+   "drawings": 7,
+   "precision": 0.7143,
+   "proven": false
+  },
+  "text:ifc_props|fire:-:wall": {
+   "n": 1,
+   "correct": 1,
+   "drawings": 1,
+   "precision": 1.0,
+   "proven": false
+  },
+  "text:ifc_props|fire:-:window": {
+   "n": 5,
+   "correct": 5,
+   "drawings": 5,
+   "precision": 1.0,
+   "proven": false
+  },
+  "text:ifc_props|meta:-:-": {
+   "n": 7,
+   "correct": 6,
+   "drawings": 7,
+   "precision": 0.8571,
+   "proven": false
+  },
+  "text:ifc_props|project:-:-": {
+   "n": 5,
+   "correct": 2,
+   "drawings": 5,
+   "precision": 0.4,
+   "proven": false
+  },
+  "text:ifc_props|storeys:-:-": {
+   "n": 4,
+   "correct": 4,
+   "drawings": 4,
+   "precision": 1.0,
+   "proven": false
+  },
+  "text:ifc_props|types:-:furniture": {
+   "n": 1,
+   "correct": 0,
+   "drawings": 1,
+   "precision": 0.0,
+   "proven": false
+  },
+  "text:ifc_props|types:-:roof": {
+   "n": 2,
+   "correct": 0,
+   "drawings": 1,
+   "precision": 0.0,
+   "proven": false
+  },
+  "text:ifc_props|types:-:sanitary terminal": {
+   "n": 17,
+   "correct": 0,
+   "drawings": 6,
+   "precision": 0.0,
+   "proven": false
+  },
+  "text:pdf_text|area:room": {
+   "n": 1,
+   "correct": 1,
+   "drawings": 1,
+   "precision": 1.0,
+   "proven": false
+  },
+  "text:pdf_text|count:room": {
+   "n": 3,
+   "correct": 3,
+   "drawings": 1,
+   "precision": 1.0,
+   "proven": false
+  }
+ }
+}

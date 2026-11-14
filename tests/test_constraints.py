@@ -44,3 +44,15 @@ def test_measure_words():
 def test_label_cognates():
     assert _cog_match("corridors", "KORIDOR")
     assert not _cog_match("bedrooms", "KORIDOR")
+
+
+def test_several_asks_and_which_questions():
+    # ifc_bench dev, 14 Nov: one number marked proven for a question that asks several things, or asks for names
+    assert ("parts", "") in kinds("What is the total number of building openings, and how many are doors versus windows?")
+    assert ("parts", "") in kinds("What are the number of levels, building footprint area, total floor area, and total number of rooms?")
+    assert ("parts", "") in kinds("What is the total tiling needed in all bathrooms, and what is the breakdown by bathroom?")
+    assert ("parts", "") in kinds("How many meeting rooms are available, and where are they?")
+    assert ("which", "") in kinds("Which sanitary furniture is present in room 110?")
+    # a leading clause is not a second ask; a which-question with a measure word is answered by a number
+    assert not any(k[0] == "parts" for k in kinds("On sheet A-801 of the drawings, how many doors are listed in the door schedule?"))
+    assert not any(k[0] == "which" for k in kinds("Which room has the largest area?"))

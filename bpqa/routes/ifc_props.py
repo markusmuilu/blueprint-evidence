@@ -1253,6 +1253,7 @@ def answer(ctx, q) -> Answer:
             + (f" {L.storey_note}." if L.storey_note else "") + f" Cited entities: {len(cited)} (GlobalIds in items).")
     ans = Answer(value=text, unit="", route=ROUTE, confidence=0.85 if L.mapper == "rules" else 0.6,
                  items=items + [{"cited_guids": guids}], explanation=expl, cost_usd=cost)
+    ans.tier_cell = f"{L.intent}:{L.attr or '-'}:{L.label or '-'}"   # the kind of lookup, calibrated by the router
     if getattr(L, "fixture_inferred", False):
         ans.tier, ans.tier_reason = "estimate", "room type inferred from the sanitary fixtures in the spaces, not from their names"
     elif L.mapper != "rules":

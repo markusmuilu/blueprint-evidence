@@ -132,16 +132,17 @@ def _try_text(ctx: Context, query: Query, why: str) -> Answer:
         ctx.tried.append(a.route)
         if a.answered:
             if a.tier is None:
+                # proven only for a kind of lookup dev measured as reliable (bpqa/calibration.py); the value is read
+                # from the file either way, but the lookup the question was matched to may not be what was asked
                 a.tier = "proven"
+                a.tier_cell = calibration.text_key(getattr(fn, "__module__", "route").rsplit(".", 1)[-1], a, query)
+                _demote(a, calibration.text_reason(a.tier_cell))
             return a
         reasons.append(f"{a.route}: {a.abstain}")
     return abstain("parser", "; ".join(reasons))
 
 
-def calibrate(a: Answer, query: Query) -> Answer:
-    """Lower a proven scan answer to an estimate unless dev supports it (bpqa/calibration.py); the routes
-    already do this for their own answers, this catches any scan route that does not."""
-    why = calibration.reason(a.route or "", query.obj, a.value, query.measure, a.tier_cell)
+def _demote(a: Answer, why: str | None) -> Answer:
     if why:
         from .answer import estimate
         estimate(a, why)
@@ -149,6 +150,12 @@ def calibrate(a: Answer, query: Query) -> Answer:
             from .evidence import mark_estimate
             a.evidence = mark_estimate(a.evidence, a.value, why, a.checks)
     return a
+
+
+def calibrate(a: Answer, query: Query) -> Answer:
+    """Lower a proven scan answer to an estimate unless dev supports it (bpqa/calibration.py); the routes
+    already do this for their own answers, this catches any scan route that does not."""
+    return _demote(a, calibration.reason(a.route or "", query.obj, a.value, query.measure, a.tier_cell))
 
 
 def _sig(q: Query) -> tuple:
