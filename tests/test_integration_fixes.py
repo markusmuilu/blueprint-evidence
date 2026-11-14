@@ -76,3 +76,9 @@ def test_room_labels_by_the_finnish_convention():
     assert all(ROOM_LABEL.fullmatch(p) for p in ("OH", "MH2", "H", "OLOHUONE", "HUONE", "BEDROOM", "LOUNGE"))
     assert not any(ROOM_LABEL.fullmatch(p) for p in ("K", "KPH", "WC", "ET", "VH", "S", "KITCHEN", "HALLWAY"))
     assert FI_ROOM.fullmatch("MH") and not FI_ROOM.fullmatch("BEDROOM")
+
+
+def test_area_of_the_apartment_is_one_flat():
+    q = P.read("What is the total area of the apartment?", use_llm=False)
+    assert (q.obj, q.variant) == ("room", "total") and q.extra.get("one_apartment")
+    assert not P.read("What is the total floor area?", use_llm=False).extra.get("one_apartment")

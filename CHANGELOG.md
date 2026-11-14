@@ -80,6 +80,11 @@ question themselves, and they missed:
   question reading by the language model is a call whenever it was made and paid for, also when the rule reading was
   kept and the answer is a cannot (the fast-cannot retry copies its cost onto the rule reading, so the row said "yes"
   and the line "none"). The line then says "rules (the language model was also asked; the rule reading was kept)".
+- **"The area of the apartment" on a floor of several flats** is a final cannot that gives each flat's area (Swiss
+  site3387: A 107.40 m2, B 80.20 m2; Esplanades 1.korrus: 10 flats in the space numbering), not the floor total proven
+  (212.4 and 870.29 with the first version of the whole-flat reading). "Total floor area" still answers the floor.
+- **Plain reasons** (`answer.py`): the `public_reason` patterns had literal backspace characters where `\b` was meant,
+  so env flags and exception text ("AssertionError: Invalid device id") reached the app; fixed.
 - Not reproduced: Tyneside "how many bathrooms" is 1 (estimate, adopted from the shower check), on AY's own branch too
   with today's caches; AY reported 2. The detector's two bathroom boxes now hold Bedroom labels (scores 0.77, 0.32), so
   the label filter drops both.

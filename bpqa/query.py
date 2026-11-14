@@ -332,6 +332,7 @@ class RuleParser(QueryParser):
         # shows, read as the total of its rooms like "total floor area?". "apartment A" is set back below
         if q.measure == "area" and apt_scope and not qs and not FLAT_AREA_NOT.search(f_obj):
             q.obj = "room"
+            q.extra["one_apartment"] = True   # a floor of several flats does not answer it (routes/dxf_swiss.py)
         # ("what is the largest room" asks which room: it stays a text question)
         if not qs and q.obj in (None, "room") and q.measure in (None, "area") and LARGEST_ROOM.search(f_obj):
             q.measure, q.obj, q.variant = "area", "room", "max"    # "biggest room?", "suurin huone"

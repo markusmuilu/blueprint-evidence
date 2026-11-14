@@ -776,6 +776,13 @@ def answer(ctx, q) -> Answer:
                 spaces = [s for s in spaces if lab in space_label_variants(s)]
                 if len(spaces) != 1:
                     return abstain(ROUTE, f"space '{q.label}' matched {len(spaces)} spaces")
+            if q.extra.get("one_apartment") and q.variant == "total":
+                fl = flats_from_space_numbers(M, storey)
+                if fl.get("value", 0) >= 2:
+                    # "the area of the apartment" on a storey of several flats: name one
+                    a = abstain(ROUTE, f"the question asks for one apartment, but {fl['note']}; name the flat")
+                    a.final = True
+                    return a
             srcs = set()
             for s in spaces:
                 a, src = M.space_area(s)
