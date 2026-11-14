@@ -342,12 +342,13 @@ def interpretation(tk: dict, rows: list[tuple[str, float]]) -> str:
     other = set(tr.get("other_types", []))
     named = [f"{lab} ({a:.2f} m2)" for lab, a in rows if not (room_types(lab) & other)]
     s = "No separate WC room on this floor; using the rooms that contain a toilet: " + (", ".join(named) or "none") + "."
+    boxed = "" if tr.get("no_boxes") else " (boxed on the evidence image)"   # IFC evidence images do not box fixtures
     if tr["confirmed"]:
         if tr.get("unknown"):
             s += (f" {', '.join(tr['unknown'][:8])}: no fixtures drawn inside, used on the bathroom label (toilet not "
-                  f"confirmed); the others have a toilet symbol drawn inside (boxed on the evidence image).")
+                  f"confirmed); the others have a toilet symbol drawn inside{boxed}.")
         else:
-            s += " Each has a toilet symbol drawn inside it (boxed on the evidence image)."
+            s += f" Each has a toilet symbol drawn inside it{boxed}."
         if tr.get("unlabelled"):
             s += f" {tr['unlabelled']} of them carr{'ies' if tr['unlabelled'] == 1 else 'y'} no room name, only the toilet symbol."
         if tr["left_out"]:

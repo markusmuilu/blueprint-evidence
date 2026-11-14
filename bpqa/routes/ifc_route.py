@@ -596,6 +596,8 @@ def answer(ctx, q) -> Answer:
             st = M.storey_of(e)
             rows.append({"label": space_display(e), "area": v, "number": e.Name,
                          "source": f"IfcSpace {M.space_area(e)[1]}" + (f", storey {st.Name}" if st is not None else "")})
+        if tk_eff and tk_eff.get("toilet_rooms"):
+            tk_eff["toilet_rooms"]["no_boxes"] = True     # the IFC evidence image does not box the fixtures
         ans.value, ans.items, expl = takeoff.summary(rows, tk_eff)
         for it, (e, _) in zip(ans.items, used):
             it["guid"] = e.GlobalId
