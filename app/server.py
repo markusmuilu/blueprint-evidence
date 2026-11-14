@@ -16,7 +16,9 @@ GET  /api/ifc3d...      3D view of an IFC model per storey (app/ifc3d.py)
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
+import secrets
 import importlib.util
 import asyncio
 import io
@@ -121,6 +123,13 @@ async def upload(files: list[UploadFile] = File(...)):
         res = await run_in_threadpool(uploads.ingest, blobs, UPLOADS, UPLOAD_EXT, MAX_UPLOAD)
     except uploads.UploadError as ex:
         raise HTTPException(ex.status, ex.message)
+    # owner token (his question 15 Nov): only the browser that uploaded a drawing may remove it. The token goes back
+    # to that browser once; the server keeps only its hash, inside the upload folder (so it travels with the upload)
+    token = secrets.token_urlsafe(24)
+    for dr in res["drawings"]:
+        uid = dr["path"].split(":")[1].split("/")[0]
+        (UPLOADS / uid / "owner.sha256").write_text(hashlib.sha256(token.encode()).hexdigest(), encoding="utf-8")
+        dr["owner_token"] = token
     if shared.enabled():             # so another container can serve the next question on it
         for dr in res["drawings"]:
             uid = dr["path"].split(":")[1].split("/")[0]
@@ -145,11 +154,19 @@ def _precompute_scan(path: str):
 
 
 @app.delete("/api/upload/{uid}")
-def delete_upload(uid: str):
+def delete_upload(uid: str, request: Request):
     """Remove one upload: its folder on this container and its copy in the shared store. Other containers drop
-    their copy when it expires; questions on it then say the drawing is gone."""
+    their copy when it expires; questions on it then say the drawing is gone. Only with the owner token that the
+    upload returned to the uploading browser (header X-Owner-Token); anyone else gets 403."""
     if not re.fullmatch(r"[0-9a-f]{6,40}", uid):
         raise HTTPException(400, "bad upload id")
+    tok = request.headers.get("x-owner-token") or ""
+    hfile = UPLOADS / uid / "owner.sha256"
+    if not hfile.exists() and shared.enabled():
+        shared.fetch_upload(uid, UPLOADS)         # uploaded on another container
+    want = hfile.read_text(encoding="utf-8").strip() if hfile.exists() else ""
+    if not tok or not want or not hmac.compare_digest(hashlib.sha256(tok.encode()).hexdigest(), want):
+        raise HTTPException(403, "only the browser that uploaded this drawing can remove it")
     shutil.rmtree(UPLOADS / uid, ignore_errors=True)
     shared.remove_upload(uid)
     return {"removed": uid}

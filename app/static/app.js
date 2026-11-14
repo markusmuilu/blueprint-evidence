@@ -473,7 +473,8 @@ function renderUploads() {
 async function removeUpload(d) {
   uploadStore.write(uploadStore.read().filter((u) => u.path !== d.path));
   const uid = (d.path.match(/^upload:([0-9a-f]+)\//) || [])[1];
-  if (uid) { try { await fetch(`/api/upload/${uid}`, { method: "DELETE" }); } catch (_) { /* offline: it expires in 24 h */ } }
+  // only this browser holds the owner token; without it the server keeps the file (it expires in 24 h)
+  if (uid && d.tok) { try { await fetch(`/api/upload/${uid}`, { method: "DELETE", headers: { "X-Owner-Token": d.tok } }); } catch (_) { /* offline */ } }
   if (state.drawing?.path === d.path) { state.drawing = null; state.answer = null; renderAnswer(null); showDrawing(); setHash(); }
   renderUploads();
   toast(`Removed ${d.name || "the upload"}`);
@@ -504,7 +505,7 @@ async function upload(fileList) {
   }
   if (added.length) {
     const t = Date.now();
-    uploadStore.write([...added.map((d) => ({ path: d.path, name: d.name, ext: d.ext, t })), ...uploadStore.read()]);
+    uploadStore.write([...added.map((d) => ({ path: d.path, name: d.name, ext: d.ext, t, tok: d.owner_token })), ...uploadStore.read()]);
     renderUploads();
     batchAddUploaded({ drawings: added, path: added[0].path, name: added[0].name });   // ask-several: uploads join the selection
     await selectDrawing(added[0].path);
@@ -2776,6 +2777,7 @@ const resSrc = (s) => RESULT_SOURCE_NAMES[s] || SOURCE_NAMES[s] || s;
 
 /* The source code link: one place to set it. "#" until Markus decides on publishing. The per-question results
    README (results/README.md in the repo) is linked from the same URL, assuming a GitHub-style /tree/main/ path. */
+const SHOW_BAKEOFF = false;   // his call 15 Nov: hidden until the fair same-question rerun
 const SOURCE_CODE_URL = "https://github.com/markusmuilu/blueprint-evidence";
 const CSV_ORDER = ["cubicasa5k", "swiss_dwellings", "ifc_models", "ifc_bench", "opening_design"];
 async function renderResLinks() {
@@ -2817,6 +2819,8 @@ const BAKEOFF = [
 ];
 const BAKE_OURS = { doors: [27, 41], windows: [23, 43], rooms: [51, 55], other: [15, 16], swiss: [54, 54], areas: [91, 91], text: [60, 60] };
 function renderBakeoff() {
+  const panel = $("#bakePanel");
+  if (!SHOW_BAKEOFF) { if (panel) panel.hidden = true; return; }
   const b = tileData.base;
   const cell = (k, v) => {
     if (!v) return `<td class="num dim">-</td>`;
@@ -3071,7 +3075,7 @@ function compareTiles(t) {
     <p class="tile-s">${sub}</p></div>`;
   return `<section class="tiles cmp-tiles" aria-label="Totals">
     ${vs("Accuracy", t.ours_accuracy, t.nemotron_accuracy, "Nemotron", `${num(t.questions)} test questions, both scored the same way`)}
-    ${b ? vs("Against the best of other vision models", b.ours_accuracy, b.best_accuracy, "Best other", `${b.models} hosted models on ${b.n} of our weakest scan questions; small sample`) : ""}
+    ${b && SHOW_BAKEOFF ? vs("Against the best of other vision models", b.ours_accuracy, b.best_accuracy, "Best other", `${b.models} hosted models on ${b.n} of our weakest scan questions; small sample`) : ""}
     ${c ? `<div class="tile" title="${esc(COST_SOURCE)}"><p class="tile-k">Cost per 1,000 questions (estimate)</p>
       <p class="tile-v">about ${fmtUsd(COST_BLENDED_USD_PER_1000)}</p>
       <p class="tile-s">Nemotron alone: about ${fmtUsd(c.nemotron_usd_per_1000)}, on the same ${num(t.questions)} questions</p></div>` : ""}
