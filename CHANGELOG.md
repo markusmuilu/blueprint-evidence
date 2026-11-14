@@ -67,6 +67,95 @@ before and after. Area values are rounded to 2 decimals; two scan answers (high_
 and bathtubs) went 3 -> 4, gold 1, wrong both times: a printed BATH next to a tub now reads as a bathroom label, the
 reason BATH had been left out. Kept because it changed no dev result; watch it.
 
+## 2026-11-14: area approximation on scans that print no areas, branch `scale-approximation` (ON)
+
+His decision: ship the area approximation switched on, as long as the answer shows clearly where the number comes
+from. (Source of the transparency point: a Junction account manager at the Stoa booth; Stoa staff have not
+confirmed it.) Builds on builder Y's object scale (`object-scale` entry) and AC's wall-bounded regions.
+
+Scale sources, in order (`raster_area.analyse`, `scale_objects.object_scale`):
+- (a) printed room areas, unchanged.
+- (b) NEW, printed door sizes: door module labels read by OCR in every cached rotation ("9x21", "09*21", "O 10x21",
+  and a width alone with its leading zero, "010", "09"), each matched one to one to the nearest detected door box
+  (label to box gap at most one box length). The door box's long side is 0.94 x the printed module
+  (`BOX_PER_MODULE`, calibrated against the printed-area scale: tune half 0.945 on 82 doors, val half 0.938 on 134).
+  A scale needs 2+ matched doors agreeing within 8% and at least half of all matched doors. Window modules
+  ("3-15x14") are never read; no window is ever measured by its drawn size.
+- (c) standard objects (Y's code, unchanged rule): door openings 0.84 m, WC pans 0.73 m, bathtubs 1.7 m, 4+ agreeing.
+- Dimension strings ("9487" along a dimension line) are NOT used: not built in the time. On high_quality_architectural-1368 the
+  door-size scale (53 px per m) matches the printed 3800 mm dimension by eye (about 54 px per m), a cheap check to automate next.
+
+Validation of (b), `tools/modscale_eval.py`, the same 370 dev CubiCasa plans with 2+ printed areas and the same
+halves as Y (none in the CubiCasa5K test split, no Stoa test question); printed areas hidden from the scale and from
+the region choice; cross-fitted (each half measured with the other half's `BOX_PER_MODULE`):
+
+| | val (188 plans) | tune (182 plans) |
+|---|---|---|
+| plans with a door-size scale | 49 (26%) | 49 (27%) |
+| scale vs printed-area scale, median abs (plans with both) | 3.7% (21) | 3.2% (13) |
+| rooms 6 m2 and over: median / within 5% / within 10% | 11.7% / 24% / 45% (114) | 12.7% / 19% / 44% (103) |
+| rooms 3 to 6 m2 | 19.9% (47) | 18.1% (44) |
+| rooms under 3 m2 (not answered) | 46.8% (75) | 31.8% (72) |
+
+Against (c) on the same 97 plans where both are set: scale error 3.5% (b) against 4.6% (c), rooms of 6 m2 and over
+11.9% against 11.2%. So printed door sizes give a slightly closer scale, but room error is set by the traced
+outlines, not the scale, and (b) adds only 1 plan that (c) could not scale. Its value is that the scale rests on
+numbers printed on the drawing. The width-alone labels ("010") add 27 plans (71 to 98 of 370) at the same room error,
+and make the two halves' calibration agree (0.945 / 0.938 against 0.98 / 0.948 without them).
+Availability on the 939 dev scans with a detector cache (`modscale_eval.py avail`): door-size scale 135 (14%), object
+scale 757 (80%), either 759.
+
+End to end (`tools/objscale_e2e.py --half all`, 370 plans, takeoff questions whose rooms all print an area, printed
+areas hidden; the gold is the sum of the printed areas; eval.py's 2% rule), 182 plans, 354 questions, all abstained
+before:
+
+| | all types | without kitchens (shipped) |
+|---|---|---|
+| answered (all tier estimate) | 99 | 84 |
+| right, within 2% | 7 | 7 |
+| within 5% / 10% / 20% | 20 / 40 / 64 | 19 / 38 / 61 |
+| median abs error (signed) | 14.1% | 11.9% (-6.7%) |
+
+By type: bedrooms 50 answered, 6 right, median 9.9%; bathrooms 28, 0, 19.7%; WC 3, 1, 6.8%; sauna 3, 0, 8.6%;
+kitchens 15, 0, 86.7%. By scale source: door sizes 54 answered, 3 right, median 12.9%; objects 45, 4, 14.2%.
+So the approximation is right by eval.py's rule only 7 times in 84: it is a rough size, which is why the answer
+says "about", gives the typical error and says "Check before ordering". Kitchens are not approximated
+(`NO_APPROX_TYPES`): the answer abstains and says why ("measured kitchens were off by a median of 87% ..."), with
+the scale it would have used. Removing "kitchen" from that dict answers them with a warning instead.
+
+Switched on (`DEFAULT_ON = True`, `STOA_OBJECT_SCALE=0` off) for room area and takeoff questions on scans with no
+printed-area scale. Stoa's dataset asks no area question on a scan, so no dataset answer changes.
+
+Transparency:
+- Answer sentence first in the explanation and in the app's answer card ("About 28 m2 (approximation): this drawing
+  prints no room areas, and no scale was read from it. Scale from 5 door sizes printed on the drawing (010, 09,
+  openings 0.9 to 1.0 m), each matched to the door it labels (doors D1 to D5), 53 px per m, spread 4%. Typical error
+  for rooms of these sizes: about 12%. Check before ordering."). With order/buy waste (main's takeoff change):
+  "About 31 m2 to order (approximation: net floor about 28 m2 plus 10% waste)". Kitchens add a warning that the
+  outline may include the living room (only reached if kitchens are re-enabled, see above). Tier always estimate, `tier_reason` starts "approximation, never proven";
+  confidence 0.35. Error bands: `MODULE_BANDS` (cross-fitted, 455 rooms of 87 plans) for (b), Y's `BANDS` for (c).
+- `Answer.approx` (new field) carries the sentence, the source, px per m, spread, band, the tagged objects and the
+  rooms; the server passes it on; the Why panel gets a Scale line; the strip says "Approximate scale from ...".
+- Evidence: scale objects boxed dashed amber, tagged D1 / WC1 / B1 with their size ("D1 door 0.84 m",
+  "D3 09x21 = 0.85 m"), labels placed so they do not overlap; printed door-size labels boxed too. Marks sidecar:
+  kind `scale_object`, tone amber, with the label (`evidence.record_context` takes tone and label); the viewer draws
+  them dashed amber, never pinned or numbered.
+- Steps card (AB's layers): "Room found: MH label read as bedroom", "Scale: 5 printed door sizes (010, 09) -> 53 px/m
+  (spread 4%)" with every scale object as one layer (new step field `rects` + `caps`, scaled in the sidecar, drawn
+  and veiled by app.js), "Room outline: 27,736 px -> about 9.8 m2 +- 12% (approximation)".
+
+Test cases (screenshots at 1440x900 in the scratchpad): high_quality_architectural-1368 bedrooms (door sizes,
+27.8 m2), -14809 bedrooms (door sizes, 34.9 m2), -6037 bathroom (3 x 9x21, 3.8 m2), -3710 bathroom tiles (objects,
+walls approximation). colorful-11960 abstains, rightly: it is a 240 x 161 px thumbnail, OCR reads only "KHWC" (no
+bedroom label), its 6 standard objects disagree (spread 26%, 25% allowed), no door size is legible, and the plan
+itself prints "suuntaa antava, ei mittakaavassa" (indicative, not to scale). The router may still fall through to the
+Nemotron estimate there, as before.
+
+Tests: `tests/test_scale_objects.py` (module tokens, matching and agreement, source order, approximation sentence,
+Steps and marks of the evidence); 207 passed. Files: `bpqa/scale_objects.py`, `bpqa/routes/raster_area.py`,
+`bpqa/evidence.py`, `bpqa/answer.py`, `app/server.py`, `app/static/app.js`, `app/static/app.css`,
+`tools/modscale_eval.py` (new), `tools/objscale_e2e.py`.
+
 ## 2026-11-14: qualifiers follow-up, branch `qualifiers-2`
 
 QA retest of the qualifier rule (20 of 24 phrasings passed). Four fixes.

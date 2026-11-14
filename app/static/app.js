@@ -819,6 +819,11 @@ function drawPins(a) {
     return `<div class="pin ${pinTone(r.tone)}${dim}" data-i="${r.i}" style="left:${v[0]}px;top:${v[1]}px;width:${v[2]}px;height:${v[3]}px"><span>${esc(r.n)}</span></div>`;
   }).join("");
   const rooms = outlines ? `<svg class="room-outlines" aria-hidden="true">${outlines}</svg>` : "";
+  /* approximations: the doors / WC pans whose size set the scale, dashed amber with their size, not numbered items */
+  const sobj = (a.marks?.marks || []).filter((m) => m.kind === "scale_object").map((m) => {
+    const v = viewer.rectToView([m.rect[0], m.rect[1] + off, m.rect[2] - m.rect[0], m.rect[3] - m.rect[1]]);
+    return `<div class="scale-obj" title="${esc(m.label || "")}: sets the approximate scale" style="left:${v[0]}px;top:${v[1]}px;width:${v[2]}px;height:${v[3]}px"><span>${esc(m.label || "")}</span></div>`;
+  }).join("");
   const added = own ? state.corr.added.map((p, j) => {
     const [vx, vy] = viewer.pointToView(p.x, p.y + off);
     return `<div class="pin add" style="left:${vx - 9}px;top:${vy - 9}px;width:18px;height:18px"><span>+${j + 1}</span></div>`;
@@ -831,7 +836,7 @@ function drawPins(a) {
     const [vx, vy] = viewer.pointToView(d.x * mk.w, d.y * mk.h + off);
     return `<div class="dis ${d.kind}" title="${esc(tip)}" style="left:${vx - R}px;top:${vy - R}px;width:${2 * R}px;height:${2 * R}px"></div>`;
   }).join("") : "";
-  $("#marks").innerHTML = rooms + html + added + dis + '<div class="reticle" hidden></div>';
+  $("#marks").innerHTML = rooms + sobj + html + added + dis + '<div class="reticle" hidden></div>';
   drawLayers();                                 // evidence layers of the selected item, in the new view space
 }
 let lastFocus = null;            // the selected item's rect and index, so a rotation can redraw its reticle
@@ -892,7 +897,9 @@ function layerSteps(a, row) {
   if (rec && rec.length) {
     return rec.map((st) => ({ ...st,
       r: st.rect ? [st.rect[0], st.rect[1] + off, Math.max(st.rect[2] - st.rect[0], 2), Math.max(st.rect[3] - st.rect[1], 2)] : null,
-      pts: st.pts && st.pts.length > 2 ? st.pts.map(([x, y]) => [x, y + off]) : null }));
+      pts: st.pts && st.pts.length > 2 ? st.pts.map(([x, y]) => [x, y + off]) : null,
+      /* a step resting on several places (the doors that set an approximate scale): one rect each, captioned */
+      rs: st.rects && st.rects.length ? st.rects.map((q) => [q[0], q[1] + off, Math.max(q[2] - q[0], 2), Math.max(q[3] - q[1], 2)]) : null }));
   }
   return deriveLayerSteps(a, row);
 }
@@ -956,6 +963,7 @@ function focusSteps() {
   const add = (x, y) => { bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); };
   for (const st of s.steps) {
     if (st.r) { add(st.r[0], st.r[1]); add(st.r[0] + st.r[2], st.r[1] + st.r[3]); }
+    (st.rs || []).forEach((q) => { add(q[0], q[1]); add(q[0] + q[2], q[1] + q[3]); });
     (st.pts || []).forEach(([x, y]) => add(x, y));
   }
   if (s.row.rect) { add(s.row.rect[0], s.row.rect[1]); add(s.row.rect[0] + s.row.rect[2], s.row.rect[1] + s.row.rect[3]); }
@@ -1000,7 +1008,17 @@ function drawLayers() {
   const split = mids.length > 1 ? (mids[Math.floor((mids.length - 1) / 2)] + mids[Math.floor(mids.length / 2)]) / 2 : Infinity;
   s.steps.forEach((st, k) => {
     const cap = esc(m2(st.cap || st.note || st.text || st.title).slice(0, 48));
-    if (st.pts) {
+    if (st.rs) {
+      let hole = "";
+      st.rs.forEach((q, j) => {
+        const v = viewer.rectToView(q), p = 3;
+        svg += `<rect data-k="${k}" class="lk-${esc(st.kind)}" x="${v[0] - 2}" y="${v[1] - 2}" width="${v[2] + 4}" height="${v[3] + 4}"/>`;
+        hole += `M${v[0] - p},${v[1] - p}H${v[0] + v[2] + p}V${v[1] + v[3] + p}H${v[0] - p}Z`;
+        const c = esc(String((st.caps || [])[j] || cap).slice(0, 28));
+        caps += `<div class="lcap mini lk-${esc(st.kind)}" data-k="${k}" style="left:${v[0] - 2}px;top:${v[1] - 2}px"><span>${j ? "" : `<b>${k + 1}</b>`}${c}</span></div>`;
+      });
+      st.hole = hole;
+    } else if (st.pts) {
       const vp = st.pts.map(([x, y]) => viewer.pointToView(x, y));
       svg += `<polygon data-k="${k}" class="lk-${esc(st.kind)}" points="${vp.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")}"/>`;
       st.hole = "M" + vp.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z";
@@ -1051,7 +1069,7 @@ function renderStepsCard() {
   }
   const s = layers.sel;
   if (!s) { card.hidden = true; return; }
-  const geo = s.steps.filter((st) => st.r || st.pts).length;
+  const geo = s.steps.filter((st) => st.r || st.pts || st.rs).length;
   const raw = (st) => st.kind === "value" || st.kind === "label" || st.kind === "detect";   // text as read: not reformatted
   card.innerHTML = `
     <div class="sc-head">
@@ -1061,7 +1079,7 @@ function renderStepsCard() {
       <button type="button" class="tool sc-close" aria-label="Close the steps">${icon("close")}</button>
     </div>
     <ol class="sc-list">
-      ${s.steps.map((st, k) => `<li><button type="button" class="sc-step${st.r || st.pts ? "" : " flat"}" data-k="${k}" aria-pressed="false">
+      ${s.steps.map((st, k) => `<li><button type="button" class="sc-step${st.r || st.pts || st.rs ? "" : " flat"}" data-k="${k}" aria-pressed="false">
         <span class="cite">${k + 1}</span><span class="k">${esc(st.title)}</span>
         <span class="v">${st.kind === "model" ? `<span class="sc-3d">Select in 3D</span>`
           : `${st.text ? `<span class="mono">${esc(raw(st) ? st.text : m2(st.text))}</span>` : ""}${st.note ? `${st.text ? " → " : ""}<span class="note">${esc(m2(st.note))}</span>` : ""}`}</span>
@@ -1106,7 +1124,7 @@ function bindStepsCard(card) {
 function playSteps() {
   const s = layers.sel;
   if (!s) return;
-  const ks = s.steps.map((st, k) => (st.r || st.pts ? k : null)).filter((k) => k != null);
+  const ks = s.steps.map((st, k) => (st.r || st.pts || st.rs ? k : null)).filter((k) => k != null);
   let j = 0;
   $("#stepsCard .sc-play")?.setAttribute("aria-pressed", "true");
   const tick = () => {
@@ -1207,8 +1225,18 @@ function correctedValue(a) {
   const c = state.corr;
   if (a.value == null || typeof a.value !== "number") return a.value;
   if (isCount(a)) return a.value - c.removed.size + c.added.length;
+  // a removed room takes out its own floor and wall area plus the waste on them (QA 14 Nov: a tiling total did
+  // not change after "Not this one" because the value includes walls and waste, not just the floor area)
+  const tot = (a.items || []).find((it) => it && it.totals)?.totals || null;
+  const w = tot && tot.waste_pct ? tot.waste_pct / 100 : 0;
+  const floorCounts = !tot || tot.floor_m2 == null || tot.floor_m2 > 0;
   let v = a.value;
-  for (const r of checkItems(a)) if (c.removed.has(r.n) && typeof r.area === "number") v -= r.area;
+  for (const r of checkItems(a)) {
+    if (!c.removed.has(r.n)) continue;
+    const it = r.it && typeof r.it === "object" ? r.it : {};
+    const floor = floorCounts ? (it.floor_m2 ?? it.area_m2 ?? (typeof r.area === "number" ? r.area : 0)) : 0;
+    v -= (floor + (it.net_wall_m2 || 0)) * (1 + w);
+  }
   return Math.round(v * 100) / 100;
 }
 function corrected() { return state.corr.removed.size > 0 || state.corr.added.length > 0; }
@@ -1229,7 +1257,8 @@ function renderStrip() {
   $("#stripHead").innerHTML = `
     <h2 class="h-panel">Verify ${rows.length} ${noun}</h2>
     <span class="legend meta"><span class="key blue" aria-hidden="true"></span>${nBlue} proven${nAmber ? `<span class="key amber" aria-hidden="true"></span>${nAmber} to check` : ""}</span>
-    ${scale ? `<span class="meta scale-src" title="${esc(scale.text)}">Scale from ${esc(scale.text.split(" (")[0].replace(/^Scale found on the sheet$/, "the sheet"))}</span>` : ""}
+    ${a.approx ? `<span class="meta scale-src approx" title="${esc(a.approx.scale)}">Approximate scale from ${esc(a.approx.short)}</span>`
+      : scale ? `<span class="meta scale-src" title="${esc(scale.text)}">Scale from ${esc(scale.text.split(" (")[0].replace(/^Scale found on the sheet$/, "the sheet"))}</span>` : ""}
     <span class="strip-gap"></span>
     ${own ? `<span class="corr" id="corrLine">${esc(corrLine(a))}</span>
       ${isCount(a) ? `<button class="btn btn-quiet" type="button" id="addMode" aria-pressed="${state.addMode}">${icon("plus")}Add missed item</button>` : ""}
@@ -1468,9 +1497,10 @@ function renderAnswer(a) {
     <div class="ans-head">
       <p class="ans-q">${esc(a.question)}</p>
       <div class="ans-value">
-        ${hasVal ? `<span class="v${isText ? " text" : ""}" id="ansValue">${esc(valText)}</span><span class="u">${esc(fmtUnit(a.unit))}</span>`
+        ${hasVal ? `${a.approx ? `<span class="about">About</span>` : ""}<span class="v${isText ? " text" : ""}" id="ansValue">${esc(valText)}</span><span class="u">${esc(fmtUnit(a.unit))}</span>`
                  : `<span class="v none">No answer</span>`}
       </div>
+      ${hasVal && a.approx ? `<p class="approx-note"><span class="approx-tag">${icon("estimate")}Approximation</span>${esc(m2(a.approx.text))}</p>` : ""}
       <p class="note corr-note" id="corrNote" hidden></p>
       <dl class="kv facts">
         <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span></dd>
@@ -1480,6 +1510,7 @@ function renderAnswer(a) {
         <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>
         <dt>Model calls</dt><dd>${a.cost_usd ? "yes" : "none"}</dd>
       </dl>
+      ${usedLine(a)}
       ${costMeter(a)}
       ${a.cached ? `<p class="note">Served from the answer cache. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
     </div>
@@ -1583,9 +1614,33 @@ function costMeter(a) {
     <span class="label">Cost per 1,000 questions like this</span>
     ${row("This answer", c.usd_per_1000, "ours")}
     ${base ? row("Nemotron, plain prompt", base.usd_per_1000, "base") : ""}
+    ${c.parse_usd || c.parse_orig_usd ? `<p class="note parse-cost">Language model reading: ${fmtUsd(c.parse_orig_usd * 1000)} per 1,000${c.parse_cached ? " (cached now, counted as €0 for this repeat)" : " (included above)"}.</p>` : ""}
     <p class="note">CPU ${fmtSec(c.cpu_s)}${c.gpu_s ? `, GPU ${fmtSec(c.gpu_s)}` : ""}${c.model_usd ? `, model ${fmtUsd(c.model_usd)}` : ""} at an assumed $${as.cpu_vcpu_hour_usd} per vCPU-hour${c.gpu_s ? ` and $${as.gpu_hour_usd} per GPU-hour` : ""}.${base ? ` Nemotron: ${num(Math.round(base.prompt_tokens_mean + base.completion_tokens_mean))} measured tokens per question at an assumed $${base.price_in_per_mtok} / $${base.price_out_per_mtok} per million in / out.` : ""} ${FX_NOTE} Log scale.</p>
   </div>`;
 }
+
+/* BEGIN used-line: a plain "what was used" line on every answer, with the AI calls counted (his request, 14 Nov) */
+const USED_PART = { "dxf-geometry": "CAD geometry", "dxf-generic": "CAD geometry", ifc: "IFC model", "ifc-props": "IFC model", "pdf-text": "PDF text", "pdf-vector": "PDF linework", "pdf-generic": "PDF linework", "raster-detector": "object detector", "raster-ocr-labels": "OCR (room labels)", "raster-area": "OCR (room labels)", "raster-cv": "object detector", "raster-cv-fixtures": "object detector", "raster-rooms": "room detector", "sheet-scale": "sheet scale", "nemotron-estimate": "Nemotron image estimate", nemotron: "Nemotron image estimate", "raster-prior": "baseline prior" };
+function usedLine(a) {
+  const q = a.query || {}, ex = q.extra || {}, c = a.compute || {};
+  const llm = q.parser === "llm";
+  const parts = [];
+  for (const r of String(a.route || "").split("+")) {
+    const w = USED_PART[r] || ROUTE_LABEL[r] || r;
+    if (w && !parts.includes(w)) parts.push(w);
+  }
+  const second = (a.checks || []).some((k) => k.name === "nemotron-second-opinion" && k.status !== "error");
+  if (second && !parts.includes("Nemotron image estimate")) parts.push("Nemotron second opinion");
+  const imageEst = String(a.route || "").split("+").includes("nemotron-estimate") || second;
+  const readCall = llm && !ex.parse_cached && (ex.parse_cost_orig_usd || ex.parse_cost_usd) ? 1 : 0;
+  const calls = [];
+  if (readCall) calls.push("question reading");
+  if (imageEst) calls.push(second ? "Nemotron second opinion" : "Nemotron image estimate");
+  const callTxt = calls.length ? `${calls.length} (${calls.join(", ")})` : (llm && ex.parse_cached ? "none (question reading cached)" : "none");
+  const per = c.usd_per_1000 != null ? `${fmtUsd(c.usd_per_1000)} per 1,000 questions like this` : "";
+  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${llm ? "language model" : "rules"}</span><span><b>Answered with:</b> ${esc(parts.join(" and ") || "-")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}</p>`;
+}
+/* END used-line */
 
 /* ---------------------------------------------------------------- witnesses */
 const FMT_NAME = { DXF: "DXF layers", IFC: "IFC model", PDF: "PDF alone", PNG: "PNG image" };
