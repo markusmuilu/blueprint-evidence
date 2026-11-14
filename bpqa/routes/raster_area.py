@@ -424,6 +424,9 @@ BANDS = {"n": 266, "plans": 74,
          "3to6": {"n": 50, "median": 0.13, "p80": 0.384, "within5": 0.28},
          "6up": {"n": 143, "median": 0.065, "p80": 0.2, "within5": 0.448}}
 MIN_MEASURED_M2 = 3.0
+# Region perimeter (convex hull) against the annotated room outlines of CubiCasa's model.svg, scale-free
+# (tools/perim_eval.py): dev 303 rooms of 55 plans (median 7.8%), test 116 rooms of 21 plans (median 10.8%), pooled.
+PERIM_BAND = {"n": 419, "plans": 76, "median": 0.087, "p80": 0.268, "within10": 0.525, "signed": -0.04}
 
 
 def _band_cls(area: float) -> str:
@@ -446,13 +449,15 @@ def _inside(contour, pt) -> bool:
     return contour is not None and cv2.pointPolygonTest(contour, (float(pt[0]), float(pt[1])), False) >= 0
 
 
-PERIM_EPS = 2.0          # px, simplification of the traced contour before measuring its length
-
-
 def region_perimeter_px(contour, eps: float | None = None) -> float:
-    """Perimeter of a room region in pixels: the traced pixel contour is staircased, so it is simplified first."""
-    c = cv2.approxPolyDP(contour, PERIM_EPS if eps is None else eps, True)
-    return float(cv2.arcLength(c, True))
+    """Perimeter of a room region in pixels. Default: the convex hull's perimeter. The traced contour of a
+    flood-filled region is ragged (furniture, door arcs, doorway bridges), and its own length overstates
+    the room's walls; on dev against the annotated room outlines the hull's median error is 7.8% against
+    17.2% for the simplified contour (CHANGELOG). A concave room (L shape) comes out a little short.
+    `eps` given: the simplified contour's length instead (tools/perim_eval.py compares the variants)."""
+    if eps is not None:
+        return float(cv2.arcLength(cv2.approxPolyDP(contour, eps, True), True))
+    return float(cv2.arcLength(cv2.convexHull(contour), True))
 
 
 def _name(r) -> str:
@@ -555,7 +560,9 @@ def takeoff_answer(ctx, q, img):
         items.append({"totals": totals})
         expl += (f" Walls on a scan are an ESTIMATE: perimeter of the measured room region x an ASSUMED ceiling height "
                  f"({wallmod.DEFAULT_CEILING_M:.2f} m unless the question gives one); door and window openings are NOT deducted "
-                 f"(not detectable here), so the wall area is gross and an upper bound. ") + basis_txt + " " + scale_txt + "." + band_note
+                 f"(not detectable here), so the wall area is gross and an upper bound. "
+                 f"The room perimeters are typically off by about {PERIM_BAND['median']:.0%} (8 in 10 within {PERIM_BAND['p80']:.0%}; "
+                 f"region against the annotated room outlines of {PERIM_BAND['n']} dev and test rooms), before the height assumption. ") + basis_txt + " " + scale_txt + "." + band_note
         est = "walls: perimeter x assumed height, openings not deducted" + ("; some rooms measured" if meas_rows else "")
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=0.45, items=items, explanation=expl)
         ans.tier, ans.tier_reason = "estimate", est + ("; " + bt if meas_rows else "")

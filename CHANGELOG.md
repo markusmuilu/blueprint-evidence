@@ -3,6 +3,56 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
+
+Problem: on a scan with some printed room areas a takeoff abstained for every room that prints none, and wall
+questions on scans abstained. The scale from the printed rooms was already there (`raster_area.py`).
+
+- Rooms without a printed area are answered with region x scale as tier estimate when the scale is established
+  (2+ printed rooms agree within 4%). Printed rooms keep their printed value. Each answer states which rooms are
+  printed and which measured, the printed rooms that set the scale, and the measured error band; measured rooms
+  go into `uncertain`. Without a scale, or without a closed region, the room still abstains with the reason.
+- Walls on scans: floor and walls as separate lines (`bpqa/walls.py` summary, same inputs as the vector routes);
+  walls = perimeter of the region x ASSUMED 2.5 m (editable), openings not deducted and said so; estimate only;
+  `raster-area` joined `WALL_ROUTES` in `takeoff.py` so the router no longer withdraws it.
+- Evidence: printed rooms blue with the printed value boxed, measured rooms amber with "measured X m2".
+
+Leave-one-out (`tools/area_eval.py --out`, then `tools/area_band.py`), scale from the other printed rooms, same
+region code as before (dev 193 rooms measurable: 18.7% within 2%, 36.8% within 5%, median 9.3%, as in the
+`area-route` entry; full test split 1,510 images: 73 rooms, 6.8% / 23.3% / median 11.9%). The headline median
+hides a heavy tail, so the band is quoted by the measured room's size (dev + test pooled, 266 rooms, 74 plans):
+
+| measured area | rooms | median error | 8 in 10 within | within 5% | within 10% | signed median |
+|---|---|---|---|---|---|---|
+| under 3 m2 | 73 | 46.3% | 77% | 13.7% | 24.7% | -46% |
+| 3 to 6 m2 | 50 | 13.0% | 38% | 28.0% | 44.0% | -3.6% |
+| 6 m2 and over | 143 | 6.5% | 20% | 44.8% | 63.6% | +0.3% |
+| all | 266 | 10.6% | 50% | 33.1% | 49.2% | -2.6% |
+
+Under 3 m2 the region is usually a fragment of the room (dev -45%, test -55%, same sign), so a measured room under
+3 m2 is not answered (`MIN_MEASURED_M2`); the threshold was read off dev and held on test. Small rooms are what a
+wet-room takeoff asks about, so many toilet questions still abstain. The test split was run a second time for
+the band; no setting was chosen on it besides confirming the 3 m2 pattern. Caveat: the reference is printed
+rooms, which are not the rooms that lack a printed area.
+
+Wall perimeter (`tools/perim_eval.py`): region against the annotated room outlines of CubiCasa's model.svg (read as
+data, frame F1_scaled), scale-free. The traced contour is ragged and overstates the walls; the convex hull's perimeter
+was chosen from five variants on dev and held on test:
+
+| perimeter of the region | dev (303 rooms, 55 plans) median / 8 in 10 / 9 in 10 | test (116 rooms, 21 plans) |
+|---|---|---|
+| traced contour, simplified 2 px (first version) | 17.2% / 49.5% / 65.1% | 20.5% / 48.6% / 74.1% |
+| contour simplified 12 px | 13.3% / 42.6% / 57.9% | 16.9% / 47.0% / 64.8% |
+| convex hull (used) | 7.8% / 26.0% / 39.5% | 10.8% / 30.1% / 41.7% |
+
+Pooled hull: median 8.7%, 8 in 10 within 27%, signed -4% (a concave room comes out short). This is the region, not
+the answer: the assumed height and the missing opening deduction come on top, so the wall figure is gross.
+
+Regression: preview dev (5,289 questions) and test (2,701) run with `eval.py` on `main` (03276ca, from a `git archive`
+copy) and on this branch: 0 answers differ in value, abstain reason, tier, route or correctness
+(dev 3,273 correct, 61.9%; test 1,811 correct, 67.0%). Stoa has no area question on a scan, so the dataset numbers
+cannot move. Tests: `tests/test_raster_area.py` (new, synthetic plan), `test_walls.py`, `test_takeoff.py` pass.
+
 ## 2026-11-14: wall-surface takeoff, property and free-text questions, generic schedules, branch `walls-text`
 
 Problem: two gaps against Stoa's brief. Tiles in toilets and bathrooms go on the walls, and wall questions

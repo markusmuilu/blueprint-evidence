@@ -195,8 +195,9 @@ floor, walls, waste and order quantity as separate lines; the value is the order
 asks what to order / buy / need, else the net area. `items` has one line per room with perimeter, height
 and its source, gross wall area, each deducted opening (GlobalId, width, deducted m2) and net wall area;
 when the IFC model carries its own NetWallArea it is shown beside ours as a check (more than 5% apart makes
-the answer an estimate). Answers resting on an assumed height are estimates. Other routes (PDF without a
-twin, scans) still answer floor areas only, so the router withdraws their answer to a wall question.
+the answer an estimate). Answers resting on an assumed height are estimates. Scans with a pixel scale from
+printed room areas answer walls as an estimate (below). Other routes (PDF without a twin) still answer
+floor areas only, so the router withdraws their answer to a wall question.
 
 Evidence: the plan with the rooms filled, their wall outline drawn thick, each deducted opening boxed in
 amber with its deducted area, and floor and net wall area per room.
@@ -232,11 +233,26 @@ Raster scans (`bpqa/routes/raster_area.py`, route `raster-area`):
 - scale (m2 per pixel) only when 2+ rooms with a printed area and a usable region agree within 4% and
   form the majority; the doorway width (1.0 m) is tried at 10 pixel-per-metre hypotheses and a
   hypothesis counts only if the scale it produces agrees with it within 20%
-- a takeoff answers only from printed areas. A room without one makes the sum abstain, and the
-  abstention gives the measured estimate (region x scale) with its dev error, because measured areas
-  are not yet within Stoa's 2% (see below; `MEASURED_ANSWERS` in `raster_area.py` switches them on).
-  It also abstains when the full eight-pass OCR (when cached) reads more labels of the asked type than
-  were located. One-letter labels (S, K) must be upper case.
+- a takeoff answers a room with a printed area with that printed value (tier proven when every asked room
+  is printed). A room without one is answered with its measured area (region x scale) as tier
+  **estimate**, only when the scale is established; the answer names the printed rooms, the measured rooms
+  (listed as `uncertain`), the printed rooms that set the scale, and the measured error band. A measured
+  region under 3 m2 is not answered (below), and without a scale the sum abstains with the reason.
+  `MEASURED_ANSWERS` in `raster_area.py` switches measured answers off. It also abstains when the full
+  eight-pass OCR (when cached) reads more labels of the asked type than were located. One-letter labels
+  (S, K) must be upper case.
+- floor and walls are separate lines. A floor-only question stays floor only. A wall question (or tiles in
+  wet rooms, paint on walls and floor) adds walls = perimeter of the room region (convex hull, x scale) x an
+  ASSUMED ceiling height (2.5 m, editable from the question like the vector routes, `bpqa/walls.py`);
+  openings are not deducted (a scan has no reliable door and window data here), so the wall figure is gross.
+  Always an estimate; no scale, or a room without a closed region, abstains.
+- measured error band (leave-one-out against printed areas, dev + test pooled, 266 rooms of 74 plans),
+  quoted in every answer by the measured room's size: measured 3 to 6 m2: median error 13%, 8 in 10 within
+  38%, 28% within 5%; 6 m2 and over: median 6.5%, 8 in 10 within 20%, 45% within 5%. Measured under 3 m2:
+  median error 46%, nearly always too small, so those rooms are not answered. Wall perimeters: median 8.7% off
+  the annotated room outline, 8 in 10 within 27% (419 rooms), before the height assumption.
+- evidence: printed rooms in blue with the printed value boxed; measured rooms in amber with "measured X m2";
+  the scale rooms are named in the header.
 
 Takeoff results (every number against a stated reference; dev was used for development, test run once):
 
@@ -248,7 +264,7 @@ Takeoff results (every number against a stated reference; dev was used for devel
 | Swiss bathroom, kitchen sums, where Stoa asks about every such room on the floor | sum of Stoa's per-room areas | 18/18 | 19/20 |
 | IFC bathroom, WC, kitchen, bedroom sums (models and plan sheets) | sum of Stoa's per-room areas, same completeness rule | 56/56 (60 type sets: 2 abstain, 2 answered with a room list that differs from the asked rooms) | 18/18 (19 sets: 1 differs) |
 | IFC rooms in the sums | Stoa's per-room areas | 204/204 | 184/184 |
-| CubiCasa measured room area, leave-one-out | the area printed on the plan, held out of the scale | 18.7% within 2%, 36.8% within 5%, median error 9.3% (193 of 1471 printed rooms measurable, 52 of 197 plans) | 4.8% within 2%, 21.4% within 5%, median error 12.3% (42 of 303 printed rooms measurable, 12 of 45 plans; 635 test images OCRed) |
+| CubiCasa measured room area, leave-one-out  | the area printed on the plan, held out of the scale | 18.7% within 2%, 36.8% within 5%, median error 9.3% (193 of 1471 printed rooms measurable, 52 of 197 plans) | 6.8% within 2%, 23.3% within 5%, median error 11.9% (73 of 756 printed rooms measurable, 22 of 112 plans; all 1,510 test images; an earlier run on 635 test images gave 4.8% / 21.4% / 12.3%) |
 
 Baselines: before this branch every takeoff question was a parser abstention (0% coverage). The
 existing area answers did not change: `eval.py` on the preview dev split gives the same Swiss, IFC
