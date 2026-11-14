@@ -1,7 +1,11 @@
-# Make Blueprints Talk
+# Blueprint Evidence
 
-Junction 2026, Stoa challenge. Answer natural-language questions about construction drawings and show
-where every answer came from.
+Junction 2026, Stoa challenge "Make Blueprints Talk". Answer natural-language questions about construction
+drawings and show where every answer came from.
+
+- **Live app:** https://muilu-markus--blueprint-evidence.us-east.modal.run
+- **Results, every test question with our answer:** [results/README.md](results/README.md)
+- **Where it fails, with pictures:** [docs/failure_gallery/SUMMARY.md](docs/failure_gallery/SUMMARY.md)
 
 Pre-existing code: none. Everything in this repository was built at Junction 2026.
 
@@ -1117,7 +1121,9 @@ given in each source's `LICENSE.md`:
 | opening_design | CC BY-SA 4.0 and MIT | OpeningDesign, Madison, Wisconsin |
 
 Evidence images are derived from the drawings and carry the drawing's licence: overlays on CubiCasa
-scans are NonCommercial and ShareAlike. For NoDerivatives files (Duplex, Medical-Dental Clinic) no overlay
+scans are NonCommercial and ShareAlike. The crops in `docs/failure_gallery/img/` are from CubiCasa5K and are
+CC BY-NC-SA 4.0 ((c) 2019 CubiCasa), not MIT. The images in `unseen/evidence/` carry their drawing's licence
+as listed in `UNSEEN.md` (CC BY 4.0, Apache-2.0, CC BY-SA 4.0). For NoDerivatives files (Duplex, Medical-Dental Clinic) no overlay
 is rendered at all; the answer JSON lists the counted entities by GlobalId instead. `out/` is not
 committed.
 
