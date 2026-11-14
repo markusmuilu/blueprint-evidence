@@ -134,7 +134,9 @@ flattened polylines, so the door convention is not recognised. opening_design an
 ### Detector
 
 Toilets, sinks, showers, bathtubs, doors and windows on the scans are counted by a small YOLO detector
-(Ultralytics, `yolo26n` from scratch), with every counted box drawn and numbered. Training data:
+(Ultralytics), with every counted box drawn and numbered. The route uses the tiled `yolo26s` described
+below (started from Ultralytics' pretrained weights), which beat the earlier `yolo26n` from scratch
+(`cubi2`) on every object on the tune images. Training data:
 
 - Public CubiCasa5K annotations (5,000 plans with SVG annotations), converted by
   `tools/cubicasa_svg.py`. Stoa's CubiCasa images are a subset of CubiCasa5K, and Stoa's counts are
@@ -227,6 +229,33 @@ dev failures only.
 
 ## Results
 
+### Detector v2 (tiers, test-time augmentation, tiled detector)
+
+Preview, `eval.py`: "before" is the route before tiers with the `cubi2` detector (`--no-tiers`), "final"
+the current route. Proven and estimate are the two answer tiers, with their precision.
+
+| | dev overall | dev CubiCasa | test overall | test CubiCasa | test proven: n / precision | test estimate: n / precision |
+|---|---|---|---|---|---|---|
+| before | 66.2% | 47.9% | 72.3% | 49.2% | 2056 / 95.0% (all answers) | - |
+| final | 80.5% | 73.9% | 85.7% | 75.6% | 2292 / 94.1% | 354 / 44.6% |
+
+The full set's test split (1,510 CubiCasa images, 14,108 detector questions in all languages, checks
+off), exact count:
+
+| object | n | before: exact (precision, coverage) | final: exact | final proven: share / precision | final estimate precision |
+|---|---|---|---|---|---|
+| toilet | 3016 | 81.0% (84.0%, 96.4%) | 88.3% | 99.7% / 88.5% | 0 of 8 |
+| sink | 2982 | 57.5% (74.5%, 77.3%) | 78.7% | 98.2% / 79.6% | 29.6% |
+| shower/bath | 2816 | 0% (switched off) | 75.7% | 95.5% / 77.4% | 39.7% |
+| door | 2274 | 23.2% (76.3%, 30.4%) | 55.4% | 69.5% / 67.1% | 28.8% |
+| window | 3020 | 25.0% (63.9%, 39.1%) | 46.4% | 44.8% / 69.0% | 28.0% |
+| **all detector questions** | 14108 | 38.6% (76.8%, 50.2%) | 69.5% | 81.9% / 78.4% | 28.7% |
+
+CHANGELOG.md has the per-step numbers (tiers, check values, TTA, tiled model), the tune-image
+comparison per object and the full-test-split numbers for every CubiCasa question type.
+
+### Before detector v2
+
 Produced by `eval.py` (dev: 5,289 questions, test: 2,701). Accuracy counts an abstention as wrong;
 coverage is the share answered; precision is correct / answered. Cost is $0.0000 per question on every
 row, because no route calls a model. "with --prior" adds the labelled dev-majority baseline on raster
@@ -288,13 +317,16 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 ## Limits, stated plainly
 
-- CubiCasa scans are 53% of the questions. The detector is good for toilets (about 75% exact) and weak
-  for sinks, doors and windows (16-36% exact on test, 60-77% precise when it answers). Showers and baths
-  are switched off: 24% exact even before abstention, below a constant answer. Doors and windows are
-  many-object counts where one missed or extra box makes the answer wrong.
-- `--prior` answers the remaining raster questions with the most common dev answer per object type, as
-  a labelled baseline (route `raster-prior`, evidence says "PRIOR, not visual proof"). It is there so
-  the detector has a number to beat, not because it is a method.
+- CubiCasa scans are 53% of the questions. With the tiled detector, toilets, sinks and showers/baths
+  are mostly right; doors and windows remain the weak counts (many objects per plan, where one missed or
+  extra box makes the answer wrong). See the full-test-split table above.
+- "Proven" means the route's tuned conditions held, not that the answer is certain: the policy was tuned
+  to accept an answer when it is right more often than wrong, so proven door and window counts are about
+  70% precise. Estimates are much weaker (20-60% per object) and are labelled as such, with the boxes or
+  labels to check.
+- Estimates for kitchens and bathrooms are below a constant answer (one of each): when no label or two
+  labels are read, the plan's own evidence is missing or misread. `eval.py --prior` shows that constant
+  as a baseline column; it is never used as an answer.
 - Stoa's CubiCasa images are all in the public CubiCasa5K, and Stoa's counts equal its annotations. The
   detector uses those annotations only for plans whose image is in our train split or not in Stoa at
   all; test-split images and anything matching them are excluded by image fingerprint. A judging set

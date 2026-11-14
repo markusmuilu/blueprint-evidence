@@ -192,6 +192,20 @@ bedrooms 54.9% -> 74.5%, saunas 22.2% -> 63.0%, WC rooms 75.7% -> 91.9%, balconi
 kitchens 57.4% -> 59.6%, storeys 93.4% -> 96.1%. The preview test has 76 CubiCasa images, so these move
 in steps of 1.3 points.
 
+Full set, test split, detector questions, final route, same flags as the baseline (run once):
+
+| object | n | before: exact (precision, coverage) | final: exact | final proven: share / precision | final estimate precision |
+|---|---|---|---|---|---|
+| toilet | 3016 | 81.0% (84.0%, 96.4%) | 88.3% | 99.7% / 88.5% | 0 of 8 |
+| sink | 2982 | 57.5% (74.5%, 77.3%) | 78.7% | 98.2% / 79.6% | 29.6% |
+| shower/bath | 2816 | 0% (switched off) | 75.7% | 95.5% / 77.4% | 39.7% |
+| door | 2274 | 23.2% (76.3%, 30.4%) | 55.4% | 69.5% / 67.1% | 28.8% |
+| window | 3020 | 25.0% (63.9%, 39.1%) | 46.4% | 44.8% / 69.0% | 28.0% |
+| **all detector questions** | 14108 | 38.6% (76.8%, 50.2%) | 69.5% | 81.9% / 78.4% | 28.7% |
+
+The tune images predicted 88.3%, 79.3%, 77.6%, 59.1% and 50.0%; doors and windows came out 3-4 points
+lower on test. The epoch-22 check had given 69.1% overall on the same questions.
+
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
 Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the
