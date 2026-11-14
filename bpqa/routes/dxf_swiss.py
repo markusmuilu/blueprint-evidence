@@ -24,6 +24,7 @@ from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
 from .. import takeoff
+from .. import walls as wallmod
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
 from .scope_guard import single_room_problem
@@ -160,6 +161,44 @@ class SwissFloor:
         if r["name"]:
             return True
         return any(r["poly"].contains(Point(c)) for c in self.fixture_centroids)
+
+
+def swiss_wall_rooms(fl, rooms_used):
+    """Room records for bpqa/walls.py from Swiss DXF rooms. A floor plan has no heights, so the ceiling
+    height is the stated default (walls.py) and door / window heights are stated assumptions. Openings:
+    door leaves (DOOR, width = leaf length) within 0.35 m of the room outline (a door counts for the rooms
+    on both sides of its wall); windows (grouped WINDOW strips) within 0.5 m along at least 30% of their
+    width."""
+    from shapely.geometry import Polygon as _P, box as _box
+    out = []
+    for r in rooms_used:
+        poly = r["poly"]
+        ops = []
+        for d in fl.doors:
+            leaf = _P(d).buffer(0)
+            if leaf.is_empty or leaf.distance(poly) > 0.35:
+                continue
+            mrr = leaf.minimum_rotated_rectangle
+            xs = list(mrr.exterior.coords)
+            width = max(((xs[i][0] - xs[i + 1][0]) ** 2 + (xs[i][1] - xs[i + 1][1]) ** 2) ** 0.5 for i in range(4))
+            ops.append({"kind": "door", "id": None, "width": width, "z0": 0.0, "z1": wallmod.DOOR_H_M,
+                        "src": f"door leaf width from DOOR polyline; height ASSUMED {wallmod.DOOR_H_M:.2f} m",
+                        "bbox": leaf.bounds})
+        for b in fl.windows:
+            g = _box(*b)
+            if g.distance(poly) > 0.5:
+                continue
+            width = max(b[2] - b[0], b[3] - b[1])
+            if poly.boundary.intersection(g.buffer(0.5)).length - 1.0 < 0.5 * width:
+                continue
+            ops.append({"kind": "window", "id": None, "width": width, "z0": wallmod.WINDOW_SILL_M,
+                        "z1": wallmod.WINDOW_SILL_M + wallmod.WINDOW_H_M,
+                        "src": f"window width from WINDOW strips; height ASSUMED {wallmod.WINDOW_H_M:.2f} m on a "
+                               f"{wallmod.WINDOW_SILL_M:.2f} m sill", "bbox": b})
+        out.append({"label": r["name"], "number": r["number"], "floor_area": fl.room_area(r),
+                    "floor_src": "ROOM_OUTLINE polygon", "poly": poly, "perimeter": wallmod.ring_length(poly),
+                    "perimeter_src": "ROOM_OUTLINE polygon", "height": None, "height_src": "", "openings": ops})
+    return out
 
 
 def _bbox(p):
@@ -325,6 +364,31 @@ def answer(ctx, q) -> Answer:
                 for r in rooms_used]
         ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
         ans.explanation = expl + (" " + note.split("; ", 1)[1] if "generic" in note else "") + f" Source: {dxf.name}."
+        tk = q.extra["takeoff"]
+        if wallmod.surfaces(tk)[1]:
+            wrooms = swiss_wall_rooms(fl, rooms_used)
+            ans.value, ans.items, wexpl, totals = wallmod.summary(wrooms, tk, ctx.q.question)
+            ans.items.append({"totals": totals})
+            ans.explanation = wexpl + f" Source: {dxf.name}."
+            ans.tier = "estimate" if not wallmod.parse_inputs(ctx.q.question).get("ceiling_m") else None
+            ans.tier_reason = "room height, door and window heights are assumptions (a floor plan does not carry them)" if ans.tier else ""
+            if ctx.evidence:
+                cv = base_canvas(fl)
+                inp = wallmod.parse_inputs(ctx.q.question)
+                for r in wrooms:
+                    w = wallmod.room_walls(r, inp)
+                    for o, d in zip(r["openings"], w["deductions"]):
+                        o["deducted"] = d["area"]
+                wallmod.draw_rooms(cv, wrooms, PALETTE[0], PALETTE[0], (231, 140, 8),
+                                   lambda i, r: f"{i + 1}. {r['label']}: floor {r['floor_area']:.2f}, walls "
+                                                f"{wallmod.room_walls(r, inp)['net']:.2f} m²")
+                out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
+                ans.evidence = finish(cv.img, out, ctx.q.question, wallmod.answer_line(ans.value, totals, ROUTE, "assumed heights" if ans.tier else ""),
+                                      note=(f"Walls = ROOM_OUTLINE (thick blue) x height - openings (amber: doors from DOOR "
+                                            f"leaves, windows from WINDOW strips). {wallmod.room_walls(wrooms[0], inp)['height_src'] if wrooms else ''}. "
+                                            f"Door height {wallmod.DOOR_H_M:.2f} m, window {wallmod.WINDOW_H_M:.2f} m on a "
+                                            f"{wallmod.WINDOW_SILL_M:.2f} m sill: assumptions. Surfaces: {totals['surfaces']}."))
+            return ans
 
     if ctx.evidence:
         cv = base_canvas(fl)

@@ -28,7 +28,11 @@ drawing  --> router: cheapest route that can prove the answer
                   dxf-generic   any other DXF: AIA / ISO 13567 / plain-word layer and block names;
                                 abstains when the asked class is absent, never a proven 0
                2. ifc           IFC entities, storey containment, quantity sets, space geometry
-               3. pdf-text      text layer and schedules (door schedule rows)
+                  ifc-props     free-text and property questions: typed lookups over the model (types,
+                                materials, fire rating, named elements, rooms, storeys, systems), every
+                                value cited by GlobalId; tried when the numeric routes cannot answer
+               3. pdf-text      text layer and schedules (door schedule rows; any other schedule table
+                                through the generic reader, columns from header words or the drawn grid)
                3b. pdf-vector   the PDF's own linework, when no DXF/IFC twin exists (or --pdf-only):
                                 room shapes, scale, doors, windows, fixtures; scanned PDFs abstain
                    pdf-generic  where pdf-vector does not recognise the convention: door swings and printed
@@ -156,9 +160,10 @@ not a change to them.
   or an exclusion clause's room words ("except balconies"); on Stoa's 127,044 questions it changes the
   parse of 2 (ifc_bench takeoff questions), checked by `tests/test_takeoff.py` and a full-file run.
 - **Interpretation, stated in every answer:** the sum of net floor areas of the matching rooms as drawn
-  inside the walls, no allowance for cutting waste. Wall surfaces abstain (they need room heights and
-  openings). "Toilets" means separate WC rooms; bathrooms are not included, and the answer says so.
-  Paint answers the floor area and says walls are not included.
+  inside the walls. Tiles in wet rooms (bathroom, WC, sauna) and any question naming walls add the wall
+  surfaces (next section); "floor tiles" stays floor only. "Toilets" means separate WC rooms; bathrooms
+  are not included, and the answer says so. Paint answers the floor area and says walls are not included
+  unless walls are asked.
 - **Room types from drawing labels** (`room_types`): Swiss (Bad, Kuche, Bain, Bagno, Schlafzimmer ...),
   IFC (Bathroom 1, Toilet, TUALETTRUUM, doucheruimte, Bad - Dame, 1IZQ-BAN ...) and Finnish
   abbreviations. Generic "Zimmer" / "Piece" / "Room" are not typed; they are listed in the answer as
@@ -170,6 +175,51 @@ not a change to them.
   areas (NetFloorArea, else footprint). On an IFC plan sheet without a level in the question, the
   storey is the one whose name and (uniqueness-weighted) space labels are printed on the sheet; no
   clear winner abstains. Zero matching rooms abstains with the labels that were read.
+
+### Wall surfaces: tiles on walls (`bpqa/walls.py`)
+
+Tiles in a bathroom go on the walls too. Wall area of a room = outline length x tiled height - the doors
+and windows in that room's walls, with every input stated in the answer and its source named:
+
+| input | IFC model | Swiss DXF floor |
+|---|---|---|
+| outline | IfcSpace geometry projected to the floor (holes add their ring length) | ROOM_OUTLINE polygon |
+| height | the space's FinishCeilingHeight / ClearHeight / Height quantity, else its geometry's z extent, else the storey height | ASSUMED 2.50 m (a plan has no heights) |
+| tiled height | full height unless the question says "tiles to 1.2 m" | same |
+| openings | IfcDoor / IfcWindow whose footprint lies within 0.2 m of the outline along 30% of its width; width x the part of the opening's own z range inside the tiled band | door leaf width, ASSUMED 2.00 m high; window strips, ASSUMED 1.20 m high on a 0.90 m sill |
+| waste | 10% cutting allowance unless the question gives one ("with 15% waste", "no waste") | same |
+
+Editable from the question: "ceiling height 2.6 m", "tiles to 1.2 m", "tiling height 210 cm", "12% waste",
+"no waste", "full height" (`TAKEOFF_CEILING_M`, `TAKEOFF_WASTE_PCT` change the defaults). The answer lists
+floor, walls, waste and order quantity as separate lines; the value is the order quantity when the question
+asks what to order / buy / need, else the net area. `items` has one line per room with perimeter, height
+and its source, gross wall area, each deducted opening (GlobalId, width, deducted m2) and net wall area;
+when the IFC model carries its own NetWallArea it is shown beside ours as a check (more than 5% apart makes
+the answer an estimate). Answers resting on an assumed height are estimates. Other routes (PDF without a
+twin, scans) still answer floor areas only, so the router withdraws their answer to a wall question.
+
+Evidence: the plan with the rooms filled, their wall outline drawn thick, each deducted opening boxed in
+amber with its deducted area, and floor and net wall area per room.
+
+Validation (`tools/wall_eval.py`): the quantities the authoring tools wrote into the IFC models, which the
+takeoff never reads (it shows NetWallArea only as a check), against what it computes from geometry, every
+IfcSpace that carries them, duplicate copies of a model counted once:
+
+| quantity | reference | spaces | within 2% | within 5% | median error |
+|---|---|---|---|---|---|
+| perimeter | Qto GrossPerimeter, Revit Perimeter, ArchiCAD Umfang (16 models) | 1,470 | 67.3% | 88.7% | 0.0% |
+| gross wall area (perimeter x height) | Qto GrossWallArea (5 models) | 454 | 66.5% | 72.0% | 0.0% |
+| net wall area (minus openings) | Qto NetWallArea (6 models) | 511 | 51.5% | 56.9% | 1.8% |
+
+Per model, net wall area within 2%: KIT institute (ac20) 96%, Smiley West 76%, FZK house 43% (gross 43%: rooms
+under the pitched roof and a gallery open to the floor below, where perimeter x height is not the wall), Molio
+31% (gross 68%; windows in thick external walls are missed by the 0.2 m rule), TU Wien escape-route model 29%
+(its GrossWallArea implies other room heights than its own height quantities), RWTH Digital Hub 11% (net only).
+One model (Gymzaal Amersfoort) stores perimeters about 300x the geometry and is left out as a unit error.
+Variants measured and rejected: counting only outline edges that run along a wall footprint (gross 46%, net
+35% within 2%: space outlines often sit more than 0.1 m off the walls) and wider opening tolerances (0.35 to
+0.7 m: worse on four of five models). There is no reference for the Swiss DXF wall areas: the heights there
+are assumptions, which is why those answers are estimates.
 
 Raster scans (`bpqa/routes/raster_area.py`, route `raster-area`):
 
@@ -207,6 +257,78 @@ bathroom tiling question, 15.81 m2 from IfcSpace footprints, where the ifc_bench
 from finish data while Stoa's own ifc_models answers give Bathroom 1 (A104) 3.16 m2 as we do).
 CubiCasa takeoffs are answered only from printed areas, so their accuracy is the OCR read of those
 labels, which has no reference in Stoa's data.
+
+### Property and free-text questions (`ifc-props`, generic schedules)
+
+"What is the fire rating of door D-12?", "Which rooms are on level 2?", "What material are the walls in room
+104?", "Which door types are installed, with quantities?". These do not have one number as the answer, so
+`bpqa/routes/ifc_props.py` maps the question to one typed lookup over the model and builds the answer only
+from what the lookup returns; every answer cites the entities it read (GlobalIds in `items`).
+
+| lookup | what it reads |
+|---|---|
+| type breakdown | entities of the class, grouped by IfcRelDefinesByType type name (else ObjectType), counts and shares; per storey, thickness or width x height when asked |
+| materials | IfcRelAssociatesMaterial: layer sets with thicknesses, lists, single materials, per type |
+| fire rating | any property named like fire rating (FireRating, Feuerwiderstand, brannklasse ...) on the element or its type; when none exists the answer says so and how many elements were searched |
+| named element | an element whose Name or Tag is printed in the question ("door D-12", "Fenster-004"); several elements with the same name are answered together |
+| room | a space named by number or name ("room 104", "staff room"); elements in it by IfcRelContainedInSpatialStructure / IfcRelSpaceBoundary, else footprint within 0.3 m (stated) |
+| storey | named in the question, or "ground floor", "basement", "attic", "level 2" resolved against the storey names and elevations, with the reading stated; unresolvable abstains |
+| extremes, statistics | widest door, largest room, tallest ceilings, average / min / max of width, height, area |
+| totals | volume, length or area quantities summed per type |
+| spaces | spaces on a storey or in the model, by storey and by function (LongName), filtered by room type from their names (bathrooms, balconies) |
+| storeys, project, systems, structure | storey elevations and heights; IfcProject / IfcSite / IfcBuilding names, coordinates, addresses; IfcSystem groups with element counts; beams, columns, slabs, load-bearing walls, footings by class |
+| property search | any other content word of the question ("glazing", "warranty") matched against property and material names; no match means "not available in this model" with the number of elements searched |
+
+Interior / exterior comes from `Pset_*Common.IsExternal`; when no element carries it, from the CAD layer name
+('Aussenwaende', 'A24_Innervegger'), stated in the answer. Element classes are also taken from the model's own
+class names (IfcSpaceHeater answers "space heater", IfcDamper "damper"), so MEP classes need no word list.
+Placeholder values (Revit writes the property's own name, "Fire Rating", into empty properties) are ignored.
+
+Tiers: narrow lookups (one element, one room, an extreme, the storey list, fire rating, model metadata) are
+`proven`; broad keyword-mapped ones (type breakdowns, property search, systems) are `estimate` with the reason
+"every value is read from the file, but the lookup was chosen by keyword rules". Evidence: the answer table
+beside a plan of the storey holding most cited elements, walls and slabs filled, doors and windows boxed.
+
+Nemotron (only when no rule lookup matches and the fallback is on) is asked to choose one lookup from a
+closed schema built from the model's class and storey names; it never supplies a value, and its answers are
+estimates. On the first 60 full-set dev questions the rules leave unmapped it chose a runnable lookup for 24,
+9 of them right (all the MEP type questions); the 15 wrong ones are mostly questions whose true answer is
+"not available" (`tools/nemo_props_eval.py`, about $0.05 at the assumed list price).
+
+PDF schedules (`bpqa/schedules.py`, used by `pdf-text` after the door-schedule parser): a header line holds 3+
+schedule header words; column edges come from the table's own drawn vertical rules when there are any,
+otherwise from the gaps between header labels; stacked header words join their column. Questions are matched
+to rows by codes printed in the table (type marks, room and door numbers, finish codes), "starts with 'X'",
+or runs of question words found in the row text; counts sum a Count / Qty column when the table has one;
+lookups return the column the question names, with the code's meaning from the legend printed on the sheet
+("F4 = RESILIENT FLOORING (T.B.D.)"). The matched rows are boxed on the sheet.
+
+How text answers are scored (`eval.py`, the dataset's lenient rule): when the gold answer contains numbers,
+every one of them must appear in our answer within 2%; otherwise 60% of the gold words must appear. Extra
+numbers or words in our answer are not penalised, so a longer answer can only gain; "B3" scores right against
+"B3 (aluminium sliding door)". As a check on that, 20 randomly drawn dev answers scored right were read by
+hand: 19 answer the question, 1 is partly right (it reports 69 flow terminals but no plumbing system).
+
+Results (full set; dev used for development, test run once at the end):
+
+| set | before | after | after: proven n / precision | after: estimate n / precision |
+|---|---|---|---|---|
+| IFC-Bench dev (439) | 0.2% (1) | 33.3% (146) | 57 / 64.9% | 285 / 38.2% |
+| IFC-Bench test (381) | 1.3% (5) | 27.8% (106) | 69 / 39.1% | 242 / 32.6% |
+| OpeningDesign dev (44, Sports Complex) | 45.5% (20) | 90.9% (40, none wrong) | 40 / 100% | - |
+| OpeningDesign test (20, Cannery Trail) | 0% | 70.0% (14; 5 wrong) | 19 / 73.7% | - |
+
+On IFC-Bench test the narrow "proven" lookups held up worse than on dev (39% vs 65% precise): project
+information is answered with the model's placeholder names ("Project Name", "Projektnummer") and decimal
+coordinates where the gold answer judges the data as imprecise or prints degrees and minutes, and "largest
+room" answers from footprints where the gold says the area properties are empty. Those answers are wrong by
+the scorer though their values are in the file; the tier rule was not changed after the test run.
+
+The OpeningDesign test number is not a clean held-out result: the generic schedule reader was built while
+looking at the layout of the Cannery Trail sheet (A700) as well as the dev sheet, and its questions had been
+printed during development. For IFC-Bench, no test model was opened, but the list of distinct question
+texts of all splits (without answers) was read to choose the lookups, and three test answers appeared in an
+early sample.
 
 ### Detector
 
@@ -340,6 +462,16 @@ Takeoff questions go through the same command (evidence PNG path in the JSON):
 Takeoff checks: `python tests/test_takeoff.py`; `tools/takeoff_eval.py --split dev` (vector sums vs.
 Stoa's area answers); `tools/ocr_r0.py --split dev --limit 2000` then `tools/area_eval.py --split dev
 --mode walls` (raster leave-one-out).
+
+Wall takeoff and property questions:
+
+```
+.venv\Scripts\python ask.py data/ifc_models/kit-fzk-haus_ac20-fzk-haus.ifc "How many square meters of tiling should I order for the bathrooms?"
+.venv\Scripts\python ask.py data/ifc_bench/ac20_arc.ifc "What material are the walls in room 104 made of?"
+.venv\Scripts\python tests/test_walls.py
+.venv\Scripts\python tools/wall_eval.py --data ../data/stoa-full/junction-dataset      (about 7 minutes)
+.venv\Scripts\python tools/nemo_props_eval.py --split dev --limit 60                  (calls Nemotron)
+```
 
 The data is never copied into the repo; point at it with `--data` or `STOA_DATA` (default:
 `../data/stoa-preview/junction-dataset-preview`).
@@ -546,8 +678,10 @@ Cost is $0 per question on every line (no model calls; Nemotron fallback off).
 | Unseen public drawings (12 drawings not in Stoa's data) | 50 | **82.0%** (41 correct, 3 wrong, 4 abstained, 2 correctly abstained) | 93.2% (41 of 44) | 0 proven answers wrong | the 3 wrong answers are estimates | `tools/unseen_run.py --data ../data/unseen`, detector on, `out/unseen/results.jsonl` |
 
 Full set, test split, by source: CubiCasa scans 73.5% (27,160 questions), Swiss dwellings 99.0% (11,408; counts
-100.0%, areas 97.0%), IFC models 87.7% (838; 99.7% precise), IFC-Bench 1.3% (381 free-text questions, almost
-all abstained), OpeningDesign 0% (20, abstained). Per CubiCasa question type: storeys 90.5%, toilets 88.3%,
+100.0%, areas 97.0%), IFC models 87.7% (838; 99.7% precise), IFC-Bench 27.8% (381 free-text questions; 1.3% before the
+`ifc-props` route), OpeningDesign 70.0% (20; 0% before the generic schedule reader). With those two sources
+the full test split is 80.7% (32,127 of 39,807; computed from the per-source change, the other sources not
+re-run). Per CubiCasa question type: storeys 90.5%, toilets 88.3%,
 bathrooms 87.9%, balconies 85.8%, WC rooms 81.2%, sinks 78.7%, showers/baths 76.0%, bedrooms 75.1%, kitchens
 64.0%, saunas 63.6%, doors 55.4%, windows 46.4%.
 
@@ -697,12 +831,18 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
   abstain on purpose. Answering them with one number for the whole building was wrong every time.
 - Text answers (ifc_bench, some opening_design) are free-form; `eval.py` scores them approximately (all
   numbers in the gold answer present within 2%, else 60% token overlap). That scorer is lenient: "B3" is
-  scored correct against "B3 (aluminium sliding door)".
-- The door-schedule parser is tuned on one sheet (Sports Complex A-801). The CTR schedule uses a different
-  layout and abstains.
+  scored correct against "B3 (aluminium sliding door)", and extra content is never penalised.
+- `ifc-props` maps a question to a lookup by keyword rules. Many IFC-Bench gold answers group types differently
+  (the family part of a Revit "Family:Type" name, English names the model does not contain) or want
+  judgement ("what does this structure suggest"); those stay wrong. Broad lookups are labelled estimates.
+- The generic schedule reader needs a header line with 3+ schedule words and was developed on two sheets
+  (Sports Complex A-801, Cannery Trail A700); other offices' schedules may need more header words.
 - `kit-fzk-haus` plan PDFs have no IFC model in the dataset, so model-level questions about them abstain.
-- Takeoff answers are floor areas. Wall areas (tiles on walls, paint) abstain: they need heights and
-  openings. A room type the classifier does not know (or a generic "Zimmer") is left out and listed.
+- Wall takeoffs need room outlines: IFC models and Swiss DXF floors. PDFs without a twin and scans answer
+  floor areas only and abstain on walls. On drawings the ceiling, door and window heights are stated
+  assumptions, so those wall answers are estimates. The whole room outline is taken as wall, so a room open
+  to another (a gallery, a kitchen open to the living room) is over-counted; sloped ceilings are not modelled.
+  A room type the classifier does not know (or a generic "Zimmer") is left out and listed.
 - CubiCasa takeoffs need printed areas. Measured room regions are an estimate only (median error 9%
   on dev); furniture drawn against walls, open doorways without swing arcs and stairs are the main
   causes. Printed areas are read from the upright OCR pass only.
@@ -716,8 +856,8 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 2. Nemotron route: verify the boxes it returns (a second pass per box, or the detector on the cropped region)
    so that a wrong estimate can be withdrawn instead of only drawn; reasoning latency is 60 to 100 s on dense
    floors.
-3. Generalise the schedule parser (column detection from header words) to cover other door, window and
-   finish schedules in the opening_design sets.
+3. Wall takeoff on PDFs without a twin (pdf-vector room shapes and door swings) and windows in thick walls
+   (the 0.2 m opening rule misses them on Molio).
 
 ## Data credits and licences
 

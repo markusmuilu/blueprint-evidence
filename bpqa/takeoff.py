@@ -164,12 +164,14 @@ def parse_takeoff(question: str) -> dict | None:
     types = list(dict.fromkeys(types))
     if not types:
         return None
-    walls, ceiling = bool(WALLS.search(f)), bool(CEILING.search(f))
+    f_surf = re.sub(r"ceiling heights?|room heights?|huonekorkeus|raumhohe", " ", f)   # an input, not a surface
+    walls, ceiling = bool(WALLS.search(f_surf)), bool(CEILING.search(f_surf))
     surface = "walls" if walls and not re.search(r"\bfloors?\b|lattia", f) else ("ceiling" if ceiling else "floor")
     if walls and re.search(r"\bfloors?\b|lattia", f):
         surface = "floor+walls"
     group = next((g for g in GROUPS if _Q_TYPE_RE[g].search(f_incl)), None)
-    out = {"types": types, "group": group, "material": material, "surface": surface, "aggregation": "sum"}
+    out = {"types": types, "group": group, "material": material, "surface": surface, "aggregation": "sum",
+           "floor_explicit": bool(re.search(r"\bfloors?\b|lattia|\bboden|\bsol\b|pavimento", f))}
     m = SCOPE_ID.search(f)
     if m:
         out["scope_named"] = m.group(0)     # "house A": not resolvable from labels in general
@@ -192,8 +194,8 @@ def describe(tk: dict) -> str:
 
 
 def wall_reason(tk: dict) -> str:
-    return ("wall area needs room heights and the wall openings; this build answers floor areas only "
-            "(ask for the floor area of the same rooms)")
+    return ("wall area needs room outlines with heights and the wall openings; this route measures floor areas "
+            "only (wall takeoffs: IFC models and Swiss DXF floors)")
 
 
 def answer_line(value, n_rooms: int, route: str) -> str:
@@ -206,10 +208,19 @@ def matches(name: str | None, tk: dict) -> bool:
 
 # ---------------------------------------------------------------- shared answer building
 
+# routes that measure wall surfaces (perimeter x height - openings, bpqa/walls.py); any other route's
+# takeoff answer is withdrawn by the router when walls are asked
+WALL_ROUTES = {"ifc", "dxf-geometry"}
+
+
+def needs_walls(tk: dict) -> bool:
+    from .walls import surfaces
+    return surfaces(tk)[1]
+
+
 def precheck(tk: dict) -> str | None:
-    """Reason to abstain before any route looks at the drawing, or None."""
-    if tk.get("surface") in ("walls", "floor+walls"):
-        return wall_reason(tk)
+    """Reason to abstain before any route looks at the drawing, or None. Wall surfaces are measured by the
+    routes in WALL_ROUTES (bpqa/walls.py); the router withdraws other routes' floor-only answers."""
     return None
 
 

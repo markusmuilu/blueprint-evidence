@@ -25,6 +25,7 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 from .. import takeoff
+from .. import walls as wallmod
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
 from .scope_guard import single_room_problem
@@ -201,6 +202,123 @@ def storey_of_sheet(M, pdf_path):
     return st, f"sheet shows storey {st.Name} (score {desc})"
 
 
+def _zrange(geom):
+    v = geom.verts
+    zs = v[2::3]
+    return (min(zs), max(zs)) if zs else (None, None)
+
+
+def space_height(M, sp):
+    """(height m, source): the space's own height quantity, else its geometry's z extent, else storey height."""
+    for k in ("FinishCeilingHeight", "ClearHeight", "Height"):
+        v, src = M.qto(sp, [k])
+        if v is not None and v > 0:
+            return v * M.len_scale, f"IfcSpace {src}"
+    fp, geom = M.footprint(sp)
+    if geom is not None:
+        z0, z1 = _zrange(geom)
+        if z0 is not None and z1 - z0 > 1.5:
+            return z1 - z0, "IfcSpace geometry height (z extent)"
+    st = M.storey_of(sp)
+    if st is not None:
+        sts = sorted(M.storeys, key=lambda s: float(getattr(s, "Elevation", 0) or 0))
+        i = sts.index(st) if st in sts else -1
+        if 0 <= i < len(sts) - 1:
+            h = (float(sts[i + 1].Elevation or 0) - float(st.Elevation or 0)) * M.len_scale
+            if 1.5 < h < 12:
+                return h, f"storey height {st.Name} to {sts[i + 1].Name} (no space height in the model)"
+    return None, ""
+
+
+OPEN_TOL = 0.2   # m: an opening whose plan footprint lies within this distance of the room outline is in its wall
+
+
+def space_openings(M, sp, poly):
+    """Doors and windows on the room's walls: plan footprint within 0.2 m of the room outline along at least
+    30% of the opening's width. Vertical extent from the opening's own geometry, relative to the room floor."""
+    _, sgeom = M.footprint(sp)
+    sz0 = _zrange(sgeom)[0] if sgeom is not None else None
+    st = M.storey_of(sp)
+    if not hasattr(M, "_openings"):
+        M._openings = {}
+    if st not in M._openings:
+        M._openings[st] = [e for cls in ("IfcDoor", "IfcWindow") for e in M.m.by_type(cls) if M.storey_of(e) == st]
+    rings = poly.boundary
+    out = []
+    for e in M._openings[st]:
+        g, geom = M.footprint(e)
+        if g is None or g.is_empty or g.distance(poly) > OPEN_TOL:
+            continue
+        mrr = g.minimum_rotated_rectangle
+        xs = list(mrr.exterior.coords) if hasattr(mrr, "exterior") else []
+        sides = sorted({round(((xs[i][0] - xs[i + 1][0]) ** 2 + (xs[i][1] - xs[i + 1][1]) ** 2) ** 0.5, 4) for i in range(len(xs) - 1)}) if xs else [0]
+        span = sides[-1]
+        w = getattr(e, "OverallWidth", None)
+        width, wsrc = (float(w) * M.len_scale, "OverallWidth") if w else (span, "plan extent")
+        if rings.intersection(g.buffer(OPEN_TOL)).length < 0.3 * min(width, span or width):
+            continue
+        z0, z1 = _zrange(geom)
+        if z0 is None or sz0 is None:
+            h = getattr(e, "OverallHeight", None)
+            if not h:
+                continue
+            a, b, zsrc = 0.0, float(h) * M.len_scale, "OverallHeight from the floor"
+        else:
+            a, b, zsrc = z0 - sz0, z1 - sz0, "own geometry z range"
+        kind = "door" if e.is_a("IfcDoor") else "window"
+        out.append({"kind": kind, "id": e.GlobalId, "name": e.Name, "width": width, "z0": a, "z1": b,
+                    "src": f"{kind} {e.Name or e.GlobalId}: width {wsrc}, height {zsrc}", "bbox": g.bounds})
+    return out
+
+
+WALL_TOL = 0.1   # m: a room edge within this distance of a wall or column footprint is a wall face
+
+
+def wall_faces(M, sp, poly):
+    """The part of the room outline that runs along a wall or column (IfcWall, IfcColumn footprints within
+    WALL_TOL). Reported as a note on the takeoff (a room open to another has edges without a wall); not
+    used as the wall length, see wall_rooms. Returns (lines, length, how)."""
+    st = M.storey_of(sp)
+    if not hasattr(M, "_wallunion"):
+        M._wallunion = {}
+    if st not in M._wallunion:
+        gs = [M.footprint(e)[0] for cls in ("IfcWall", "IfcColumn") for e in M.m.by_type(cls) if M.storey_of(e) == st]
+        gs = [g for g in gs if g is not None and not g.is_empty]
+        M._wallunion[st] = unary_union(gs).buffer(WALL_TOL) if gs else None
+    U = M._wallunion[st]
+    full = wallmod.ring_length(poly)
+    if U is None:
+        return poly.boundary, full, "whole outline (no wall geometry on the storey)"
+    on = poly.boundary.intersection(U)
+    if on.length < 0.3 * full:
+        return poly.boundary, full, "whole outline (walls found along less than 30% of it)"
+    return on, on.length, f"outline along walls and columns ({on.length:.2f} of {full:.2f} m; open sides left out)"
+
+
+def wall_rooms(M, used):
+    """Room records for bpqa/walls.py from IfcSpaces: outline, perimeter, height, openings, model check."""
+    rooms = []
+    for sp, area in used:
+        fp, _ = M.footprint(sp)
+        if fp is None or fp.is_empty:
+            return None, f"space {space_display(sp)} has no geometry for its outline"
+        poly = fp.simplify(0.005)
+        h, hsrc = space_height(M, sp)
+        mnet, _ = M.qto(sp, ["NetWallArea"])
+        # the whole outline is the wall length. Counting only the edges along wall footprints (wall_faces)
+        # was tried and validated worse against the models' own GrossWallArea (46% vs 66% within 2%):
+        # space outlines often sit more than 0.1 m off the wall footprints. It is reported as a note.
+        _, along, _ = wall_faces(M, sp, poly)
+        full = wallmod.ring_length(poly)
+        note = "" if along >= 0.95 * full else f"; only {along:.2f} m of it runs along a wall within {WALL_TOL} m (open side or offset outline)"
+        rooms.append({"label": space_display(sp), "number": sp.Name, "floor_area": area,
+                      "floor_src": f"IfcSpace {M.space_area(sp)[1]}", "poly": poly,
+                      "perimeter": full, "perimeter_src": f"IfcSpace geometry outline{note}",
+                      "height": h, "height_src": hsrc, "openings": space_openings(M, sp, poly),
+                      "model_net_wall": mnet * M._area_scale() if mnet is not None else None, "guid": sp.GlobalId})
+    return rooms, ""
+
+
 def space_type_label(sp) -> str:
     """The space label that names its type: LongName ('Bathroom 1') when it has one, else Name."""
     for s in (getattr(sp, "LongName", None), sp.Name):
@@ -313,9 +431,76 @@ def answer(ctx, q) -> Answer:
             it["guid"] = e.GlobalId
         ans.explanation = expl + f" Source: {path.name}, {note}" + (f"; {sheet_note}." if sheet_note else ".")
         value = ans.value
+        tk = q.extra["takeoff"]
+        if wallmod.surfaces(tk)[1]:
+            rooms, why = wall_rooms(M, used)
+            if rooms is None:
+                return abstain(ROUTE, why)
+            ans.value, ans.items, wexpl, totals = wallmod.summary(rooms, tk, ctx.q.question)
+            for it, r in zip(ans.items, rooms):
+                it["guid"] = r["guid"]
+            ans.items.append({"totals": totals})
+            ans.explanation = wexpl + f" Source: {path.name}" + (f"; {sheet_note}." if sheet_note else ".")
+            ans.checks = wall_checks(ans.items)
+            if any(c["status"] == "fail" for c in ans.checks):
+                ans.tier, ans.tier_reason = "estimate", "computed wall area differs from the model's own NetWallArea by more than 5%"
+            if any("ASSUMED" in r.get("height_src", "") for r in rooms) or not any(r["height"] for r in rooms):
+                ans.tier = "estimate"
+                ans.tier_reason = (ans.tier_reason + "; " if ans.tier_reason else "") + "room height assumed"
+            if ctx.evidence:
+                ans.evidence = render_walls(ctx, M, rooms, ans.value, totals, wexpl, ans.checks, ans.tier_reason if ans.tier == "estimate" else "")
+            return ans
     if ctx.evidence:
         ans.evidence = render(ctx, M, storey, used, q, value, unit, note)
     return ans
+
+
+def wall_checks(items):
+    out = []
+    for it in items:
+        if "model_net_wall_m2" in it and "net_wall_m2" in it and it.get("tiled_height_m") == it.get("height_m"):
+            m, c = it["model_net_wall_m2"], it["net_wall_m2"]
+            ok = abs(c - m) <= 0.05 * max(m, 1e-6)
+            out.append({"name": f"wall area {it['room']}", "status": "pass" if ok else "fail",
+                        "detail": f"computed {c:.2f} m2 vs model NetWallArea {m:.2f} m2"})
+    return out
+
+
+def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate=""):
+    """Plan of the storey: the rooms filled, their wall faces drawn thick (blue), openings deducted boxed
+    (amber), each room labelled with floor and net wall area."""
+    from ..evidence import AMBER, BLUE
+    sp0 = next((s for s in M.m.by_type("IfcSpace") if s.GlobalId == rooms[0]["guid"]), None)
+    storey = M.storey_of(sp0) if sp0 is not None else None
+    ctx_els = [e for cls in ("IfcWall", "IfcSpace") for e in M.m.by_type(cls) if storey is None or M.storey_of(e) == storey]
+    fps = [(e, M.footprint(e)[0]) for e in ctx_els[:2000]]
+    geoms = [g for _, g in fps if g is not None] + [r["poly"] for r in rooms]
+    cv = VectorCanvas(unary_union(geoms).bounds)
+    for e, g in fps:
+        if g is None:
+            continue
+        for p in getattr(g, "geoms", [g]):
+            if hasattr(p, "exterior"):
+                cv.poly(list(p.exterior.coords), fill=(235, 235, 235, 255) if e.is_a("IfcWall") else None,
+                        outline=(175, 175, 175), width=1)
+
+    inp = wallmod.parse_inputs(ctx.q.question)
+    for r in rooms:
+        w = wallmod.room_walls(r, inp)
+        for o, d in zip(r["openings"], w["deductions"]):
+            o["deducted"] = d["area"]
+
+    def lab(i, r):
+        w = wallmod.room_walls(r, inp)
+        return f"{i + 1}. {r['label'][:22]}: floor {r['floor_area']:.2f}, walls {w['net']:.2f} m²"
+
+    wallmod.draw_rooms(cv, rooms, BLUE, BLUE, AMBER, lab)
+    out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
+    hs = sorted({r["height_src"].split(" (")[0] for r in rooms})
+    nop = sum(len(r["openings"]) for r in rooms)
+    return finish(cv.img, out, ctx.q.question, wallmod.answer_line(value, totals, ROUTE, estimate[:40]),
+                  note=(f"Walls = outline (thick blue) x height - {nop} openings (amber boxes). Height: {'; '.join(hs)}. "
+                        f"Surfaces: {totals['surfaces']}. Storey {storey.Name if storey is not None else '-'}."), checks=checks)
 
 
 def render(ctx, M, storey, used, q, value, unit, note):
