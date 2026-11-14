@@ -48,7 +48,7 @@ function colors() {
   V.colors = {
     bg: cssColor(tok("--well") || "#111"),
     cited: cssColor(tok("--accent")),
-    sel: cssColor(tok("--accent-hi")),
+    sel: cssColor(tok("--fg")),
     deducted: cssColor(tok("--warn")),
     room: cssColor(tok("--accent")),
     dim: cssColor("oklch(0.66 0.012 245)"),
@@ -408,7 +408,7 @@ function focusHighlight() {
   }
   if (b.isEmpty()) return;
   const s = b.getSize(new THREE.Vector3()), r = Math.max(s.x, s.y, s.z, 6);
-  b.expandByScalar(r * 0.6);                       // keep the storey around them in view
+  b.expandByScalar(Math.max(4, Math.min(r * 0.6, 12)));                       // keep the storey around them in view
   frame(b);
 }
 

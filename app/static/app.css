@@ -124,7 +124,7 @@ a { color: var(--accent); text-underline-offset: 3px; }
   display: grid; grid-template-columns: var(--picker-w) minmax(0, 1fr) var(--detail-w);
   height: 100vh;
 }
-.view-ask.no-picker { grid-template-columns: 0 minmax(0, 1fr) var(--detail-w); }
+.view-ask.no-picker { grid-template-columns: minmax(0, 1fr) var(--detail-w); }   /* the hidden picker takes no grid cell */
 .view-ask.no-picker .picker { display: none; }
 
 /* ------------------------------------------------------------ controls */

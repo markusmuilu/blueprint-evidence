@@ -484,6 +484,11 @@ function clearFocus() {
   if (ret) ret.hidden = true;
 }
 function focusRect(r, i, focus) {
+  if (state.mode === "3d") {                    // in 3D the strip and item list select the element in the model
+    const it = state.answer ? answerItems(state.answer)[+i] : null;
+    if (focus && it && it.guid && window.Viewer3D) Viewer3D.select(it.guid);
+    return;
+  }
   if (!r || state.layer !== "evidence") return;
   clearFocus();
   if (i != null) document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"], #marks .pin[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
