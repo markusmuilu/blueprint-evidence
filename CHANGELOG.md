@@ -3,6 +3,52 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14 morning: English and German room labels, evidence colours, app tiers and results, branch `polish`
+
+Problem: on the unseen-drawing set the room-label route read only Finnish and Swedish words, so the two
+English-labelled scans (Tyneside, Ballymun) got zeros, and the "a zero needs three readable labels" guard
+was passed by OCR noise ("S", "IV"), which let "balconies 0" through as proven on the Ballymun scan.
+
+- `bpqa/routes/labels.py`: English and German room words (BEDROOM, KITCHEN, BATHROOM, TOILET, BALCONY,
+  SCHLAFZIMMER, KUCHE, BADEZIMMER, BALKON, ...; two-word labels such as "Bed room" joined first) and English and
+  German plan words for the readability guard (LOUNGE, HALL, LANDING, FLUR, WOHNEN, ...). Words of 6+ letters
+  also match with one OCR error ("bedrocm3", "bathroon"), marked `fuzzy`; the Finnish abbreviations never
+  match fuzzily. BATH, SHOWER and DUSCHE are left out on purpose (also printed next to the fixture symbol).
+- `bpqa/routes/raster.py`: a count that needs a fuzzy read is an estimate; a zero on a plan where any label
+  was read only fuzzily is an estimate (the OCR misreads this plan). "How many rooms labelled 'X'" on a scan
+  counts the readings of X, always as an estimate (no Stoa scan question asks it).
+- Tiers on the generic routes: `dxf-generic` answers below confidence 0.8 (rooms counted from text labels
+  alone) are estimates; the convention-free PDF reading now answers under its own route name
+  `pdf-generic` and is always an estimate. Before, the router marked both "proven".
+- `bpqa/evidence.py`: one blueprint blue (oklch 0.50 0.13 240, darkened from the app accent so it holds 5.8:1
+  on white) for proven items, amber for items to check, blue tones where rooms must be told apart; strokes and
+  number tabs scale with the image so they stay readable when a 4,000 px scan is shown at 1,600 px. The
+  detector, label, generic DXF/PDF and Nemotron overlays use it.
+- App: names for `dxf-generic`, `pdf-generic`, `nemotron-estimate` and `raster-area`; the answer's own tier and
+  reason come first; the Results view names the dataset and split of every run, shows one line per named test
+  set with its source file, and fills the naive AI baseline card from `out/baseline_nemotron.json` (our side
+  re-scored from the newest preview test run). `eval.py` writes `data=<dataset>` into the summary header.
+
+Regression: preview dev and test answers identical before and after every step (0 of 5,289 and 0 of 2,701
+questions differ in value, tier or route): dev 80.5%, test 85.7%. Full set, test split: 39,807 questions, 80.4% (32,012 correct), proven 32,041 at 89.8%, estimates 7,278 at 44.6%, the same accuracy as the detector-v2 numbers. Compared with the detector branch's full CubiCasa run, two answers changed tier and none changed value: on one plan the new plan word PATIO raises the room-label count to 6, the doors >= rooms - 1 check fails, and the door count 4 (correct) becomes an estimate.
+
+Unseen set (`tools/unseen_run.py --data ../data/unseen`, detector on the GPU, Nemotron fallback off; 50
+distinct questions, the three DXF questions asked again on the PDF rendered from the DXF are left out):
+
+| format | n | before: correct / wrong / abstain / abstain-ok | after |
+|---|---|---|---|
+| IFC | 23 | 23 / 0 / 0 / 0 | 23 / 0 / 0 / 0 |
+| DXF | 3 | 3 / 0 / 0 / 0 | 3 / 0 / 0 / 0 (the 'OPEN OFFICE' count is now an estimate) |
+| PDF, no twin | 12 | 6 / 0 / 4 / 2 | 6 / 0 / 4 / 2 (the 6 answers are now estimates, route `pdf-generic`) |
+| image | 12 | 4 / 7 / 1 / 0 | 9 / 3 / 0 / 0 |
+| all | 50 | 36 / 7 / 5 / 2 | 41 / 3 / 4 / 2 |
+
+Proven and wrong: 1 before (Ballymun balconies 0), 0 after. Of the 41 correct answers 30 are proven and 11
+estimates. The three wrong answers are all estimates of 0: kitchens on Ballymun (the OCR reads "Htchon") and
+on Milam (no kitchen label read), balconies on Ballymun ("BALENCY", "talcom": more than one error). With
+`--pdf-only` the rendered DXF still gets 1 of 3 (doors). "Before" is main at fb96ee4 with the same setup
+(the generality CHANGELOG entry's numbers were without the detector and before tiers).
+
 ## 2026-11-14: generality on drawings Stoa did not ship, branch `generality`
 
 Problem: the unseen-drawing test (12 public drawings, `UNSEEN.md` in the unseen worktree) found the

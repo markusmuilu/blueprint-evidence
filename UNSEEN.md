@@ -333,3 +333,12 @@ Copied from `out/unseen/evidence/` to `unseen/evidence/` (the full set stays in 
 
 Single question: `.venv\Scripts\python ask.py "IFC Schependomlaan.ifc" "..." --data ..\data\unseen` with the drawing
 path relative to `data/unseen` (for example `schependomlaan_design_ifc/IFC Schependomlaan.ifc`).
+
+## Rerun, 2026-11-14 morning (branch `polish`)
+
+Same 50 distinct questions, `tools/unseen_run.py`, detector on the GPU, Nemotron fallback off, after the
+generality merge, tiers, and English and German room words. 41 correct, 3 wrong, 4 abstained, 2 correctly
+abstained (IFC 23/0/0/0, DXF 3/0/0/0, PDF without twin 6/0/4/2, scans 9/3/0/0). No proven answer is wrong; the
+three wrong answers are estimates of 0 (Ballymun kitchens and balconies, Milam kitchens). Per-question tables:
+`out/unseen/tables.md` (not committed). The tables above are the first run and are left as they were.
+

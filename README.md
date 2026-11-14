@@ -291,8 +291,8 @@ sample (CubiCasa 50, Swiss counts 40, Swiss areas 30, IFC room areas 30):
 
 | | Nemotron, plain prompt (number only) | our router |
 |---|---|---|
-| accuracy, all 150 | 39.3% | 82.0% (100% on the 100 PDF questions with PDF only) |
-| CubiCasa counts | 66.0% | 46.0% (answers 27 of 50) |
+| accuracy, all 150 | 39.3% | 94.0% (82.0% when the baseline was recorded; 100% on the 100 PDF questions with PDF only) |
+| CubiCasa counts | 66.0% | 82.0% (answers all 50 with a tier; 46.0%, 27 answered, when the baseline was recorded) |
 | Swiss counts / areas | 50.0% / 16.7% | 100% / 100% |
 | IFC room areas (plan PDF) | 3.3% | 100% |
 | median latency | 25 s (reasoning model) | seconds, local |
@@ -423,6 +423,41 @@ dev failures only.
 
 ## Results
 
+### Results by test set
+
+Final numbers of this version, every line from one named set of questions. Accuracy counts an abstention as
+wrong; precision is correct / answered; proven and estimate are the two answer tiers with their precision.
+Cost is $0 per question on every line (no model calls; Nemotron fallback off).
+
+| test set | questions | accuracy | precision when answered | proven: n / precision | estimate: n / precision | source |
+|---|---|---|---|---|---|---|
+| Stoa full set, test split | 39,807 | **80.4%** | 81.4% | 32,041 / 89.8% | 7,278 / 44.6% | `eval.py --data ../data/stoa-full/junction-dataset --split test` (684 s with warm OCR and detector caches), `out/test-junction-dataset/summary.txt` |
+| Stoa preview set, test split | 2,701 | **85.7%** | 87.5% | 2,292 / 94.1% | 354 / 44.6% | `eval.py --split test`, `out/test/summary.txt` |
+| Stoa preview set, dev split (rules developed here) | 5,289 | 80.5% | 84.6% | 4,225 / 91.9% | 808 / 46.5% | `eval.py --split dev`, `out/dev/summary.txt` |
+| Naive AI baseline sample: 150 preview test questions | 150 | router **94.0%** (141), Nemotron with a plain prompt 39.3% (59) | Nemotron 51.3% (answers 115) | - | - | `out/baseline_nemotron.json`; router side re-scored from `out/test/answers.jsonl` (82.0% when the baseline was recorded, before tiers) |
+| Unseen public drawings (12 drawings not in Stoa's data) | 50 | **82.0%** (41 correct, 3 wrong, 4 abstained, 2 correctly abstained) | 93.2% (41 of 44) | 0 proven answers wrong | the 3 wrong answers are estimates | `tools/unseen_run.py --data ../data/unseen`, detector on, `out/unseen/results.jsonl` |
+
+Full set, test split, by source: CubiCasa scans 73.5% (27,160 questions), Swiss dwellings 99.0% (11,408; counts
+100.0%, areas 97.0%), IFC models 87.7% (838; 99.7% precise), IFC-Bench 1.3% (381 free-text questions, almost
+all abstained), OpeningDesign 0% (20, abstained). Per CubiCasa question type: storeys 90.5%, toilets 88.3%,
+bathrooms 87.9%, balconies 85.8%, WC rooms 81.2%, sinks 78.7%, showers/baths 76.0%, bedrooms 75.1%, kitchens
+64.0%, saunas 63.6%, doors 55.4%, windows 46.4%.
+
+Unseen drawings by format (50 distinct questions; the three DXF questions asked again on the PDF rendered from
+the DXF are left out):
+
+| format | n | correct | wrong | abstained | correctly abstained |
+|---|---|---|---|---|---|
+| IFC | 23 | 23 | 0 | 0 | 0 |
+| DXF | 3 | 3 | 0 | 0 | 0 |
+| PDF, no twin | 12 | 6 | 0 | 4 | 2 |
+| image (scans) | 12 | 9 | 3 | 0 | 0 |
+
+Before the English and German room words the scans got 4 correct, 7 wrong (one of them proven: balconies 0
+on an English-labelled scan) and 1 abstention. The three remaining wrong answers are estimates of 0 on scans
+whose kitchen or balcony label the OCR misreads by more than one letter, or does not read. Details per
+question: `UNSEEN.md` (first run) and `out/unseen/tables.md`.
+
 ### Detector v2 (tiers, test-time augmentation, tiled detector)
 
 Preview, `eval.py`: "before" is the route before tiers with the `cubi2` detector (`--no-tiers`), "final"
@@ -452,7 +487,7 @@ questions 63.7% before, 80.4% final.
 CHANGELOG.md has the per-step numbers (tiers, check values, TTA, tiled model), the tune-image
 comparison per object and the full-test-split numbers for every CubiCasa question type.
 
-### Before detector v2
+### Before detector v2 (preview set, historical)
 
 Produced by `eval.py` (dev: 5,289 questions, test: 2,701). Accuracy counts an abstention as wrong;
 coverage is the share answered; precision is correct / answered. Cost is $0.0000 per question on every
