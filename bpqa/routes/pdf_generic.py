@@ -103,7 +103,9 @@ def swing_doors(vp, m_per_pt: float | None = None):
         return None, "door-swing candidates have implausible sizes"
     # a legend entry: the symbol printed next to the word for door ("Porta", "Door", "Tuer")
     door_words = [s for s in vp.spans if len(s.text) <= 25 and "door" in name_classes(s.text.replace(chr(0xFFFD), "u"), sfb=False)]
-    legend = [a for a in keep if any(math.dist(a[0], s.c) < 4 * a[1] for s in door_words)]
+    lboxes = legend_box(vp)
+    legend = [a for a in keep if any(math.dist(a[0], s.c) < 4 * a[1] for s in door_words)
+              or any(b[0] <= a[0][0] <= b[2] and b[1] <= a[0][1] <= b[3] for b in lboxes)]
     keep = [a for a in keep if a not in legend]
     if not keep:
         return None, "the only door swings are legend symbols"
