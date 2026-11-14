@@ -58,6 +58,11 @@ ROOM_NO = re.compile(r"(?<![\w.])(\d{1,2}\.\d{1,2})(?![\w.])(?!" + UNIT_AFTER + 
 ROOM_WORD_NO = re.compile(r"\b(room|rum|raum|zimmer|huone|ruum|piece|nr\.?|no\.?|number|space)\s+(\d{2,4})(?![\w.])", re.I)
 WORD_NO = re.compile(r"\b([A-Za-zÄÖÜäöüÅå]{3,})\s+(\d{3,4})(?![\w.])")
 ABBR_NO = re.compile(r"(?<![\w])([A-ZÄÖÜ]{2,4})\s?(\d{1,2}(?:\.\d)?)(?![\w.])")
+# "makuuhuone 1", "bedroom 2", "living room 1": a room type with a small number names one room. Finnish scans print it
+# as "MH 1" / "OH 1", so those types are looked up by that label (his typo'd question summed every bedroom, 14 Nov)
+TYPE_NO = re.compile(r"\b(makuuhuone\w*|bedroom|olohuone\w*|living ?room|schlafzimmer|sovrum|kitchen|keitti[oö]\w*|"
+                     r"bathroom|kylpyhuone\w*|office|toimisto\w*)\s+(\d{1,2})(?![\w.,])(?!\s*(?:m\b|m2|m²|%|cm|mm|kpl|x\b))", re.I)
+TYPE_LABEL = {"makuuhuone": "MH", "bedroom": "MH", "olohuone": "OH", "living room": "OH", "livingroom": "OH"}
 NAMED = re.compile(r"\b(?:named|called|labell?ed|nimelta\w*|genannt|bezeichnet)\s+['\"«„]?([\wÄÖÜäöüÅå][\w\-ÄÖÜäöüÅå ]{1,30}?)"
                    r"['\"»“]?(?=\s*(?:\?|$|,|\.|\band\b|\bon\b|\bin\b))", re.I)
 NOT_ROOM_WORDS = {"floor", "level", "storey", "story", "apartment", "flat", "unit", "page", "sheet", "scale", "version",
@@ -136,6 +141,15 @@ def detect(question: str) -> list[dict]:
             if any(val in n["value"] or n["value"] in val for n in nos):
                 continue
             nos.append({"kind": "room_no", "value": val, "phrase": m.group(0), "word": m.group(1) if rx is not ROOM_NO else ""})
+    for m in TYPE_NO.finditer(src):
+        if off == 0 and not free(m):
+            continue
+        w = fold(m.group(1)).lower()
+        base = next((k for k in TYPE_LABEL if w.startswith(k)), None)
+        val = f"{TYPE_LABEL[base]} {m.group(2)}" if base else m.group(0)
+        if any(m.group(2) == n["value"].split()[-1] for n in nos):
+            continue
+        nos.append({"kind": "room_no", "value": val, "phrase": m.group(0), "word": "label"})
     out += nos
     for m in NAMED.finditer(question):
         out.append({"kind": "named", "value": m.group(1).strip(), "phrase": m.group(0)})
