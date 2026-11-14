@@ -173,14 +173,15 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
     return value, items, expl, totals
 
 
-def answer_line(value: float, totals: dict, route: str) -> str:
+def answer_line(value: float, totals: dict, route: str, estimate: str = "") -> str:
     parts = []
     if totals.get("floor_m2") is not None:
         parts.append(f"floor {totals['floor_m2']:.2f}")
     if totals.get("walls_m2") is not None:
         parts.append(f"walls {totals['walls_m2']:.2f}")
     parts.append(f"{totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}")
-    return f"Answer: {value:.2f} m2 ({' + '.join(parts)}; {totals['value_is']})   route: {route} (cost $0)"
+    tag = f" [ESTIMATE: {estimate}]" if estimate else ""
+    return f"Answer{tag}: {value:.2f} m2 ({' + '.join(parts)}; {totals['value_is']})   route: {route} (cost $0)"
 
 
 def ring_length(poly) -> float:

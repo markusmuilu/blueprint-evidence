@@ -448,7 +448,7 @@ def answer(ctx, q) -> Answer:
                 ans.tier = "estimate"
                 ans.tier_reason = (ans.tier_reason + "; " if ans.tier_reason else "") + "room height assumed"
             if ctx.evidence:
-                ans.evidence = render_walls(ctx, M, rooms, ans.value, totals, wexpl, ans.checks)
+                ans.evidence = render_walls(ctx, M, rooms, ans.value, totals, wexpl, ans.checks, ans.tier_reason if ans.tier == "estimate" else "")
             return ans
     if ctx.evidence:
         ans.evidence = render(ctx, M, storey, used, q, value, unit, note)
@@ -466,7 +466,7 @@ def wall_checks(items):
     return out
 
 
-def render_walls(ctx, M, rooms, value, totals, expl, checks=None):
+def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate=""):
     """Plan of the storey: the rooms filled, their wall faces drawn thick (blue), openings deducted boxed
     (amber), each room labelled with floor and net wall area."""
     from ..evidence import AMBER, BLUE
@@ -498,7 +498,7 @@ def render_walls(ctx, M, rooms, value, totals, expl, checks=None):
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     hs = sorted({r["height_src"].split(" (")[0] for r in rooms})
     nop = sum(len(r["openings"]) for r in rooms)
-    return finish(cv.img, out, ctx.q.question, wallmod.answer_line(value, totals, ROUTE),
+    return finish(cv.img, out, ctx.q.question, wallmod.answer_line(value, totals, ROUTE, estimate[:40]),
                   note=(f"Walls = outline (thick blue) x height - {nop} openings (amber boxes). Height: {'; '.join(hs)}. "
                         f"Surfaces: {totals['surfaces']}. Storey {storey.Name if storey is not None else '-'}."), checks=checks)
 

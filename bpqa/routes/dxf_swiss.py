@@ -383,7 +383,7 @@ def answer(ctx, q) -> Answer:
                                    lambda i, r: f"{i + 1}. {r['label']}: floor {r['floor_area']:.2f}, walls "
                                                 f"{wallmod.room_walls(r, inp)['net']:.2f} m²")
                 out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-                ans.evidence = finish(cv.img, out, ctx.q.question, wallmod.answer_line(ans.value, totals, ROUTE),
+                ans.evidence = finish(cv.img, out, ctx.q.question, wallmod.answer_line(ans.value, totals, ROUTE, "assumed heights" if ans.tier else ""),
                                       note=(f"Walls = ROOM_OUTLINE (thick blue) x height - openings (amber: doors from DOOR "
                                             f"leaves, windows from WINDOW strips). {wallmod.room_walls(wrooms[0], inp)['height_src'] if wrooms else ''}. "
                                             f"Door height {wallmod.DOOR_H_M:.2f} m, window {wallmod.WINDOW_H_M:.2f} m on a "
