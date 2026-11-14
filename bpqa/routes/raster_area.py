@@ -40,6 +40,7 @@ import numpy as np
 from .labels import ROOM_PATTERNS, is_word, parts, quad_box, PLAN_WORDS
 from .ocr import _run, cache_path
 from .. import scale_objects as OS
+from .. import not_to_scale as NTS
 
 SCALE_TOL = 0.04          # rooms must agree within 4% of the median scale
 MIN_SCALE_ROOMS = 2
@@ -705,6 +706,77 @@ def choose(hyps, exclude: int | None = None):
     return name, rs, sc
 
 
+NARROW_RETRY = os.environ.get("STOA_NARROW_RETRY", "1") != "0"
+NARROW_FRAC = 0.75      # a printed room whose region holds less than this share of its printed area is retried
+NARROW_TRIES = (0.75, 0.5, 0.0)      # doorway bridge sizes tried, as shares of the hypothesis' own (0: the minimum)
+NARROW_ACCEPT = 0.25    # the retried region must come within this of the printed area
+
+
+def retry_narrow(img, toks, others, rooms, name: str, sc) -> int:
+    """Narrow rooms cut by the doorway bridge. The legacy wall mask closes every wall gap up to the doorway width
+    along rows and columns, which also fills a room narrower than that wall to wall (a WC 0.9 m wide, a closet):
+    its region comes out half its printed area. For a room whose region is under NARROW_FRAC of its printed
+    area, with the label inside the region, the region is measured again with a smaller bridge, for that room
+    only; the one nearest the printed area is kept when it comes within NARROW_ACCEPT of it. Returns how many
+    rooms changed (each is marked in room.extra["retried"])."""
+    import copy
+    if "@" not in name:
+        return 0
+    tag, ppm = name.split("@")
+    door = max(3, round(DOOR_M * float(ppm)))
+    todo = [r for r in rooms if r.printed and r.region_ok and r.measured is not None
+            and r.measured < NARROW_FRAC * r.printed]
+    if not todo:
+        return 0
+    base = walls_base(img, toks, mode="stroke" if tag == "stroke" else "legacy")
+    n = 0
+    for r in todo:
+        best = None
+        for share in NARROW_TRIES:
+            d = max(3, round(share * door)) if share else 3
+            c = copy.deepcopy(r)
+            c.pixels, c.region_ok, c.contour, c.why = 0, False, None, ""
+            measure_regions(img, [c], others, toks, door_px=d, base=base)
+            if not c.region_ok:
+                continue
+            m = round(c.pixels * sc.m2_per_px, 2)
+            if m > r.measured and abs(m - r.printed) < abs(r.measured - r.printed) and abs(m - r.printed) <= NARROW_ACCEPT * r.printed:
+                if best is None or abs(m - r.printed) < abs(best[0] - r.printed):
+                    best = (m, c, d)
+        if best is not None:
+            m, c, d = best
+            r.pixels, r.contour, r.measured = c.pixels, c.contour, m
+            r.extra["retried"] = f"doorway bridge {d} px instead of {door}"
+            n += 1
+    return n
+
+
+STROKE_MERGE = os.environ.get("STOA_STROKE_MERGE", "1") != "0"
+STROKE_GROW = 1.15       # a stroke-mask region replaces the legacy one when it is this much larger (or the legacy one failed)
+
+
+def merge_stroke(hyps, name: str, rooms, ppm: float) -> int:
+    """Object-scale rooms, room by room: the legacy wall mask closes fixtures standing against a wall (a toilet, a
+    vanity, a shower niche) into the wall, so a room traced with it can lose a strip or a corner; the thick-stroke
+    mask keeps the fixtures as floor. With no printed-area scale there is nothing to choose between the two region
+    sets on, so each room takes the stroke region where it is closed and clearly larger than the legacy one (the
+    region checks, closed, no other label inside, not leaking, still apply to it). tools/region_family_eval.py
+    measures the rule against printed areas. Returns how many rooms changed."""
+    if not name or not name.startswith("walls@"):
+        return 0
+    cand = [(abs(np.log(p / ppm)), rs) for n, p, rs in hyps if p is not None and n.startswith("stroke@")]
+    if not cand:
+        return 0
+    srooms = min(cand, key=lambda c: c[0])[1]
+    n = 0
+    for r, sr in zip(rooms, srooms):
+        if sr.region_ok and (not r.region_ok or sr.pixels > STROKE_GROW * r.pixels):
+            r.pixels, r.region_ok, r.contour, r.why = sr.pixels, True, sr.contour, ""
+            r.extra = {**r.extra, "walls": "stroke", "stroke_merge": True}
+            n += 1
+    return n
+
+
 @dataclass
 class PlanAreas:
     rooms: list
@@ -738,6 +810,8 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
     if not sc.known and OS.ENABLED:     # no printed-area scale: printed door sizes, then standard objects (scale_objects.py)
         on, orooms, osc = OS.object_scale(f, hyps, allow_run, mirror=orient[0])
         name, rooms, sc = (on, orooms, osc) if orooms is not None else (name, rooms, sc)
+        if orooms is not None and STROKE_MERGE:
+            merge_stroke(hyps, on, orooms, 1 / float(np.sqrt(sc.m2_per_px)))
         sc.detail += "" if orooms is not None else f"; no object scale either: {osc}"
     if rooms is None:
         rooms = hyps[0][2]
@@ -745,6 +819,8 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
         for r in rooms:
             if r.region_ok:
                 r.measured = round(r.pixels * sc.m2_per_px, 2)
+        if NARROW_RETRY and name and not OS.is_object(sc):
+            retry_narrow(img, toks, others, rooms, name, sc)
     return PlanAreas(rooms, free, sc, name or "none", orient, sum(1 for r in proto if r.printed is not None))
 
 
@@ -985,6 +1061,12 @@ def takeoff_answer(ctx, q, img):
                                   + f". {OS.scale_sentence(sc)}")
     approx_txt = OS.approx_text(sum(r["area"] for r in rows), [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want) if approx else ""
     uncertain = [{"room": r["label"], "area_m2": round(r["area"], 2), "why": "measured, not printed"} for r in meas_rows]
+    # a note printed on the drawing saying it is not to scale (not_to_scale.py): printed areas stay stated values,
+    # anything measured from the drawing (an object scale, a region x scale, a perimeter for walls) gets a warning
+    nts = NTS.find(full) if (meas_rows or want_walls) else []
+    warn = NTS.warning(nts, "this approximation" if approx else "the measured areas and lengths") if nts else ""
+    if nts and approx:
+        approx_txt = approx_txt + " " + warn
 
     if want_walls:
         wrooms = []
@@ -1004,7 +1086,7 @@ def takeoff_answer(ctx, q, img):
                  f"region against the annotated room outlines of {PERIM_BAND['n']} dev and test rooms), before the height assumption. ") + basis_txt + " " + scale_txt + "." + band_note
         if approx:
             approx_txt = OS.approx_text(total, [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want).replace(
-                "Typical error for", "Walls add the assumed height. Typical floor-area error for")
+                "Typical error for", "Walls add the assumed height. Typical floor-area error for") + (" " + warn if nts else "")
             expl = approx_txt + " Details: " + expl
         est = "walls: perimeter x assumed height, openings not deducted" + ("; some rooms measured" if meas_rows else "")
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=0.45, items=items, explanation=expl)
@@ -1022,7 +1104,7 @@ def takeoff_answer(ctx, q, img):
         expl += " " + basis_txt + " " + scale_txt + "." + band_note
         if approx:
             approx_txt = OS.approx_text(total, [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want,
-                                        net=sum(r["area"] for r in rows))
+                                        net=sum(r["area"] for r in rows)) + (" " + warn if nts else "")
             expl = approx_txt + " Details: " + expl
             conf = 0.35
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=conf, items=items, explanation=expl)
@@ -1043,6 +1125,10 @@ def takeoff_answer(ctx, q, img):
                 f"scale from {OS.scale_short(sc)}   route: {ROUTE}" if approx else
                 f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows
                 else takeoff.answer_line(total, len(rows), ROUTE, "rooms with a toilet, no WC room" if fb else ""))
+    if nts:
+        if not approx:
+            ans.explanation = warn + " " + ans.explanation
+        estimate(ans, "the drawing says it is not to scale: " + ("; ".join(n["text"] for n in nts)[:80]))
     ans.uncertain = uncertain
     if approx:
         ans.approx = {"text": approx_txt, "source": getattr(sc, "source", "objects"), "why_no_scale": pa.no_scale_why(),
@@ -1078,8 +1164,16 @@ def takeoff_answer(ctx, q, img):
                 tb = cv.d.textbbox((x, y + fs), txt, font=f, anchor="mm")
                 cv.d.rectangle([tb[0] - 3, tb[1] - 2, tb[2] + 3, tb[3] + 2], fill=AMBER)
                 cv.d.text((x, y + fs), txt, fill=(28, 48, 65), font=f, anchor="mm")
-            record_steps(cv.img, i + 1, approx_steps(row, r, want, sc) if approx and row["kind"] == "measured"
-                         else _room_steps(row, r, want))
+            steps = approx_steps(row, r, want, sc) if approx and row["kind"] == "measured" else _room_steps(row, r, want)
+            if nts and (row["kind"] == "measured" or want_walls):
+                steps.append({"kind": "note", "title": "Not to scale", "text": nts[0]["text"],
+                              "note": "the drawing says it is not to scale: measured values may be off", "rect": nts[0]["box"]})
+            record_steps(cv.img, i + 1, steps)
+        for n in nts:                                      # the note itself, boxed dashed amber
+            b = n["box"]
+            rect = (b[0] - 5, b[1] - 5, b[2] + 5, b[3] + 5)
+            dashed_rect(cv.d, rect, AMBER, max(2, round(2 * cv.k)), max(4, round(5 * cv.k)))
+            record_context(cv.img, rect, "not_to_scale", tone="amber", label="Drawing says: not to scale")
         used_ids = {id(row["room"]) for row in rows}
         for j in sc.rooms if sc.known else []:            # printed rooms that only set the scale: grey, dashed, no fill
             b = pa.rooms[j].area_box

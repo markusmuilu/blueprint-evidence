@@ -33,6 +33,54 @@ QA tried the unseen plan (architecture-floor-plan.dxf, 18 labelled rooms in a 6 
 - **Used-line:** a cannot answer says "Tried: ...; none could prove it" instead of "Answered with: ...".
 - No change on dev: swiss_dwellings, ifc_bench, cubicasa5k and ifc_models room/door/window/toilet rows are identical
   before and after (see commit message); tests/test_wall_rooms.py adds 15 cases.
+## 2026-11-14: known failures, branch `specific-failures`
+
+Five failures from his own testing, fixed in general ways (no per-file cases). Not merged.
+
+- **Kitchens answer in the area approximation** (his decision). `NO_APPROX_TYPES` is empty: "How big is the kitchen?" on a
+  scan that prints no areas gives "About N m2 (approximation)" as tier estimate with "Check: this outline may include the
+  open living area next to the kitchen", and the traced outline is drawn on the evidence. Put `"kitchen": "<why>"` back in
+  `NO_APPROX_TYPES` to abstain again. Measured: kitchens with a printed label in the object-scale leave-one-out: 12 rooms,
+  median error 35% (signed -9%, within 10%: 25%); 87% in the end-to-end test. The cheap outline cut (at the counter run or a
+  large opening) was not built: 12 kitchens are too few to tune or to verify a cut against.
+- **high_quality-14334** (upside-down plan, text reads in every pass): the label route already pools all eight OCR passes,
+  and the passes read this plan about equally well (the OCR corrects the 180-degree turn inside a box), so a "best
+  orientation by room words" does not separate them. What was missing was vocabulary: Finnish full words (PESUHUONE,
+  KYLPYHUONE, SUIHKUHUONE, MAKUUHUONE, KEITTIO, SAUNA) are room words (with one OCR error for 8+ letters: "PESUIHUONE"), a
+  dot between two words of 3+ letters splits them ("KEITTIO.RUOKAILU" is a kitchen label; "W.C" is still WC), RUOKAILU is a
+  plan word, and labels that are full words win over the detector as for English and German. Kitchen, bathroom, sauna
+  0, 0, 0 (gold 1, 1, 1) -> 1, 1, 1 (estimates). WC rooms still 4 (gold 2): the detector's 4 outvote 2 "WC" labels, an
+  abbreviation. The room detector also gets a retry on the plan turned 180 degrees when its own drawn score is low and the
+  turned view scores at least 1.5x and +1.0 higher (`STOA_ROOMS_ORIENT=0` turns it off); on 14334 the turned view scores
+  2.0 against 1.5 (gain 1.35), so it does not trigger there: the detector is weak on this plan in every orientation.
+- **Narrow rooms cut by the doorway bridge** (high_quality_architectural-10372 WC): a printed room whose region holds under
+  75% of its printed area is measured again with a smaller bridge (75%, 50%, minimum of the hypothesis' doorway width), for
+  that room only, and the region nearest the printed area is kept when within 25% of it (`retry_narrow`,
+  `STOA_NARROW_RETRY=0` turns it off). WC 1.8 m2: region 0.80 -> 1.77. It uses the printed area as the target, so it only
+  changes outlines and measured values of printed rooms, never an answer's printed value. `tools/narrow_eval.py` ran on
+  only 3 plans with cached OCR (1 retried room, no other room changed).
+- **high_quality-10241 bathroom outline** (same family: the legacy wall mask closes fixtures against a wall into it): in the
+  object-scale approximation each room takes the thick-stroke mask's region when it is closed and 15% larger than the
+  legacy region (`merge_stroke`, `STOA_STROKE_MERGE=0` off). KPH 5.89 -> 8.24 m2, outline now covers the whole bathroom.
+  `tools/region_family_eval.py` (object scale from standard objects, printed areas hidden, 10 plans with a stroke mask, 93
+  rooms): median error against printed 19.8% (legacy) -> 5.2% (rule), better in 12 rooms, worse in 0; stroke alone
+  4.1% but closes fewer rooms. A small sample: the cache build is slow.
+- **Tyneside "how many bathrooms" 4 -> 2.** A drawn room whose box holds another type's label read exactly (Bedroom, 0.39
+  and 0.35) is dropped, and a printed "Shower" inside a drawn bathroom counts as its label (never proven on that alone).
+  `STOA_ROOMS_LABEL_FILTER=0` turns both off.
+- **"Not to scale" notes** (`bpqa/not_to_scale.py`): ei mittakaavassa, ohjeellinen, suuntaa antava, not to scale, NTS,
+  unmassstaeblich, ej skalenlig, pas a l'echelle (squashed text, one OCR error allowed in long phrases). 26 of the 279
+  scans with OCR caches carry one. Printed areas stay stated values; the approximation, measured areas and wall
+  perimeters get "The drawing says it is not to scale (...): this approximation may be off." in the answer, the amber
+  approximation box and the tier reason, and the note is boxed dashed amber on the evidence and added as a step.
+  Other routes (sheet scale on PDFs) are unchanged.
+
+Dev check (room-type counts, CubiCasa dev, `eval.py --split dev --sources cubicasa5k --objects bedroom,kitchen,bathroom,
+sauna,balcony,wc_room,wc`, main behaviour against all of the above, first 557 of the 21,398 such questions in path order, so
+colorful plans only: the full run was too slow on a shared machine): 521 -> 523 correct (93.5% -> 93.9%), proven 132 -> 132
+(all correct both times), 2 answers differ (colorful-14927 bedrooms 1 -> 0, gold 0), no regression. High_quality plans
+(14334, 10241, 10372) were checked by hand only. pytest: 252 passed.
+
 
 ## 2026-11-14: casual phrasings, branch `phrasing-2`
 
