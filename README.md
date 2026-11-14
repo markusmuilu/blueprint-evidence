@@ -33,13 +33,18 @@ drawing  --> router: cheapest route that can prove the answer
                                 room shapes, scale, doors, windows, fixtures; scanned PDFs abstain
                4. raster        scans (CubiCasa): panel segmentation, room labels read by local OCR,
                                 a trained detector for fixtures, doors and windows;
-                                abstains where the count is not provable
-          --> checking layer (raster answers): consistency checks across routes; abstain on conflict
-          --> answer JSON {value, unit, route, confidence, evidence, explanation, items, checks}
+                                every count in a tier: "proven" or "estimate" (with the reason)
+          --> checking layer (raster answers): consistency checks across routes; a conflict makes an estimate
+          --> answer JSON {value, unit, route, tier, tier_reason, uncertain, confidence, evidence, explanation,
+                           items, checks}
           --> evidence PNG: counted items boxed and numbered, measured rooms filled with their area
 ```
 
-A route either proves an answer or abstains with a reason, and the router then tries the next one. All
+A route either proves an answer or abstains with a reason, and the router then tries the next one. The
+raster routes (labels and detector) instead give their best count in one of two tiers: "proven" when the
+conditions tuned for a provable answer hold, "estimate" otherwise, with the reason and the boxes or labels
+a person should check (drawn amber on the evidence image). They abstain only when there is nothing to go
+on. All
 routes are deterministic and cost $0 per question in model calls; the eval reports cost per question so
 an LLM route can be compared on the same table later.
 
@@ -68,8 +73,8 @@ Raster (CubiCasa scans):
 |---|---|
 | storeys | multi-storey plans paste each floor as its own scan onto a white canvas; count the large non-white panels |
 | bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE) and a few Swedish ones; apartment summaries like "3H+K+S" are skipped |
-| when to answer | kitchen, bathroom, sauna only when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels |
-| toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold; abstains when any box scores close to the threshold (see "Detector") |
+| proven or estimate | proven: kitchen, bathroom, sauna when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels. Every other count is an estimate |
+| toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold, over the eight rotations and mirrors of the image; an estimate when boxes score close to the threshold, the views disagree, or the object is one the detector is wrong on more often than right (see "Detector") |
 
 Every counted label is boxed and numbered on the scan; the other room labels that were read are boxed in
 grey, so a zero answer can be checked too. The OCR is the slow part (about 5-15 s per image for eight
@@ -78,7 +83,9 @@ passes); `tools/ocr_cache.py` fills the cache in `out/ocr/` up front.
 ### Checking layer
 
 Before a raster answer is returned, `bpqa/checks.py` compares it with what the other raster signals
-on the same image imply, and abstains when they conflict. Examples: a label "MH3" means at least three
+on the same image imply, and makes the answer an estimate when they conflict (for seven checks the
+implied value also replaces the count, because on dev it was right more often: a "MH3" label, a summary
+listing K or S, floor names, a stair label, bathrooms needing a shower or bath). Examples: a label "MH3" means at least three
 bedrooms; an apartment summary "3H+K" means two bedrooms; two floor names on the sheet mean at least
 two storeys; every WC room label implies a WC seat, every bathroom and kitchen a sink, every bathroom a
 shower or bath, n room labels at least n-1 doors, every bedroom and the living room a window. Each
@@ -197,7 +204,9 @@ labels, which has no reference in Stoa's data.
 ### Detector
 
 Toilets, sinks, showers, bathtubs, doors and windows on the scans are counted by a small YOLO detector
-(Ultralytics, `yolo26n` from scratch), with every counted box drawn and numbered. Training data:
+(Ultralytics), with every counted box drawn and numbered. The route uses the tiled `yolo26s` described
+below (started from Ultralytics' pretrained weights), which beat the earlier `yolo26n` from scratch
+(`cubi2`) on every object on the tune images. Training data:
 
 - Public CubiCasa5K annotations (5,000 plans with SVG annotations), converted by
   `tools/cubicasa_svg.py`. Stoa's CubiCasa images are a subset of CubiCasa5K, and Stoa's counts are
@@ -210,7 +219,16 @@ Toilets, sinks, showers, bathtubs, doors and windows on the scans are counted by
   white, random scale and rotation, boxes from the same rules the DXF route uses.
 
 The count threshold per object, and an uncertainty band around it, are tuned on the held-out
-train-split images (`tools/tune_detector.py`). Test answers are never read while tuning.
+train-split images (`tools/tune_detector.py`). Test answers are never read while tuning. The tuner
+also tries test-time augmentation (the eight rotations and mirrors, boxes fused across views or the
+median per-view count) and the tiled detector below; `tools/pick_detector.py` keeps, per object, the
+model and mode with the higher cross-validated exact-count accuracy on those images.
+
+Tiled detector (`tools/build_tile_dataset.py`, model `detector_tiles.pt`): the same plans, re-read at
+native resolution from the public `F1_original.png`, resized 2x (long side capped at 4,096 px) and cut
+into 1,024 px tiles with 192 px overlap (17,596 training tiles), and a `yolo26s` started from
+Ultralytics' pretrained weights. At inference the image gets the same resize and tiling; boxes found
+twice where tiles overlap are merged (same class, IoU >= 0.5 or the smaller box 60% inside the larger).
 
 ## Run it
 
@@ -224,9 +242,11 @@ set STOA_DATA=C:\path\to\junction-dataset-preview
 ```
 
 `eval.py` options: `--split dev|test|all`, `--sources swiss_dwellings,ifc_models`, `--limit N`,
-`--evidence` (render overlays into `out/evidence/`), `--prior` (see below), `--pdf-only` (PDF questions
-only, DXF/IFC twins ignored; `ask.py` takes it too). Results go to
-`out/<split>/answers.jsonl`, `summary.txt` and `summary.json`.
+`--evidence` (render overlays into `out/evidence/`), `--prior` (also report the dev-majority baseline per
+object; it is never used as an answer), `--no-tiers` (withdraw estimates, the behaviour before tiers),
+`--no-checks`, `--pdf-only` (PDF questions only, DXF/IFC twins ignored; `ask.py` takes it too). Results go
+to `out/<split>/answers.jsonl`, `summary.txt` and `summary.json`; the summary has accuracy, coverage,
+precision, and the number and precision of answers in each tier.
 
 One question:
 
@@ -293,6 +313,24 @@ eval outputs), `--gpu` (by default the detector runs on the CPU).
   `GET /api/status`; docs at `/api/docs`. The design system is in `DESIGN.md`.
 
 Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG) and
+Test-time augmentation and the tiled pretrained detector (each policy is tuned on the same 624 held-out
+train-split images; `pick_detector.py` keeps the better one per object by cross-validated exact-count
+accuracy and writes `models/detector_thresholds.json`, which names the model and mode per object):
+
+```
+set T=--stoa ../data/stoa-full/junction-dataset --images ../data/detector/ds_cubi/tune_images.txt
+.venv\Scripts\python tools/tune_detector.py %T% --out models/th_base.json
+.venv\Scripts\python tools/tune_detector.py %T% --tta --out models/th_tta.json
+.venv\Scripts\python tools/build_tile_dataset.py --ds ../data/detector/ds_cubi --public ../data/cubicasa5k-public/cubicasa5k --overlap out/overlap --out ../data/detector/ds_tiles
+.venv\Scripts\python -c "from ultralytics.utils.downloads import attempt_download_asset as d; d('yolo26s.pt')"
+.venv\Scripts\python tools/train_detector.py --data ../data/detector/ds_tiles/data.yaml --name tiles_s --weights yolo26s.pt --imgsz 1024 --batch 8 --time 4.5 --copy-as detector_tiles.pt
+.venv\Scripts\python tools/tune_detector.py %T% --model models/detector_tiles.pt --tile 1024 --tile-scale 2 --out models/th_tiles.json
+.venv\Scripts\python tools/tune_detector.py %T% --model models/detector_tiles.pt --tile 1024 --tile-scale 2 --tta --out models/th_tiles_tta.json
+.venv\Scripts\python tools/pick_detector.py models/th_base.json models/th_tta.json models/th_tiles.json models/th_tiles_tta.json --out models/detector_thresholds.json
+```
+
+Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG), `python tests/test_tiling.py`
+(tiles, seam merging, rotated and mirrored views mapped back) and
 `python tools/test_overlap.py --work <scratch folder>` (overlap tool on the preview).
 
 ### Split
@@ -303,6 +341,37 @@ model and the plans rendered from it, all sheets of one drawing set. Rules were 
 dev failures only.
 
 ## Results
+
+### Detector v2 (tiers, test-time augmentation, tiled detector)
+
+Preview, `eval.py`: "before" is the route before tiers with the `cubi2` detector (`--no-tiers`), "final"
+the current route. Proven and estimate are the two answer tiers, with their precision.
+
+| | dev overall | dev CubiCasa | test overall | test CubiCasa | test proven: n / precision | test estimate: n / precision |
+|---|---|---|---|---|---|---|
+| before | 66.2% | 47.9% | 72.3% | 49.2% | 2056 / 95.0% (all answers) | - |
+| final | 80.5% | 73.9% | 85.7% | 75.6% | 2292 / 94.1% | 354 / 44.6% |
+
+The full set's test split (1,510 CubiCasa images, 14,108 detector questions in all languages, checks
+off), exact count:
+
+| object | n | before: exact (precision, coverage) | final: exact | final proven: share / precision | final estimate precision |
+|---|---|---|---|---|---|
+| toilet | 3016 | 81.0% (84.0%, 96.4%) | 88.3% | 99.7% / 88.5% | 0 of 8 |
+| sink | 2982 | 57.5% (74.5%, 77.3%) | 78.7% | 98.2% / 79.6% | 29.6% |
+| shower/bath | 2816 | 0% (switched off) | 75.7% | 95.5% / 77.4% | 39.7% |
+| door | 2274 | 23.2% (76.3%, 30.4%) | 55.4% | 69.5% / 67.1% | 28.8% |
+| window | 3020 | 25.0% (63.9%, 39.1%) | 46.4% | 44.8% / 69.0% | 28.0% |
+| **all detector questions** | 14108 | 38.6% (76.8%, 50.2%) | 69.5% | 81.9% / 78.4% | 28.7% |
+
+All 27,160 CubiCasa questions of the full test split with the checking layer: 49.0% before, 73.5% final
+(proven 84.1% precise, estimates 44.6%). With the other sources, unchanged: all 39,807 full-set test
+questions 63.7% before, 80.4% final.
+
+CHANGELOG.md has the per-step numbers (tiers, check values, TTA, tiled model), the tune-image
+comparison per object and the full-test-split numbers for every CubiCasa question type.
+
+### Before detector v2
 
 Produced by `eval.py` (dev: 5,289 questions, test: 2,701). Accuracy counts an abstention as wrong;
 coverage is the share answered; precision is correct / answered. Cost is $0.0000 per question on every
@@ -365,13 +434,16 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 ## Limits, stated plainly
 
-- CubiCasa scans are 53% of the questions. The detector is good for toilets (about 75% exact) and weak
-  for sinks, doors and windows (16-36% exact on test, 60-77% precise when it answers). Showers and baths
-  are switched off: 24% exact even before abstention, below a constant answer. Doors and windows are
-  many-object counts where one missed or extra box makes the answer wrong.
-- `--prior` answers the remaining raster questions with the most common dev answer per object type, as
-  a labelled baseline (route `raster-prior`, evidence says "PRIOR, not visual proof"). It is there so
-  the detector has a number to beat, not because it is a method.
+- CubiCasa scans are 53% of the questions. With the tiled detector, toilets, sinks and showers/baths
+  are mostly right; doors and windows remain the weak counts (many objects per plan, where one missed or
+  extra box makes the answer wrong). See the full-test-split table above.
+- "Proven" means the route's tuned conditions held, not that the answer is certain: the policy was tuned
+  to accept an answer when it is right more often than wrong, so proven door and window counts are about
+  70% precise. Estimates are much weaker (20-60% per object) and are labelled as such, with the boxes or
+  labels to check.
+- Estimates for kitchens and bathrooms are below a constant answer (one of each): when no label or two
+  labels are read, the plan's own evidence is missing or misread. `eval.py --prior` shows that constant
+  as a baseline column; it is never used as an answer.
 - Stoa's CubiCasa images are all in the public CubiCasa5K, and Stoa's counts equal its annotations. The
   detector uses those annotations only for plans whose image is in our train split or not in Stoa at
   all; test-split images and anything matching them are excluded by image fingerprint. A judging set

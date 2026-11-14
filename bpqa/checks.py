@@ -34,7 +34,8 @@ class Check:
     name: str
     status: str          # pass | fail
     detail: str          # what was compared, in words
-    action: str = ""     # on fail: abstain | lower
+    action: str = ""     # on fail: abstain | lower (how the check was set before tiers; see apply)
+    suggest: int | None = None   # the value the other signal implies (the bound, or the expected count)
 
     def as_dict(self):
         return {k: v for k, v in asdict(self).items() if v}
@@ -113,7 +114,7 @@ def check_numbered(F, obj, v):
     if k >= 2:
         ok = v >= k
         return Check("numbered-labels", "pass" if ok else "fail",
-                     f"a label numbered {k} was read, so at least {k}; answer {v}", "abstain")
+                     f"a label numbered {k} was read, so at least {k}; answer {v}", "abstain", k)
 
 
 def check_summary_bedrooms(F, obj, v):
@@ -125,7 +126,7 @@ def check_summary_bedrooms(F, obj, v):
     if exp < 1:
         return None
     return Check("summary-rooms", "pass" if v == exp else "fail",
-                 f"apartment summary '{s['text']}' implies {exp} bedroom(s); answer {v}", "abstain")
+                 f"apartment summary '{s['text']}' implies {exp} bedroom(s); answer {v}", "abstain", exp)
 
 
 def check_summary_kitchen(F, obj, v):
@@ -133,7 +134,7 @@ def check_summary_kitchen(F, obj, v):
         return None
     s = F["summaries"][0]
     return Check("summary-kitchen", "pass" if v >= 1 else "fail",
-                 f"apartment summary '{s['text']}' lists a kitchen; answer {v}", "abstain")
+                 f"apartment summary '{s['text']}' lists a kitchen; answer {v}", "abstain", 1)
 
 
 def check_summary_sauna(F, obj, v):
@@ -143,7 +144,7 @@ def check_summary_sauna(F, obj, v):
         return None
     s = F["summaries"][0]
     return Check("summary-sauna", "pass" if v >= 1 else "fail",
-                 f"apartment summary '{s['text']}' lists a sauna; answer {v}", "abstain")
+                 f"apartment summary '{s['text']}' lists a sauna; answer {v}", "abstain", 1)
 
 
 def check_utility_kitchen(F, obj, v):
@@ -158,7 +159,7 @@ def check_utility_kitchen(F, obj, v):
         return None
     return Check("utility-kitchen", "pass" if v >= 2 else "fail",
                  f"only a utility kitchen label was read ({', '.join(F['labels']['kitchen'])}); "
-                 f"a main kitchen is implied; answer {v}", "abstain")
+                 f"a main kitchen is implied; answer {v}", "abstain", 2)
 
 
 def check_floor_names(F, obj, v):
@@ -167,7 +168,7 @@ def check_floor_names(F, obj, v):
         return None
     k = len(F["floors"])
     return Check("floor-names", "pass" if v >= k else "fail",
-                 f"{k} floor names read ({', '.join(sorted(F['floors']))}); answer {v}", "abstain")
+                 f"{k} floor names read ({', '.join(sorted(F['floors']))}); answer {v}", "abstain", k)
 
 
 def check_stairs(F, obj, v):
@@ -175,7 +176,7 @@ def check_stairs(F, obj, v):
     if obj != "storey" or not F["stairs"]:
         return None
     return Check("stairs-label", "pass" if v >= 2 else "fail",
-                 f"stair label read ({F['stairs']}), so at least 2 storeys; answer {v}", "abstain")
+                 f"stair label read ({F['stairs']}), so at least 2 storeys; answer {v}", "abstain", 2)
 
 
 def check_fixture_bounds(F, obj, v):
@@ -186,22 +187,47 @@ def check_fixture_bounds(F, obj, v):
     wc, kh, k, mh = _labels(F, "wc_room"), _labels(F, "bathroom"), min(_labels(F, "kitchen"), 1), _labels(F, "bedroom")
     if obj == "toilet" and wc:
         out.append(Check("toilets>=wc-rooms", "pass" if v >= wc else "fail",
-                         f"{wc} WC room label(s) read, each holds a WC seat; answer {v}", "abstain"))
+                         f"{wc} WC room label(s) read, each holds a WC seat; answer {v}", "abstain", wc))
     if obj == "sink" and (kh or k):
         lo = kh + k
         out.append(Check("sinks>=bathrooms+kitchen", "pass" if v >= lo else "fail",
-                         f"{kh} bathroom and {k} kitchen label(s) read, each implies a sink; answer {v}", "lower"))
+                         f"{kh} bathroom and {k} kitchen label(s) read, each implies a sink; answer {v}", "lower", lo))
     if obj == "shower_or_bath" and kh:
         out.append(Check("showers>=bathrooms", "pass" if v >= kh else "fail",
-                         f"{kh} bathroom label(s) read, each implies a shower or bath; answer {v}", "abstain"))
+                         f"{kh} bathroom label(s) read, each implies a shower or bath; answer {v}", "abstain", kh))
     if obj == "door" and F["words"] >= 3:
         lo = F["words"] - 1
         out.append(Check("doors>=rooms-1", "pass" if v >= lo else "fail",
-                         f"{F['words']} room labels read, so at least {lo} doors connect them; answer {v}", "lower"))
+                         f"{F['words']} room labels read, so at least {lo} doors connect them; answer {v}", "lower", lo))
     if obj == "window" and mh:
         out.append(Check("windows>=bedrooms+1", "pass" if v >= mh + 1 else "fail",
-                         f"{mh} bedroom label(s) read, each plus the living room needs a window; answer {v}", "abstain"))
+                         f"{mh} bedroom label(s) read, each plus the living room needs a window; answer {v}", "abstain",
+                         mh + 1))
     return out
+
+
+def detected_count(file, obj):
+    """The raster-detector's count for obj on this image (its tuned policy), or None without a model."""
+    from .routes import detector
+    c = detector.config(obj)
+    if not c:
+        return None
+    model = detector.REPO / "models" / c["model"]
+    views = detector.detect_views(Path(file), model=model, imgsz=c["imgsz"], tile=c["tile"], tta=c["tta"])
+    if views is None:
+        return None
+    return detector.count_views(views, detector.combine(views), obj, c)[0]
+
+
+def check_bathroom_from_showers(F, obj, v, file=None):
+    """A shower or bathtub the detector finds stands in a bathroom: a zero bathroom count conflicts with it."""
+    if obj != "bathroom" or v >= 1 or file is None:
+        return None
+    n = detected_count(file, "shower_or_bath")
+    if not n:
+        return None
+    return Check("bathroom>=1-if-shower", "fail",
+                 f"the detector counts {n} shower(s) or bathtub(s), each in a bathroom; answer {v}", "abstain", 1)
 
 
 CHECKS = [check_numbered, check_summary_bedrooms, check_summary_kitchen, check_summary_sauna,
@@ -218,14 +244,24 @@ def run(file: Path, obj: str, value) -> list[Check]:
     for fn in CHECKS:
         r = fn(F, obj, v)
         out += r if isinstance(r, list) else ([r] if r else [])
+    r = check_bathroom_from_showers(F, obj, v, file)
+    if r:
+        out.append(r)
     return out
 
 
 LOWER_FACTOR = 0.5
+# Checks whose implied value replaces the route's count when the check fails (the answer then becomes
+# an estimate either way). Chosen on the dev split (answers.jsonl of a dev run, see CHANGELOG): only where the
+# implied value was right more often than the route's own count on dev answers that failed the check.
+ADOPT = {"numbered-labels", "summary-kitchen", "summary-sauna", "utility-kitchen", "floor-names", "stairs-label",
+         "showers>=bathrooms", "bathroom>=1-if-shower"}
+TIERS = True     # False: the pre-tier behaviour (a failed "abstain" check withdraws the answer)
 
 
 def apply(ctx, query, ans):
-    """Run the checks for a raster answer; abstain or lower confidence on conflict. Returns the answer."""
+    """Run the checks for a raster answer. A failed check makes it an estimate (and, for checks in ADOPT,
+    replaces the count with the implied value); with TIERS off, the old abstain/lower actions apply."""
     if not ans.answered or not ans.route.startswith("raster") or query.measure != "count":
         return ans
     cs = run(ctx.file, query.obj, ans.value)
@@ -233,6 +269,21 @@ def apply(ctx, query, ans):
         return ans
     ans.checks = [c.as_dict() for c in cs]
     fails = [c for c in cs if c.status == "fail"]
+    if TIERS:
+        if fails:
+            ans.confidence = round(ans.confidence * LOWER_FACTOR, 2)
+            from .answer import estimate
+            estimate(ans, "consistency check failed: " + "; ".join(f"{c.name}: {c.detail}" for c in fails))
+            adopt = [c for c in fails if c.name in ADOPT and c.suggest is not None]
+            if adopt:
+                old = ans.value
+                ans.value = max(c.suggest for c in adopt) if all(c.suggest >= old for c in adopt) else adopt[0].suggest
+                ans.explanation += f"; count changed from {old} to {ans.value} by check {adopt[0].name}"
+                ans.items = [{"route_count": old}] + ans.items
+        if ans.evidence:
+            from .evidence import add_checks
+            add_checks(ans.evidence, cs, value=ans.value, estimate=bool(fails))
+        return ans
     if any(c.action == "abstain" for c in fails):
         why = "; ".join(f"{c.name}: {c.detail}" for c in fails)
         ans.abstain = f"checking layer: {why}"

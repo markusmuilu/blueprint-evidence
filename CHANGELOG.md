@@ -103,6 +103,214 @@ openings lose thin partitions. Gating by rectangularity and by 4+ agreeing scale
 57.6% within 5% on 33 rooms. That is not Stoa's 2%, so measured areas are not answered: a CubiCasa
 takeoff uses printed areas only and abstains, with the measured estimate in the reason, when a room
 has none. Test split, once, same settings (635 test images, 45 plans, 303 printed rooms): 42 measured, 4.8% within 2%, 21.4% within 5%, median error 12.3%.
+## 2026-11-14 night: detector v2 (tiers, test-time augmentation, tiled detector), branch `detector-v2`
+
+### Baseline: cubi2 on the full set's test split, before any change here
+
+`cubi2` (yolo26n from scratch, 80 epochs, imgsz 1280, same data as `cubi1`) and its thresholds, tuned
+by main's `tools/tune_detector.py` on the 624 held-out train-split images, run with main's code and
+the same flags as the earlier full-set run: `eval.py --data ../data/stoa-full/junction-dataset --split
+test --sources cubicasa5k --objects toilet,sink,shower_or_bath,door,window --no-checks` (1,510 images,
+14,108 questions in all languages). The overall full-set test accuracy was not run: it needs OCR of every
+test image for the label routes (several hours), so this baseline is detector questions only.
+
+| object | n | exact (abstain = wrong) | coverage | precision |
+|---|---|---|---|---|
+| toilet | 3016 | 81.0% | 96.4% | 84.0% |
+| sink | 2982 | 57.5% | 77.3% | 74.5% |
+| door | 2274 | 23.2% | 30.4% | 76.3% |
+| window | 3020 | 25.0% | 39.1% | 63.9% |
+| shower/bath (switched off) | 2816 | 0% | 0% | - |
+| **all detector questions** | 14108 | 38.6% | 50.2% | 76.8% |
+
+For comparison, `cubi1` on the same questions: toilets 74.8%, sinks 38.8%, doors 24.9%, windows 18.7%.
+
+### Tiers instead of abstaining
+
+Every detector and label answer now comes with a tier (`tier`, `tier_reason`, `uncertain` in the answer
+JSON). "proven" is exactly the set the route answered before (the tuned band, count range and
+per-object switch, and no failed check); everything that used to be an abstention is now the route's
+best count as an "estimate", with the reason and the boxes or labels to check by eye (amber on the
+evidence image). The route abstains only when there is nothing to go on (no model, unreadable image).
+A failed consistency check demotes the answer to an estimate instead of withdrawing it. The `--prior`
+fallback is gone from the route; `eval.py --prior` reports the dev-majority answer per object as a
+baseline column only. `eval.py --no-tiers` reproduces the old behaviour (checked: identical dev numbers
+to the README, 64.8% overall, CubiCasa 45.3%, with cubi1).
+
+Checks with an implied value: when a failed check implies a count (a "MH3" label, a summary listing K or
+S, floor names, a stair label, bathrooms needing showers), that value replaces the route's count for the
+seven checks where, on dev answers that failed the check, the implied value was right more often than
+the route (`ADOPT` in `bpqa/checks.py`; dev, cubi1, questions failing each check: numbered-labels 8 vs
+0 right, summary-kitchen 18 vs 0, summary-sauna 14 vs 0, utility-kitchen 2 vs 0, floor-names 4 vs 0,
+stairs-label 8 vs 2, showers>=bathrooms 66 vs 8; not adopted: sinks 2 vs 10, toilets 4 vs 2,
+summary-rooms 10 vs 8, doors 6 vs 6, windows 0 vs 0).
+
+Full set, test split, detector questions, same flags as the baseline (14,108 questions, checks off):
+
+| object | baseline exact | tiers exact | tiers + TTA exact | proven: share / precision | estimate precision |
+|---|---|---|---|---|---|
+| toilet | 81.0% | 82.5% | 84.9% | 96.8% / 86.1% | 49.0% |
+| sink | 57.5% | 64.8% | 69.7% | 83.2% / 76.6% | 35.6% |
+| door | 23.2% | 50.0% | 52.0% | 54.5% / 68.5% | 32.1% |
+| window | 25.0% | 38.7% | 39.7% | 36.4% / 67.9% | 23.5% |
+| shower/bath | 0% | 34.9% | 40.6% | 0% / - | 40.6% |
+| **all** | 38.6% | 54.6% | 57.9% | 54.8% / 77.6% | 33.8% |
+
+With tiers alone the proven tier is the old answered set exactly (7,084 answers, 76.8% precise); TTA
+then re-tunes each object's policy, so its proven tier is larger (7,738) and slightly more precise.
+
+Preview dev, cubi2 (5,289 questions; the detector's dev images are among its tuning images, so the
+detector rows are slightly optimistic):
+
+| | overall | CubiCasa | CubiCasa proven: n / precision | CubiCasa estimate: n / precision |
+|---|---|---|---|---|
+| before tiers (`--no-tiers`) | 66.2% | 47.9% | 1672 / 83.3% | - |
+| tiers, implied values from checks | 76.0% | 65.7% | 1656 / 83.3% | 1252 / 42.5% |
+| tiers, implied values, TTA | 76.6% | 66.7% | 1688 / 84.4% | 1220 / 42.3% |
+
+On cubi1 (dev, CubiCasa) the steps were 45.3% -> 60.0% (tiers) -> 62.9% (implied values) -> 64.0% (TTA).
+
+Where estimates are weak (dev, cubi2 + TTA): kitchens (104 estimates, 23% right) and bathrooms (66,
+15%): no label or two labels read while the plan has one; the dev-majority baseline answers those
+questions right 93% and 91% of the time, but it is a constant, not a reading of the plan, so it is not
+used. Shower/bath counts are all estimates (48% right on dev, the constant gets 76%).
+
+### Full set, test split, all CubiCasa questions with the checking layer (cubi2, before the tiled model)
+
+The OCR cache for the 1,510 full-set test images was filled overnight, so the label routes and checks
+could run on the full test split too (27,160 CubiCasa questions in all languages). "Before" is main's
+behaviour: `--no-tiers` with main's cubi2 thresholds (on dev this reproduces main's numbers exactly).
+The other sources are unchanged by this branch (12,647 questions, 12,032 right, 99.0% precise), so the
+overall line adds them to both columns.
+
+| object | n | before: exact | before: precision | after: exact | proven: n / precision | estimate: n / precision | dev-majority baseline |
+|---|---|---|---|---|---|---|---|
+| storey | 3020 | 89.4% | 92.2% | 90.5% | 2928 / 92.2% | 92 / 37.0% | 81.5% |
+| balcony | 942 | 71.8% | 87.6% | 85.8% | 772 / 87.6% | 170 / 77.6% | 51.4% |
+| WC room | 1450 | 72.3% | 82.0% | 81.2% | 1278 / 82.0% | 172 / 75.6% | 55.0% |
+| bedroom | 1914 | 57.6% | 86.4% | 75.1% | 1276 / 86.4% | 638 / 52.7% | 31.5% |
+| kitchen | 2090 | 55.3% | 98.8% | 64.0% | 1170 / 98.8% | 920 / 19.8% | 96.1% |
+| bathroom | 1484 | 53.2% | 96.8% | 79.0% | 816 / 96.8% | 668 / 57.2% | 88.8% |
+| sauna | 2152 | 19.7% | 81.9% | 63.6% | 518 / 81.9% | 1634 / 57.8% | 56.8% |
+| toilet | 3016 | 80.3% | 85.0% | 84.9% | 2870 / 86.8% | 146 / 46.6% | 62.5% |
+| sink | 2982 | 57.5% | 74.5% | 69.7% | 2394 / 77.9% | 588 / 36.1% | 52.8% |
+| door | 2274 | 23.2% | 76.3% | 52.0% | 1150 / 68.5% | 1124 / 35.1% | 12.0% |
+| window | 3020 | 24.9% | 64.2% | 39.7% | 1092 / 68.1% | 1928 / 23.5% | 12.9% |
+| shower/bath | 2816 | 0% | - | 50.2% | 0 / - | 2816 / 50.2% | 77.3% |
+| **CubiCasa** | 27160 | 49.0% | 84.4% | 68.0% | 16264 / 84.8% | 10896 / 43.0% | |
+| **all sources** | 39807 | 63.7% | | 76.6% | | | |
+
+One more check came out of the dev analysis: a shower or bathtub found by the detector means at least one
+bathroom, so a zero bathroom count becomes an estimate of 1 (on dev, of the bathroom questions with no
+label read, the 14 with a detected shower all had one bathroom). Bathrooms on dev 60.8% -> 79.7%, on
+the full test split 53.2% -> 79.0% (the estimates are 57% right).
+
+Still below the constant answer: kitchens (estimates 20% right: no label or two labels read while the plan
+has one kitchen), bathrooms and showers/baths. Those are the places where the plan's own evidence is
+missing or misread; the constant is not used because it does not read the plan.
+
+### Test-time augmentation (`tta` per object in the thresholds file)
+
+The detector runs on the eight rotations and mirrors of the image; boxes are mapped back and either
+fused across views (a box found by fewer views is discounted) or the median per-view count is taken,
+whichever is better per object on the tune images. The spread of per-view counts is one more reason for
+"estimate". Tuned on the 624 held-out train-split images (2-fold cross-validated exact-count accuracy,
+every image answered):
+
+| object | cubi1 | cubi1 + TTA | cubi2 | cubi2 + TTA | TTA mode (cubi2) |
+|---|---|---|---|---|---|
+| toilet | 76.8% | 77.9% | 81.7% | 82.7% | median |
+| sink | 58.8% | 63.4% | 65.5% | 70.2% | fuse |
+| shower/bath | 28.8% | 35.9% | 36.2% | 41.5% | median |
+| door | 42.2% | 45.8% | 48.8% | 51.9% | median |
+| window | 37.7% | 39.3% | 41.7% | 43.8% | fuse |
+
+TTA won on every object for both models, so the route uses it for all five (eight detector passes per
+image instead of one; still $0; the full-set run took under 1 s per image on the RTX 5070 while it was also training).
+
+### Tiled, pretrained, larger detector (`detector_tiles.pt`, run `tiles_s`)
+
+Dataset `ds_tiles` (`tools/build_tile_dataset.py`): exactly the plans of `ds_cubi`'s train and val
+lists, each checked again against the overlap lists (a plan not in `train_clean.txt` or matching a test
+image is refused; none was). CubiCasa plans are re-read from the public `F1_original.png` at native
+resolution (`ds_cubi` had capped the long side at 2,048 px), resized 2x (long side capped at 4,096 px)
+and cut into 1,024 px tiles with 192 px overlap; edge tiles are padded white so YOLO never rescales a
+tile. A box stays in a tile when at least 40% of it is inside. Empty tiles are kept 25% of the time when
+they hold drawing. Half of the synthetic Swiss renders are tiled at their own scale. 17,596 training
+tiles, 251 validation tiles. In native pixels the objects' long side is 9-20 px at the 10th percentile
+and 17 px (showers) to 51 px (windows) at the median (300 sampled training plans); 2x doubles that.
+
+Model: `yolo26s` from Ultralytics' official pretrained weights (`yolo26s.pt`, downloaded once), imgsz
+1,024, batch 8, the same augmentation as before (flips, no colour jitter, mosaic 0.5, scale 0.3),
+trained with a wall-clock budget (`--time`) from 01:35 to about 06:50, RTX 5070. At inference the image
+gets the same resize and tiling, tiles go through the model in batches, and boxes found twice in the
+overlap are merged (same class, IoU >= 0.5 or the smaller box 60% inside the larger).
+
+Mid-training check (weights after epoch 22 of about 58, tune images, 2-fold cross-validated exact-count
+accuracy, every image answered):
+
+| object | cubi2 | cubi2 + TTA | tiles e22 | tiles e22 + TTA |
+|---|---|---|---|---|
+| toilet | 81.7% | 82.7% | 87.0% | 89.3% |
+| sink | 65.5% | 70.2% | 79.8% | 81.8% |
+| shower/bath | 36.2% | 41.5% | 72.8% | 74.5% |
+| door | 48.8% | 51.9% | 54.6% | 57.3% |
+| window | 41.7% | 43.8% | 45.8% | 48.6% |
+
+The epoch-22 tiles + TTA policy on the full set's test split, detector questions, same flags as the
+baseline: toilets 89.3%, sinks 78.1%, showers/baths 74.1%, doors 54.1%, windows 46.6%; all 69.1%
+(baseline 38.6%, cubi2 + tiers + TTA 57.9%). Close to what the tune images predicted, so the tune-image
+comparison transfers. Showers and baths get a proven tier for the first time (the policy is right more
+often than wrong).
+
+Final model: 61 epochs in the 5.3 h budget (best epoch 60; tile validation mAP50 0.943, mAP50-95 0.817;
+cubi2 on its whole-image validation set: 0.892 and 0.676, not directly comparable). Tuned on the same 624 held-out train-split images as
+cubi2. 2-fold cross-validated exact-count accuracy (every image answered), and the proven tier's share
+and precision:
+
+| object | cubi2 | cubi2 + TTA | tiles | tiles + TTA | kept | proven share / precision (kept) | estimate precision (kept) |
+|---|---|---|---|---|---|---|---|
+| toilet | 81.7% | 82.7% | 87.5% | **88.3%** | tiles + TTA | 97.9% / 88.9% | 61.5% |
+| sink | 65.5% | 70.2% | 78.2% | **79.3%** | tiles + TTA | 93.0% / 82.0% | 44.2% |
+| shower/bath | 36.2% | 41.5% | 72.4% | **77.6%** | tiles + TTA | 98.3% / 78.1% | 50.0% |
+| door | 48.8% | 51.9% | **59.1%** | 58.2% | tiles | 68.1% / 71.0% | 33.8% |
+| window | 41.7% | 43.8% | 44.7% | **50.0%** | tiles + TTA | 50.0% / 71.2% | 28.8% |
+
+The tiled model wins every object, so the route now uses `detector_tiles.pt` for all five (with TTA for
+four of them). `models/detector_thresholds.json` names the model and mode per object.
+
+Preview, cubi2 before this branch (`--no-tiers`, main's thresholds) against the final route:
+
+| | dev overall | dev CubiCasa | test overall | test CubiCasa | test proven: n / precision | test estimate: n / precision |
+|---|---|---|---|---|---|---|
+| before | 66.2% | 47.9% | 72.3% | 49.2% | 2056 / 95.0% (all answers) | - |
+| final | 80.5% | 73.9% | 85.7% | 75.6% | 2292 / 94.1% | 354 / 44.6% |
+
+Preview test per CubiCasa object, before -> final (exact): toilets 85.5% -> 92.1%, sinks 50.0% -> 74.3%,
+showers/baths 0% -> 83.3%, doors 18.3% -> 60.0%, windows 31.6% -> 44.7%, bathrooms 43.2% -> 86.5%,
+bedrooms 54.9% -> 74.5%, saunas 22.2% -> 63.0%, WC rooms 75.7% -> 91.9%, balconies 76.2% -> 100%,
+kitchens 57.4% -> 59.6%, storeys 93.4% -> 96.1%. The preview test has 76 CubiCasa images, so these move
+in steps of 1.3 points.
+
+Full set, test split, detector questions, final route, same flags as the baseline (run once):
+
+| object | n | before: exact (precision, coverage) | final: exact | final proven: share / precision | final estimate precision |
+|---|---|---|---|---|---|
+| toilet | 3016 | 81.0% (84.0%, 96.4%) | 88.3% | 99.7% / 88.5% | 0 of 8 |
+| sink | 2982 | 57.5% (74.5%, 77.3%) | 78.7% | 98.2% / 79.6% | 29.6% |
+| shower/bath | 2816 | 0% (switched off) | 75.7% | 95.5% / 77.4% | 39.7% |
+| door | 2274 | 23.2% (76.3%, 30.4%) | 55.4% | 69.5% / 67.1% | 28.8% |
+| window | 3020 | 25.0% (63.9%, 39.1%) | 46.4% | 44.8% / 69.0% | 28.0% |
+| **all detector questions** | 14108 | 38.6% (76.8%, 50.2%) | 69.5% | 81.9% / 78.4% | 28.7% |
+
+The tune images predicted 88.3%, 79.3%, 77.6%, 59.1% and 50.0%; doors and windows came out 3-4 points
+lower on test. The epoch-22 check had given 69.1% overall on the same questions.
+
+Full set, test split, all CubiCasa questions with the checking layer, final route (27,160 questions):
+73.5% (before this branch 49.0%, cubi2 + tiers + TTA 68.0%); proven 19,884 answers at 84.1%, estimates
+7,276 at 44.6%. Changes against the cubi2 + TTA column above: toilets 88.3%, sinks 78.7%, showers/baths
+76.0%, doors 55.4%, windows 46.4%, and bathrooms 87.9% (the shower check sees more showers). With the
+unchanged other sources: **all 39,807 full-set test questions 80.4% (before 63.7%)**.
 
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
