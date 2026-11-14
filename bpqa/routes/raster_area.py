@@ -14,8 +14,10 @@ Three signals, each drawn on the evidence image:
            their median; otherwise no scale and measured areas abstain.
 
 Area of a room for a takeoff: the printed value when the plan prints one (it is the designer's
-number), else region pixels x scale. If any asked room has neither, the sum abstains, because a
-partial sum would be a wrong order quantity.
+number), else, when a scale is established, region pixels x scale as tier "estimate" with the
+measured leave-one-out error band stated. If any asked room has neither, the sum abstains, because a
+partial sum would be a wrong order quantity. Wall questions: floor and walls are separate lines; walls
+are perimeter of the region x an assumed height, openings not deducted, estimate, scale required.
 """
 from __future__ import annotations
 
@@ -409,20 +411,64 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
 # ---------------------------------------------------------------- takeoff answer
 
 ROUTE = "raster-area"
-# Measured areas (region x scale) are not used as answers: on dev, leave-one-out against printed
-# areas puts only 37% of measured rooms within 5% (18.7% within 2%, Stoa's tolerance). They are
-# reported as an estimate in the abstention instead. Set True to answer with them anyway.
-MEASURED_ANSWERS = False
+# Measured areas (region x scale) answer rooms that print no area, as tier "estimate", when a scale is
+# established (2+ printed rooms agree). The error band is the leave-one-out measurement on the dev split
+# (tools/area_eval.py, CHANGELOG "raster area estimates"): each printed room measured with a scale from
+# the OTHER printed rooms only. Update BAND with the numbers of the latest run. Set False to abstain again.
+MEASURED_ANSWERS = True
+# Pooled leave-one-out rows of dev (193 rooms, 52 plans) and test (73 rooms, 22 plans): `python tools/area_band.py
+# loo_dev.jsonl loo_test.jsonl`. Classes are by the MEASURED area. Under 3 m2 the region is usually a fragment
+# of the room (median error 46%, nearly always too small, dev and test alike), so such a room is not answered.
+BANDS = {"n": 266, "plans": 74,
+         "under3": {"n": 73, "median": 0.463, "p80": 0.773, "within5": 0.137},
+         "3to6": {"n": 50, "median": 0.13, "p80": 0.384, "within5": 0.28},
+         "6up": {"n": 143, "median": 0.065, "p80": 0.2, "within5": 0.448}}
+MIN_MEASURED_M2 = 3.0
+# Region perimeter (convex hull) against the annotated room outlines of CubiCasa's model.svg, scale-free
+# (tools/perim_eval.py): dev 303 rooms of 55 plans (median 7.8%), test 116 rooms of 21 plans (median 10.8%), pooled.
+PERIM_BAND = {"n": 419, "plans": 76, "median": 0.087, "p80": 0.268, "within10": 0.525, "signed": -0.04}
+
+
+def _band_cls(area: float) -> str:
+    return "under3" if area < MIN_MEASURED_M2 else ("3to6" if area < 6.0 else "6up")
+
+
+def band_text(areas=None) -> str:
+    """The measured error band for the classes of the measured rooms (all classes answered when areas is None)."""
+    classes = {_band_cls(a) for a in areas} if areas else {"3to6", "6up"}
+    parts = []
+    for c, name in (("3to6", "measured rooms of 3 to 6 m2"), ("6up", "measured rooms of 6 m2 and over")):
+        if c in classes:
+            b = BANDS[c]
+            parts.append(f"{name}: typical error about {b['median']:.0%}, 8 in 10 within {b['p80']:.0%}, "
+                         f"only {b['within5']:.0%} within 5%")
+    return "; ".join(parts) + "; check before ordering"
 
 
 def _inside(contour, pt) -> bool:
     return contour is not None and cv2.pointPolygonTest(contour, (float(pt[0]), float(pt[1])), False) >= 0
 
 
+def region_perimeter_px(contour, eps: float | None = None) -> float:
+    """Perimeter of a room region in pixels. Default: the convex hull's perimeter. The traced contour of a
+    flood-filled region is ragged (furniture, door arcs, doorway bridges), and its own length overstates
+    the room's walls; on dev against the annotated room outlines the hull's median error is 7.8% against
+    17.2% for the simplified contour (CHANGELOG). A concave room (L shape) comes out a little short.
+    `eps` given: the simplified contour's length instead (tools/perim_eval.py compares the variants)."""
+    if eps is not None:
+        return float(cv2.arcLength(cv2.approxPolyDP(contour, eps, True), True))
+    return float(cv2.arcLength(cv2.convexHull(contour), True))
+
+
+def _name(r) -> str:
+    return r.label or (f"unlabelled {r.printed:g} m2" if r.printed is not None else "unlabelled room")
+
+
 def takeoff_answer(ctx, q, img):
     from .. import takeoff
+    from .. import walls as wallmod
     from ..answer import Answer, abstain
-    from ..evidence import BLUE, PALETTE, ImageCanvas, evidence_path, finish
+    from ..evidence import AMBER, BLUE, ImageCanvas, evidence_path, finish, font
     from PIL import Image
 
     tk = q.extra["takeoff"]
@@ -457,54 +503,122 @@ def takeoff_answer(ctx, q, img):
             if len(inn) == 1:
                 r.printed, r.area_box = inn[0].printed, inn[0].area_box
                 loose.remove(inn[0])
-    rows, missing = [], []
     sc = pa.scale
+    want_floor, want_walls, how = wallmod.surfaces(tk)
+    rows, missing = [], []
     for r in typed:
         if r.printed is not None:
             src = "printed on plan"
             if r.measured is not None:
                 src += f" (measured {r.measured:.2f})"
-            rows.append({"label": r.label, "area": r.printed, "source": src, "room": r})
-        elif r.measured is not None and MEASURED_ANSWERS:
-            rows.append({"label": r.label, "area": r.measured, "source": f"measured region x scale ({sc.method})", "room": r})
-        elif r.measured is not None:
-            missing.append(f"{r.label}: no printed area; measured region x scale gives about {r.measured:.1f} m2, "
-                           f"an estimate only (dev leave-one-out: median error 9%, within 5% for 37% of rooms)")
+            rows.append({"label": r.label, "area": r.printed, "source": src, "room": r, "kind": "printed"})
+        elif r.measured is not None and sc.known and MEASURED_ANSWERS and r.measured < MIN_MEASURED_M2:
+            missing.append(f"{r.label}: no printed area; its measured region is only {r.measured:.1f} m2, and regions under "
+                           f"{MIN_MEASURED_M2:g} m2 are too unreliable to answer (median error {BANDS['under3']['median']:.0%}, "
+                           f"nearly always too small)")
+        elif r.measured is not None and sc.known and MEASURED_ANSWERS:
+            rows.append({"label": r.label, "area": r.measured, "kind": "measured", "room": r,
+                         "source": f"MEASURED, not printed: region x scale, ESTIMATE ({band_text([r.measured])})"})
         else:
-            missing.append(f"{r.label}: " + ("no printed area and no scale" if not sc.known else (r.why or "no region")))
+            missing.append(f"{r.label}: no printed area and " + ("no pixel scale" if not sc.known else (r.why or "no closed region")))
     if missing:
         return abstain(ROUTE, "room(s) without an area: " + "; ".join(missing) + f"; scale: {sc.detail}")
-    total, items, expl = takeoff.summary([{k: v for k, v in r.items() if k != "room"} for r in rows], tk)
-    measured_any = any(r["room"].printed is None for r in rows)
-    conflict = [r for r in rows if r["room"].printed is not None and r["room"].measured is not None
-                and abs(r["room"].measured - r["room"].printed) > 0.1 * r["room"].printed]
-    conf = 0.6 if measured_any else 0.8
-    if conflict:
-        conf = 0.5
-    scale_note = (f"scale {sc.method}: {sc.detail}" if sc.known else f"no pixel scale ({sc.detail})")
-    ans = Answer(value=total, unit="m2", route=ROUTE, confidence=conf, items=items,
-                 explanation=expl + f" Areas: printed values read by local OCR where printed, else region x scale; {scale_note}.")
+    m_per_px = float(np.sqrt(sc.m2_per_px)) if sc.known else None
+    if want_walls:
+        if not sc.known:
+            return abstain(ROUTE, f"walls on a scan need a pixel scale from printed room areas; {sc.detail}")
+        bad = [f"{r['label']}: {r['room'].why or 'no closed region'}" for r in rows if r["room"].contour is None]
+        if bad:
+            return abstain(ROUTE, "walls need each room's closed region for its perimeter; " + "; ".join(bad))
+
+    printed_rows = [r for r in rows if r["kind"] == "printed"]
+    meas_rows = [r for r in rows if r["kind"] == "measured"]
+    scale_names = [_name(pa.rooms[j]) + f" ({pa.rooms[j].printed:g})" for j in sc.rooms] if sc.known else []
+    scale_txt = (f"Scale from printed rooms {', '.join(scale_names)}: {sc.detail}" if sc.known
+                 else f"No pixel scale ({sc.detail})")
+    basis = []
+    if printed_rows:
+        basis.append("printed on the plan: " + ", ".join(f"{r['label']} {r['area']:.2f}" for r in printed_rows[:12]))
+    if meas_rows:
+        basis.append("MEASURED (pixel region x scale, not printed): " + ", ".join(f"{r['label']} {r['area']:.2f}" for r in meas_rows[:12]))
+    basis_txt = "Floor areas " + "; ".join(basis) + "."
+    bt = band_text([r["area"] for r in meas_rows]) if meas_rows else ""
+    band_note = (f" Measured areas are estimates: {bt}. (Leave-one-out on {BANDS['n']} printed rooms of {BANDS['plans']} plans, "
+                 f"dev and test, each measured with a scale from the other printed rooms.)") if meas_rows else ""
+    uncertain = [{"room": r["label"], "area_m2": round(r["area"], 2), "why": "measured, not printed"} for r in meas_rows]
+
+    if want_walls:
+        wrooms = []
+        for r in rows:
+            per = region_perimeter_px(r["room"].contour) * m_per_px
+            wrooms.append({"label": r["label"], "floor_area": r["area"], "floor_src": r["source"], "perimeter": per,
+                           "perimeter_src": f"perimeter of the measured room region x scale ({sc.method})",
+                           "height": None, "openings": [], "openings_unknown": True})
+        total, items, expl, totals = wallmod.summary(wrooms, tk, ctx.q.question)
+        for it, r in zip(items, rows):
+            it["area_kind"] = r["kind"]
+        items.append({"totals": totals})
+        expl += (f" Walls on a scan are an ESTIMATE: perimeter of the measured room region x an ASSUMED ceiling height "
+                 f"({wallmod.DEFAULT_CEILING_M:.2f} m unless the question gives one); door and window openings are NOT deducted "
+                 f"(not detectable here), so the wall area is gross and an upper bound. "
+                 f"The room perimeters are typically off by about {PERIM_BAND['median']:.0%} (8 in 10 within {PERIM_BAND['p80']:.0%}; "
+                 f"region against the annotated room outlines of {PERIM_BAND['n']} dev and test rooms), before the height assumption. ") + basis_txt + " " + scale_txt + "." + band_note
+        est = "walls: perimeter x assumed height, openings not deducted" + ("; some rooms measured" if meas_rows else "")
+        ans = Answer(value=total, unit="m2", route=ROUTE, confidence=0.45, items=items, explanation=expl)
+        ans.tier, ans.tier_reason = "estimate", est + ("; " + bt if meas_rows else "")
+        head = (f"Answer [ESTIMATE]: {total:.2f} m2 = floor {totals['floor_m2'] or 0:.2f} + walls {totals['walls_m2']:.2f}"
+                f" + {totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}   route: {ROUTE}") if want_floor else                (f"Answer [ESTIMATE]: {total:.2f} m2 = walls {totals['walls_m2']:.2f} + {totals['waste_pct']:g}% waste "
+                f"{totals['waste_m2']:.2f}   route: {ROUTE}")
+    else:
+        total, items, expl = takeoff.summary([{k: v for k, v in r.items() if k not in ("room", "kind")} for r in rows], tk)
+        for it, r in zip(items, rows):
+            it["area_kind"] = r["kind"]
+        conflict = [r for r in printed_rows if r["room"].measured is not None
+                    and abs(r["room"].measured - r["area"]) > 0.1 * r["area"]]
+        conf = 0.5 if conflict else (0.55 if meas_rows else 0.8)
+        expl += " " + basis_txt + " " + scale_txt + "." + band_note
+        ans = Answer(value=total, unit="m2", route=ROUTE, confidence=conf, items=items, explanation=expl)
+        if meas_rows:
+            ans.tier, ans.tier_reason = "estimate", f"{len(meas_rows)} room(s) have no printed area: measured region x scale; {bt}"
+        head = (f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows
+                else takeoff.answer_line(total, len(rows), ROUTE))
+    ans.uncertain = uncertain
+
     if ctx.evidence:
         cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+        fs = round(14 * cv.k)
+        f = font(fs)
         for i, row in enumerate(rows):
             r = row["room"]
-            col = PALETTE[i % len(PALETTE)]
+            col = BLUE if row["kind"] == "printed" else AMBER
             if r.contour is not None and r.region_ok:
                 pts = [tuple(int(v) for v in p[0]) for p in r.contour]
                 if len(pts) >= 3:
                     cv.d.polygon(pts, fill=col + (70,), outline=col)
-            if r.area_box is not None:
-                b = r.area_box
-                cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), color=col, width=2)
             lb = r.label_box or r.area_box
-            cv.box((lb[0] - 3, lb[1] - 3, lb[2] + 3, lb[3] + 3), n=i + 1, color=col, width=2)
-        for j in sc.rooms if sc.known else []:            # rooms that set the scale, thin blue
+            if r.area_box is not None and row["kind"] == "printed":
+                b = r.area_box                                  # the printed value, boxed
+                cv.d.rectangle([b[0] - 4, b[1] - 4, b[2] + 4, b[3] + 4], outline=col, width=max(2, round(2 * cv.k)))
+            if lb is not None:
+                cv.box((lb[0] - 3, lb[1] - 3, lb[2] + 3, lb[3] + 3), n=i + 1, color=col, width=2)
+            if row["kind"] == "measured":
+                x, y = r.seed
+                txt = f"measured {row['area']:.1f} m2"
+                tb = cv.d.textbbox((x, y + fs), txt, font=f, anchor="mm")
+                cv.d.rectangle([tb[0] - 3, tb[1] - 2, tb[2] + 3, tb[3] + 2], fill=AMBER)
+                cv.d.text((x, y + fs), txt, fill=(28, 48, 65), font=f, anchor="mm")
+        for j in sc.rooms if sc.known else []:            # printed rooms that set the scale, thin blue
             b = pa.rooms[j].area_box
             if b is not None:
-                cv.d.rectangle([b[0] - 5, b[1] - 5, b[2] + 5, b[3] + 5], outline=BLUE, width=max(1, round(cv.k)))
-        lines = "; ".join(f"{i + 1}. {row['label']} {row['area']:.2f} m2 ({'printed' if row['room'].printed is not None else 'measured'})"
-                          for i, row in enumerate(rows))
+                cv.d.rectangle([b[0] - 7, b[1] - 7, b[2] + 7, b[3] + 7], outline=BLUE, width=max(1, round(cv.k)))
+        lines = "; ".join(f"{i + 1}. {row['label']} {row['area']:.2f} m2 ({row['kind']})" for i, row in enumerate(rows))
+        if want_walls:
+            extra = f" Walls {totals['walls_m2']:.2f} m2 gross: perimeter x assumed {wallmod.DEFAULT_CEILING_M:.2f} m, openings not deducted."
+        else:
+            extra = " Floor area only, no waste allowance."
+        sc_note = f"Scale from printed rooms {', '.join(scale_names[:5])}" if sc.known else "No pixel scale"
+        if meas_rows:
+            sc_note += f"; measured rooms amber, {bt}"
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              takeoff.answer_line(total, len(rows), ROUTE),
-                              note=f"{lines}. Floor area only, no waste allowance. {scale_note} (scale rooms boxed blue)")
+                              head, note=f"{sc_note}. {lines}.{extra} Printed rooms blue, value boxed.")
     return ans

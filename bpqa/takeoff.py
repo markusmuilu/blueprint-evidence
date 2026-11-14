@@ -195,7 +195,7 @@ def describe(tk: dict) -> str:
 
 def wall_reason(tk: dict) -> str:
     return ("wall area needs room outlines with heights and the wall openings; this route measures floor areas "
-            "only (wall takeoffs: IFC models and Swiss DXF floors)")
+            "only (wall takeoffs: IFC models, Swiss DXF floors, and scans with a scale from printed room areas)")
 
 
 def answer_line(value, n_rooms: int, route: str) -> str:
@@ -210,7 +210,7 @@ def matches(name: str | None, tk: dict) -> bool:
 
 # routes that measure wall surfaces (perimeter x height - openings, bpqa/walls.py); any other route's
 # takeoff answer is withdrawn by the router when walls are asked
-WALL_ROUTES = {"ifc", "dxf-geometry"}
+WALL_ROUTES = {"ifc", "dxf-geometry", "raster-area"}
 
 
 def needs_walls(tk: dict) -> bool:

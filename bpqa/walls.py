@@ -136,6 +136,8 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
                                      "deducted_m2": round(d["area"], 2), "source": d.get("src", ""),
                                      "z0_m": round(d["z0"], 3), "z1_m": round(d["z1"], 3)} for d in w["deductions"]],
                        "openings_m2": round(w["openings_area"], 2), "net_wall_m2": round(w["net"], 2)})
+            if r.get("openings_unknown"):
+                it["openings_not_deducted"] = True
             if r.get("model_net_wall") is not None:
                 it["model_net_wall_m2"] = round(r["model_net_wall"], 2)
             walls_t += w["net"]
@@ -157,7 +159,7 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
     if want_floor:
         lines.append(f"floor {floor_t:.2f} m2")
     if want_walls:
-        lines.append(f"walls {walls_t:.2f} m2 (perimeter x height - openings)")
+        lines.append(f"walls {walls_t:.2f} m2 (perimeter x height" + ("" if any(r.get("openings_unknown") for r in rooms) else " - openings") + ")")
     lines.append(f"net {net:.2f} m2; waste {waste:g}% = {order_q - net:.2f} m2 ({waste_src}); order {order_q:.2f} m2")
     per = []
     for it in items[:12]:
@@ -165,8 +167,12 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
         if "floor_m2" in it:
             bits.append(f"floor {it['floor_m2']:.2f}")
         if "net_wall_m2" in it:
-            bits.append(f"walls {it['perimeter_m']:.2f} m x {it['tiled_height_m']:.2f} m = {it['gross_wall_m2']:.2f} - openings "
-                        f"{it['openings_m2']:.2f} = {it['net_wall_m2']:.2f}")
+            if it.get("openings_not_deducted"):
+                bits.append(f"walls {it['perimeter_m']:.2f} m x {it['tiled_height_m']:.2f} m = {it['gross_wall_m2']:.2f} "
+                            f"(openings not deducted)")
+            else:
+                bits.append(f"walls {it['perimeter_m']:.2f} m x {it['tiled_height_m']:.2f} m = {it['gross_wall_m2']:.2f} - openings "
+                            f"{it['openings_m2']:.2f} = {it['net_wall_m2']:.2f}")
         per.append(f"{it['room']}: " + ", ".join(bits))
     expl = (f"{value:.2f} m2 = {'; '.join(lines)}. Value is the {totals['value_is']}. Surfaces: {how}. Per room: "
             + " | ".join(per) + (" | ..." if len(items) > 12 else "") + "."
