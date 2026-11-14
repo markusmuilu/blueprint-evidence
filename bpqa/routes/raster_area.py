@@ -712,6 +712,14 @@ class PlanAreas:
     scale: Scale
     regions: str
     orient: tuple = UPRIGHT      # (mirror, rot) of the OCR pass the labels and areas were read in
+    printed_n: int = 0           # rooms with a printed area read on the plan (0: the plan prints none)
+
+    def no_scale_why(self) -> str:
+        """Why the plan has no printed-area scale, for an approximation's answer sentence."""
+        if not self.printed_n:
+            return "this drawing prints no room areas, and no scale was read from it"
+        return (f"the {self.printed_n} room area{'s' if self.printed_n > 1 else ''} printed on this drawing "
+                f"{'do' if self.printed_n > 1 else 'does'} not give a scale (no 2 agree with their traced rooms)")
 
 
 @lru_cache(maxsize=4)
@@ -727,8 +735,8 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
             toks = toks + [{"quad": [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], "text": "", "conf": 1.0}]
     hyps = hypotheses(img, toks, proto, others, mode="walls")   # walls beat lines and auto on dev (CHANGELOG)
     name, rooms, sc = choose(hyps)
-    if not sc.known and OS.ENABLED:     # no printed-area scale: standard objects, weaker, estimate only (scale_objects.py)
-        on, orooms, osc = OS.object_scale(f, hyps, allow_run)
+    if not sc.known and OS.ENABLED:     # no printed-area scale: printed door sizes, then standard objects (scale_objects.py)
+        on, orooms, osc = OS.object_scale(f, hyps, allow_run, mirror=orient[0])
         name, rooms, sc = (on, orooms, osc) if orooms is not None else (name, rooms, sc)
         sc.detail += "" if orooms is not None else f"; no object scale either: {osc}"
     if rooms is None:
@@ -737,7 +745,7 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
         for r in rooms:
             if r.region_ok:
                 r.measured = round(r.pixels * sc.m2_per_px, 2)
-    return PlanAreas(rooms, free, sc, name or "none", orient)
+    return PlanAreas(rooms, free, sc, name or "none", orient, sum(1 for r in proto if r.printed is not None))
 
 
 # ---------------------------------------------------------------- takeoff answer
@@ -818,6 +826,28 @@ def _room_steps(row, r, want) -> list[dict]:
             note = f"no printed size: measured {row['area']:.2f} m2 (region x scale), an estimate"
         cap = f"region {r.measured:.1f} m2" if r.measured is not None else "region"
         steps.append({"kind": "region", "title": "Room region", "text": "outlined", "note": note, "cap": cap, "pts": pts})
+    return steps
+
+
+def approx_steps(row, r, want, sc) -> list[dict]:
+    """Steps of a room measured with an approximate (door or object) scale: the room found by its label, the
+    scale objects with their sizes (one layer, every object boxed), the traced outline and what it comes to."""
+    from .. import takeoff
+    types = sorted(takeoff.room_types(r.label or "") & set(want)) or sorted(takeoff.room_types(r.label or ""))
+    ppm = 1 / float(np.sqrt(sc.m2_per_px))
+    err = OS.typical_error(row["area"], sc)
+    steps = []
+    if r.label_box is not None and r.label:
+        steps.append({"kind": "label", "title": "Room found", "text": r.label,
+                      "note": f"label read as {', '.join(types)}" if types else "room label", "rect": r.label_box})
+    steps.append({"kind": "scale", "title": "Scale", "text": OS.scale_short(sc),
+                  "note": f"{ppm:.0f} px/m (spread {sc.spread:.0%})",
+                  "rects": [c["xyxy"] for c in sc.objects], "caps": [f"{c.get('tag', '')} {OS.obj_label(c)}".strip() for c in sc.objects]})
+    if r.contour is not None and r.region_ok:
+        pts = [(float(p[0][0]), float(p[0][1])) for p in r.contour]
+        steps.append({"kind": "region", "title": "Room outline", "text": f"{r.pixels:,} px",
+                      "note": f"about {OS.about(row['area'])} m2 ± {err:.0%} (approximation)",
+                      "cap": f"about {OS.about(row['area'])} m2", "pts": pts})
     return steps
 
 
@@ -912,7 +942,7 @@ def takeoff_answer(ctx, q, img):
                            f"nearly always too small)")
         elif r.measured is not None and sc.known and MEASURED_ANSWERS:
             rows.append({"label": r.label, "area": r.measured, "kind": "measured", "room": r,
-                         "source": f"MEASURED, not printed: region x scale, ESTIMATE ({(OS.band_text if OS.is_object(sc) else band_text)([r.measured])})"})
+                         "source": f"MEASURED, not printed: region x scale, ESTIMATE ({OS.band_text([r.measured], sc) if OS.is_object(sc) else band_text([r.measured])})"})
         else:
             missing.append(f"{r.label}: no printed area and " + ("no pixel scale" if not sc.known else (r.why or "no closed region")))
     if missing:
@@ -942,8 +972,10 @@ def takeoff_answer(ctx, q, img):
     band_note = (f" Measured areas are estimates: {bt}. (Leave-one-out on {BANDS['n']} printed rooms of {BANDS['plans']} plans, "
                  f"dev and test, each measured with a scale from the other printed rooms.)") if meas_rows else ""
     if OS.is_object(sc):                # object scale: its own description and leave-one-out band
-        scale_txt, bt = sc.detail, OS.band_text([r["area"] for r in meas_rows])
-        band_note = f" Measured areas are estimates from an OBJECT scale: {bt}." if meas_rows else ""
+        scale_txt, bt = sc.detail, OS.band_text([r["area"] for r in meas_rows], sc)
+        band_note = f" Measured areas are approximations from a door or object scale: {bt}." if meas_rows else ""
+    approx = OS.is_object(sc) and bool(meas_rows)      # the approximation: an area rests on a door / object scale
+    approx_txt = OS.approx_text(sum(r["area"] for r in rows), [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want) if approx else ""
     uncertain = [{"room": r["label"], "area_m2": round(r["area"], 2), "why": "measured, not printed"} for r in meas_rows]
 
     if want_walls:
@@ -962,6 +994,10 @@ def takeoff_answer(ctx, q, img):
                  f"(not detectable here), so the wall area is gross and an upper bound. "
                  f"The room perimeters are typically off by about {PERIM_BAND['median']:.0%} (8 in 10 within {PERIM_BAND['p80']:.0%}; "
                  f"region against the annotated room outlines of {PERIM_BAND['n']} dev and test rooms), before the height assumption. ") + basis_txt + " " + scale_txt + "." + band_note
+        if approx:
+            approx_txt = OS.approx_text(total, [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want).replace(
+                "Typical error for", "Walls add the assumed height. Typical floor-area error for")
+            expl = approx_txt + " Details: " + expl
         est = "walls: perimeter x assumed height, openings not deducted" + ("; some rooms measured" if meas_rows else "")
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=0.45, items=items, explanation=expl)
         ans.tier, ans.tier_reason = "estimate", est + ("; " + bt if meas_rows else "") + ("; " + fb if fb else "")
@@ -976,8 +1012,16 @@ def takeoff_answer(ctx, q, img):
                     and abs(r["room"].measured - r["area"]) > 0.1 * r["area"]]
         conf = 0.5 if conflict else (0.55 if meas_rows else 0.8)
         expl += " " + basis_txt + " " + scale_txt + "." + band_note
+        if approx:
+            approx_txt = OS.approx_text(total, [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want,
+                                        net=sum(r["area"] for r in rows))
+            expl = approx_txt + " Details: " + expl
+            conf = 0.35
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=conf, items=items, explanation=expl)
-        if meas_rows:
+        if approx:
+            ans.tier, ans.tier_reason = "estimate", (f"approximation, never proven: {pa.no_scale_why()}; "
+                                                     f"{OS.scale_sentence(sc)} {bt}")
+        elif meas_rows:
             ans.tier, ans.tier_reason = "estimate", f"{len(meas_rows)} room(s) have no printed area: measured region x scale; {bt}"
         elif sc.known and not OS.is_object(sc) and len(sc.rooms) >= 2 and not conflict and not fb:
             # every value is printed on the plan, and 2+ printed rooms give the same pixel scale: an OCR misread would
@@ -987,14 +1031,26 @@ def takeoff_answer(ctx, q, img):
             estimate(ans, f"{len(conflict)} printed value(s) disagree with the measured room by more than 10%")
         if fb:
             estimate(ans, fb)
-        head = (f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows
+        head = (f"Answer [ESTIMATE, APPROXIMATION]: about {OS.about(total)} m2 ({total:.2f}{' incl. ' + format(tk['waste_pct'], 'g') + '% waste' if tk.get('waste_pct') else ''}) over {len(rows)} room(s), floor only, "
+                f"scale from {OS.scale_short(sc)}   route: {ROUTE}" if approx else
+                f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows
                 else takeoff.answer_line(total, len(rows), ROUTE, "rooms with a toilet, no WC room" if fb else ""))
     ans.uncertain = uncertain
+    if approx:
+        ans.approx = {"text": approx_txt, "source": getattr(sc, "source", "objects"), "why_no_scale": pa.no_scale_why(),
+                      "scale": OS.scale_sentence(sc), "short": OS.scale_short(sc), "px_per_m": round(1 / float(np.sqrt(sc.m2_per_px)), 1),
+                      "spread": round(sc.spread, 3), "band": OS.band_text([r["area"] for r in meas_rows], sc),
+                      "objects": [{"tag": c.get("tag"), "label": OS.obj_label(c), "xyxy": [round(v, 1) for v in c["xyxy"]]}
+                                  for c in sc.objects],
+                      "rooms": [{"label": r["label"], "area_m2": round(r["area"], 2),
+                                 "typical_error": OS.typical_error(r["area"], sc)} for r in meas_rows]}
 
     if ctx.evidence:
         cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
         fs = round(14 * cv.k)
         f = font(fs)
+        if OS.is_object(sc):
+            OS.draw(cv, sc, AMBER)          # scale objects first: room captions are drawn over them
         for i, row in enumerate(rows):
             r = row["room"]
             col = BLUE if row["kind"] == "printed" else AMBER
@@ -1014,7 +1070,8 @@ def takeoff_answer(ctx, q, img):
                 tb = cv.d.textbbox((x, y + fs), txt, font=f, anchor="mm")
                 cv.d.rectangle([tb[0] - 3, tb[1] - 2, tb[2] + 3, tb[3] + 2], fill=AMBER)
                 cv.d.text((x, y + fs), txt, fill=(28, 48, 65), font=f, anchor="mm")
-            record_steps(cv.img, i + 1, _room_steps(row, r, want))
+            record_steps(cv.img, i + 1, approx_steps(row, r, want, sc) if approx and row["kind"] == "measured"
+                         else _room_steps(row, r, want))
         used_ids = {id(row["room"]) for row in rows}
         for j in sc.rooms if sc.known else []:            # printed rooms that only set the scale: grey, dashed, no fill
             b = pa.rooms[j].area_box
@@ -1026,13 +1083,15 @@ def takeoff_answer(ctx, q, img):
         if want_walls:
             extra = f" Walls {totals['walls_m2']:.2f} m2 gross: perimeter x assumed {wallmod.DEFAULT_CEILING_M:.2f} m, openings not deducted."
         else:
-            extra = " Floor area only, no waste allowance."
+            extra = (f" Floor area plus {tk['waste_pct']:g}% waste." if tk.get("waste_pct") else " Floor area only, no waste allowance.")
         sc_note = f"Scale from printed rooms {', '.join(scale_names[:5])}" if sc.known else "No pixel scale"
         if OS.is_object(sc):
-            sc_note = f"OBJECT scale from {OS.summary(sc.objects)}, boxed amber"; OS.draw(cv, sc, AMBER)
+            sc_note = (f"APPROXIMATION: {pa.no_scale_why()}. {OS.scale_sentence(sc)[:-1]}; the scale objects are boxed "
+                       f"dashed amber with their size") if approx else f"Scale from {OS.summary(sc.objects)}, boxed dashed amber"
         if meas_rows:
             sc_note += f"; measured rooms amber, {bt}"
         interp = (takeoff.interpretation(tk, [(r["label"], r["area"]) for r in rows]) + " ") if fb else ""
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              head, note=f"{interp}{sc_note}. {lines}.{extra} Rooms in the answer blue, printed value boxed; rooms that only set the scale dashed grey.")
+                              head, note=f"{interp}{sc_note}. {lines}.{extra}" + (" Measured rooms amber, printed rooms blue; scale objects dashed amber."
+                              if approx else " Rooms in the answer blue, printed value boxed; rooms that only set the scale dashed grey."))
     return ans

@@ -50,7 +50,7 @@ PREVIEW_CACHE = APP_OUT / "preview"
 UPLOADS = Path(tempfile.gettempdir()) / "blueprint-evidence" / "uploads"
 UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff"}
 MAX_UPLOAD = 200 * 1024 * 1024
-CACHE_VERSION = "4"       # 4: wall-takeoff openings carry z0_m / z1_m for the order sheet
+CACHE_VERSION = "5"       # 5: approximations on scans without printed areas (approx field); 4: wall openings z0_m / z1_m
 
 for d in (EVIDENCE_DIR, RENDER_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
     d.mkdir(parents=True, exist_ok=True)
@@ -185,7 +185,8 @@ ROUTES = {
     "raster-cv": ("Scan, panel analysis", "Separate drawing panels found on the scan by image analysis."),
     "raster-cv-fixtures": ("Scan, outlines", "Closed outlines on the scan classified as fixtures."),
     "ifc-props": ("IFC properties", "Looked up in the IFC model's attributes and property sets; the answer lists the IDs of the elements it read."),
-    "raster-area": ("Scan, printed areas", "Room areas printed on the scan, read by a local OCR model and attached to their room labels."),
+    "raster-area": ("Scan, printed areas", "Room areas printed on the scan, read by a local OCR model and attached to their room labels. "
+                    "A room with no printed area is measured from its traced outline and a pixel scale."),
     "raster-prior": ("Baseline prior", "Most common answer for this question type. A baseline, not visual proof."),
     "parser": ("Question parser", "The question was not turned into a typed query."),
     "router": ("Router", "No route reads this file type."),
@@ -219,6 +220,10 @@ def scale_source(a: dict, query: dict, ext: str) -> str | None:
         return "DXF model units in metres; room outline area by the shoelace formula."
     if route == "ifc":
         return "IFC project units; NetFloorArea from quantity sets, else the space footprint."
+    if route == "raster-area" and a.get("approx"):
+        ap = a["approx"]
+        return (f"Approximation: {ap['why_no_scale']}. {ap['scale']} The scale objects are boxed dashed amber "
+                f"on the evidence, each with its size.")
     if route in ("pdf-vector", "pdf-generic"):
         m = re.search(r"; (scale .*)$", a.get("explanation") or "")
         return (m.group(1) if m else "Scale found on the sheet") + ". The text that set the scale is boxed blue on the evidence."
@@ -366,6 +371,7 @@ def ask(body: AskBody):
         "path": body.path, "drawing": display_name(rel.rsplit("/", 1)[-1]), "question": question, "query": qd,
         "value": a.get("value"), "unit": a.get("unit") or "", "route": a.get("route"),
         "confidence": a.get("confidence"), "abstain": a.get("abstain"), "explanation": a.get("explanation"),
+        "approx": a.get("approx"),
         "checks": a.get("checks") or [], "items": a.get("items") or [], "cost_usd": a.get("cost_usd") or 0.0,
         "evidence_id": ev_id, "evidence_geometry": geo, "tried": list(ctx.tried),
         "status": status, "status_rule": rule,

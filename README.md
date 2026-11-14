@@ -256,11 +256,15 @@ Raster scans (`bpqa/routes/raster_area.py`, route `raster-area`):
 - scale (m2 per pixel) only when 2+ rooms with a printed area and a usable region agree within 4% and
   form the majority; the doorway width (1.0 m) is tried at 10 pixel-per-metre hypotheses and a
   hypothesis counts only if the scale it produces agrees with it within 20%
-- object scale (`bpqa/scale_objects.py`, OFF by default, `STOA_OBJECT_SCALE=1`): with no printed-area scale,
-  door openings (0.84 m), WC pans (0.73 m) and bathtubs (1.7 m) from the detector give a scale when 4+ agree
-  (IQR at most 25%). Always an estimate naming the objects, the scale and its own band. Validation (printed areas
-  hidden): rooms of 6 m2 and over 12.5% median error, but only 3 of 53 takeoff answers within 2%, so it is
-  kept off (CHANGELOG)
+- **approximation** on scans that print no areas (`bpqa/scale_objects.py`, ON, `STOA_OBJECT_SCALE=0` turns it off).
+  With no printed-area scale, the scale comes from (b) door sizes printed on the drawing ("9x21", "09*21", or a
+  width alone, "010"), each matched to the detected door box it labels, set when 2+ agree within 8%; else (c)
+  standard objects from the detector, door openings assumed 0.84 m, WC pans 0.73 m, bathtubs 1.7 m, set when 4+
+  agree (IQR at most 25%). Windows are never used. The answer says so first: "About 28 m2 (approximation): this
+  drawing prints no room areas, and no scale was read from it. Scale from 5 door sizes printed on the drawing
+  ... (doors D1 to D5), 53 px per m, spread 4%. Typical error for rooms of these sizes: about 12%. Check before
+  ordering." Always tier estimate, never proven; the scale objects are boxed dashed amber with their size on the
+  evidence, and the Steps card shows room found, scale (every object as one layer) and room outline
 - a takeoff answers a room with a printed area with that printed value (tier proven when every asked room
   is printed). A room without one is answered with its measured area (region x scale) as tier
   **estimate**, only when the scale is established; the answer names the printed rooms, the measured rooms
@@ -1043,9 +1047,17 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
   assumptions, so those wall answers are estimates. The whole room outline is taken as wall, so a room open
   to another (a gallery, a kitchen open to the living room) is over-counted; sloped ceilings are not modelled.
   A room type the classifier does not know (or a generic "Zimmer") is left out and listed.
-- CubiCasa takeoffs need printed areas. Measured room regions are an estimate only (median error 9%
-  on dev); furniture drawn against walls, open doorways without swing arcs and stairs are the main
-  causes. Printed areas are read from the upright OCR pass only.
+- CubiCasa takeoffs are reliable only from printed areas. Measured room regions are an estimate only (median
+  error 9% on dev with a printed-area scale); furniture drawn against walls, open doorways without swing arcs and
+  stairs are the main causes. Printed areas are read from the upright OCR pass only.
+- **The approximation** (scans that print no areas) is a rough number, not a quantity to order from. Measured on
+  dev CubiCasa plans that print areas, with the areas hidden (leave-one-out, never the test split): the door-size
+  scale is within 3 to 4% of the printed-area scale (median), the object scale within about 4 to 5%, but a room's
+  area is off by a median of about 12% for rooms of 6 m2 and over, about 19% for 3 to 6 m2, and rooms under 3 m2
+  are not answered (about 40%, nearly always too small). The traced room outline, not the scale, is most of that
+  error, so printed door sizes barely improve the room numbers. Open kitchens merge with the living room (the
+  answer warns). A scale is set on about 80% of dev scans (door sizes alone on 14%); plans that are thumbnails
+  (colorful-11960, 240 x 161 px) or whose labels cannot be read abstain. See CHANGELOG "area approximation".
 - Unnamed numbered rooms in Swiss floors are ambiguous (wet rooms, shafts, balconies). The fixture rule
   is right more often than not, and is where most remaining Swiss area errors are.
 
