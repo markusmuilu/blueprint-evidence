@@ -21,6 +21,9 @@ class Answer:
     tier: str | None = None
     tier_reason: str = ""
     uncertain: list = field(default_factory=list)
+    # the condition a scan route met, used to look up its measured precision (bpqa/calibration.py), e.g.
+    # "clear" for a detector count whose views all agree with no box near the threshold; "" for none
+    tier_cell: str = ""
 
     @property
     def answered(self) -> bool:

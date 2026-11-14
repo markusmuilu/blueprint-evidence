@@ -1,0 +1,1094 @@
+{
+ "_about": "Proven precision of scan routes on dev drawings (tools/calibrate_tiers.py). A cell keeps the proven tier only at >= 98% precision over >= 100 drawings.",
+ "_sources": [
+  "dev_v2.jsonl",
+  "full set, dev split: the 657 CubiCasa drawings with cached detector and OCR results, calibration off, checks on"
+ ],
+ "_drawings": 657,
+ "cells": {
+  "raster-cv|storey": {
+   "n": 643,
+   "correct": 591,
+   "precision": 0.9191,
+   "wilson_low": 0.8955,
+   "proven": false,
+   "counts": {
+    "1": {
+     "n": 556,
+     "correct": 517,
+     "precision": 0.9299,
+     "wilson_low": 0.9055,
+     "proven": false
+    },
+    "2": {
+     "n": 77,
+     "correct": 65,
+     "precision": 0.8442,
+     "wilson_low": 0.7471,
+     "proven": false
+    },
+    "3": {
+     "n": 10,
+     "correct": 9,
+     "precision": 0.9,
+     "wilson_low": 0.5958,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|door": {
+   "n": 302,
+   "correct": 225,
+   "precision": 0.745,
+   "wilson_low": 0.693,
+   "proven": false,
+   "counts": {
+    "2": {
+     "n": 4,
+     "correct": 4,
+     "precision": 1.0,
+     "wilson_low": 0.5101,
+     "proven": false
+    },
+    "3": {
+     "n": 16,
+     "correct": 15,
+     "precision": 0.9375,
+     "wilson_low": 0.7167,
+     "proven": false
+    },
+    "4": {
+     "n": 25,
+     "correct": 16,
+     "precision": 0.64,
+     "wilson_low": 0.4452,
+     "proven": false
+    },
+    "5": {
+     "n": 28,
+     "correct": 24,
+     "precision": 0.8571,
+     "wilson_low": 0.6851,
+     "proven": false
+    },
+    "6": {
+     "n": 41,
+     "correct": 34,
+     "precision": 0.8293,
+     "wilson_low": 0.6874,
+     "proven": false
+    },
+    "7": {
+     "n": 35,
+     "correct": 25,
+     "precision": 0.7143,
+     "wilson_low": 0.5494,
+     "proven": false
+    },
+    "8": {
+     "n": 27,
+     "correct": 19,
+     "precision": 0.7037,
+     "wilson_low": 0.5152,
+     "proven": false
+    },
+    "9": {
+     "n": 26,
+     "correct": 19,
+     "precision": 0.7308,
+     "wilson_low": 0.5392,
+     "proven": false
+    },
+    "10": {
+     "n": 21,
+     "correct": 14,
+     "precision": 0.6667,
+     "wilson_low": 0.4537,
+     "proven": false
+    },
+    "11": {
+     "n": 14,
+     "correct": 11,
+     "precision": 0.7857,
+     "wilson_low": 0.5241,
+     "proven": false
+    },
+    "12": {
+     "n": 23,
+     "correct": 17,
+     "precision": 0.7391,
+     "wilson_low": 0.5353,
+     "proven": false
+    },
+    "13": {
+     "n": 18,
+     "correct": 10,
+     "precision": 0.5556,
+     "wilson_low": 0.3372,
+     "proven": false
+    },
+    "14": {
+     "n": 10,
+     "correct": 9,
+     "precision": 0.9,
+     "wilson_low": 0.5958,
+     "proven": false
+    },
+    "15": {
+     "n": 3,
+     "correct": 2,
+     "precision": 0.6667,
+     "wilson_low": 0.2077,
+     "proven": false
+    },
+    "16": {
+     "n": 2,
+     "correct": 1,
+     "precision": 0.5,
+     "wilson_low": 0.0945,
+     "proven": false
+    },
+    "17": {
+     "n": 3,
+     "correct": 2,
+     "precision": 0.6667,
+     "wilson_low": 0.2077,
+     "proven": false
+    },
+    "18": {
+     "n": 3,
+     "correct": 1,
+     "precision": 0.3333,
+     "wilson_low": 0.0615,
+     "proven": false
+    },
+    "19": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    },
+    "22": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    },
+    "23": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|door|clear": {
+   "n": 89,
+   "correct": 81,
+   "precision": 0.9101,
+   "wilson_low": 0.8325,
+   "proven": false,
+   "counts": {
+    "2": {
+     "n": 3,
+     "correct": 3,
+     "precision": 1.0,
+     "wilson_low": 0.4385,
+     "proven": false
+    },
+    "3": {
+     "n": 6,
+     "correct": 6,
+     "precision": 1.0,
+     "wilson_low": 0.6097,
+     "proven": false
+    },
+    "4": {
+     "n": 9,
+     "correct": 8,
+     "precision": 0.8889,
+     "wilson_low": 0.565,
+     "proven": false
+    },
+    "5": {
+     "n": 10,
+     "correct": 9,
+     "precision": 0.9,
+     "wilson_low": 0.5958,
+     "proven": false
+    },
+    "6": {
+     "n": 18,
+     "correct": 17,
+     "precision": 0.9444,
+     "wilson_low": 0.7424,
+     "proven": false
+    },
+    "7": {
+     "n": 10,
+     "correct": 10,
+     "precision": 1.0,
+     "wilson_low": 0.7225,
+     "proven": false
+    },
+    "8": {
+     "n": 7,
+     "correct": 7,
+     "precision": 1.0,
+     "wilson_low": 0.6457,
+     "proven": false
+    },
+    "9": {
+     "n": 8,
+     "correct": 7,
+     "precision": 0.875,
+     "wilson_low": 0.5291,
+     "proven": false
+    },
+    "10": {
+     "n": 7,
+     "correct": 4,
+     "precision": 0.5714,
+     "wilson_low": 0.2505,
+     "proven": false
+    },
+    "11": {
+     "n": 4,
+     "correct": 4,
+     "precision": 1.0,
+     "wilson_low": 0.5101,
+     "proven": false
+    },
+    "12": {
+     "n": 4,
+     "correct": 3,
+     "precision": 0.75,
+     "wilson_low": 0.3006,
+     "proven": false
+    },
+    "13": {
+     "n": 2,
+     "correct": 2,
+     "precision": 1.0,
+     "wilson_low": 0.3424,
+     "proven": false
+    },
+    "14": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|shower_or_bath": {
+   "n": 518,
+   "correct": 425,
+   "precision": 0.8205,
+   "wilson_low": 0.7851,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 42,
+     "correct": 16,
+     "precision": 0.381,
+     "wilson_low": 0.25,
+     "proven": false
+    },
+    "1": {
+     "n": 350,
+     "correct": 339,
+     "precision": 0.9686,
+     "wilson_low": 0.9446,
+     "proven": false
+    },
+    "2": {
+     "n": 95,
+     "correct": 53,
+     "precision": 0.5579,
+     "wilson_low": 0.4577,
+     "proven": false
+    },
+    "3": {
+     "n": 21,
+     "correct": 13,
+     "precision": 0.619,
+     "wilson_low": 0.4088,
+     "proven": false
+    },
+    "4": {
+     "n": 7,
+     "correct": 3,
+     "precision": 0.4286,
+     "wilson_low": 0.1582,
+     "proven": false
+    },
+    "5": {
+     "n": 3,
+     "correct": 1,
+     "precision": 0.3333,
+     "wilson_low": 0.0615,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|shower_or_bath|clear": {
+   "n": 201,
+   "correct": 186,
+   "precision": 0.9254,
+   "wilson_low": 0.8805,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 17,
+     "correct": 12,
+     "precision": 0.7059,
+     "wilson_low": 0.4687,
+     "proven": false
+    },
+    "1": {
+     "n": 158,
+     "correct": 156,
+     "precision": 0.9873,
+     "wilson_low": 0.955,
+     "proven": true
+    },
+    "2": {
+     "n": 25,
+     "correct": 18,
+     "precision": 0.72,
+     "wilson_low": 0.5242,
+     "proven": false
+    },
+    "3": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|sink": {
+   "n": 562,
+   "correct": 467,
+   "precision": 0.831,
+   "wilson_low": 0.7978,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 5,
+     "correct": 3,
+     "precision": 0.6,
+     "wilson_low": 0.2307,
+     "proven": false
+    },
+    "1": {
+     "n": 21,
+     "correct": 10,
+     "precision": 0.4762,
+     "wilson_low": 0.2834,
+     "proven": false
+    },
+    "2": {
+     "n": 291,
+     "correct": 267,
+     "precision": 0.9175,
+     "wilson_low": 0.8802,
+     "proven": false
+    },
+    "3": {
+     "n": 157,
+     "correct": 127,
+     "precision": 0.8089,
+     "wilson_low": 0.7403,
+     "proven": false
+    },
+    "4": {
+     "n": 61,
+     "correct": 46,
+     "precision": 0.7541,
+     "wilson_low": 0.6332,
+     "proven": false
+    },
+    "5": {
+     "n": 18,
+     "correct": 8,
+     "precision": 0.4444,
+     "wilson_low": 0.2456,
+     "proven": false
+    },
+    "6": {
+     "n": 6,
+     "correct": 5,
+     "precision": 0.8333,
+     "wilson_low": 0.4365,
+     "proven": false
+    },
+    "7": {
+     "n": 2,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    },
+    "8": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|sink|clear": {
+   "n": 360,
+   "correct": 336,
+   "precision": 0.9333,
+   "wilson_low": 0.9027,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 4,
+     "correct": 3,
+     "precision": 0.75,
+     "wilson_low": 0.3006,
+     "proven": false
+    },
+    "1": {
+     "n": 11,
+     "correct": 8,
+     "precision": 0.7273,
+     "wilson_low": 0.4343,
+     "proven": false
+    },
+    "2": {
+     "n": 204,
+     "correct": 200,
+     "precision": 0.9804,
+     "wilson_low": 0.9507,
+     "proven": true
+    },
+    "3": {
+     "n": 95,
+     "correct": 86,
+     "precision": 0.9053,
+     "wilson_low": 0.8297,
+     "proven": false
+    },
+    "4": {
+     "n": 35,
+     "correct": 32,
+     "precision": 0.9143,
+     "wilson_low": 0.7762,
+     "proven": false
+    },
+    "5": {
+     "n": 7,
+     "correct": 4,
+     "precision": 0.5714,
+     "wilson_low": 0.2505,
+     "proven": false
+    },
+    "6": {
+     "n": 4,
+     "correct": 3,
+     "precision": 0.75,
+     "wilson_low": 0.3006,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|toilet": {
+   "n": 605,
+   "correct": 546,
+   "precision": 0.9025,
+   "wilson_low": 0.8762,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 25,
+     "correct": 13,
+     "precision": 0.52,
+     "wilson_low": 0.335,
+     "proven": false
+    },
+    "1": {
+     "n": 368,
+     "correct": 353,
+     "precision": 0.9592,
+     "wilson_low": 0.9338,
+     "proven": false
+    },
+    "2": {
+     "n": 182,
+     "correct": 157,
+     "precision": 0.8626,
+     "wilson_low": 0.8051,
+     "proven": false
+    },
+    "3": {
+     "n": 24,
+     "correct": 18,
+     "precision": 0.75,
+     "wilson_low": 0.551,
+     "proven": false
+    },
+    "4": {
+     "n": 5,
+     "correct": 4,
+     "precision": 0.8,
+     "wilson_low": 0.3755,
+     "proven": false
+    },
+    "5": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|toilet|clear": {
+   "n": 486,
+   "correct": 459,
+   "precision": 0.9444,
+   "wilson_low": 0.9204,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 18,
+     "correct": 13,
+     "precision": 0.7222,
+     "wilson_low": 0.4913,
+     "proven": false
+    },
+    "1": {
+     "n": 314,
+     "correct": 308,
+     "precision": 0.9809,
+     "wilson_low": 0.9589,
+     "proven": true
+    },
+    "2": {
+     "n": 135,
+     "correct": 123,
+     "precision": 0.9111,
+     "wilson_low": 0.8511,
+     "proven": false
+    },
+    "3": {
+     "n": 14,
+     "correct": 11,
+     "precision": 0.7857,
+     "wilson_low": 0.5241,
+     "proven": false
+    },
+    "4": {
+     "n": 5,
+     "correct": 4,
+     "precision": 0.8,
+     "wilson_low": 0.3755,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|window": {
+   "n": 269,
+   "correct": 209,
+   "precision": 0.777,
+   "wilson_low": 0.7235,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 2,
+     "correct": 2,
+     "precision": 1.0,
+     "wilson_low": 0.3424,
+     "proven": false
+    },
+    "1": {
+     "n": 9,
+     "correct": 7,
+     "precision": 0.7778,
+     "wilson_low": 0.4526,
+     "proven": false
+    },
+    "2": {
+     "n": 43,
+     "correct": 34,
+     "precision": 0.7907,
+     "wilson_low": 0.6479,
+     "proven": false
+    },
+    "3": {
+     "n": 47,
+     "correct": 36,
+     "precision": 0.766,
+     "wilson_low": 0.6278,
+     "proven": false
+    },
+    "4": {
+     "n": 56,
+     "correct": 43,
+     "precision": 0.7679,
+     "wilson_low": 0.6423,
+     "proven": false
+    },
+    "5": {
+     "n": 21,
+     "correct": 18,
+     "precision": 0.8571,
+     "wilson_low": 0.6536,
+     "proven": false
+    },
+    "6": {
+     "n": 22,
+     "correct": 17,
+     "precision": 0.7727,
+     "wilson_low": 0.5656,
+     "proven": false
+    },
+    "7": {
+     "n": 16,
+     "correct": 12,
+     "precision": 0.75,
+     "wilson_low": 0.505,
+     "proven": false
+    },
+    "8": {
+     "n": 8,
+     "correct": 5,
+     "precision": 0.625,
+     "wilson_low": 0.3057,
+     "proven": false
+    },
+    "9": {
+     "n": 10,
+     "correct": 10,
+     "precision": 1.0,
+     "wilson_low": 0.7225,
+     "proven": false
+    },
+    "10": {
+     "n": 7,
+     "correct": 6,
+     "precision": 0.8571,
+     "wilson_low": 0.4869,
+     "proven": false
+    },
+    "11": {
+     "n": 6,
+     "correct": 4,
+     "precision": 0.6667,
+     "wilson_low": 0.3,
+     "proven": false
+    },
+    "12": {
+     "n": 3,
+     "correct": 2,
+     "precision": 0.6667,
+     "wilson_low": 0.2077,
+     "proven": false
+    },
+    "13": {
+     "n": 2,
+     "correct": 1,
+     "precision": 0.5,
+     "wilson_low": 0.0945,
+     "proven": false
+    },
+    "14": {
+     "n": 3,
+     "correct": 2,
+     "precision": 0.6667,
+     "wilson_low": 0.2077,
+     "proven": false
+    },
+    "15": {
+     "n": 2,
+     "correct": 2,
+     "precision": 1.0,
+     "wilson_low": 0.3424,
+     "proven": false
+    },
+    "16": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    },
+    "17": {
+     "n": 3,
+     "correct": 3,
+     "precision": 1.0,
+     "wilson_low": 0.4385,
+     "proven": false
+    },
+    "18": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    },
+    "19": {
+     "n": 2,
+     "correct": 2,
+     "precision": 1.0,
+     "wilson_low": 0.3424,
+     "proven": false
+    },
+    "22": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    },
+    "26": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    },
+    "29": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    },
+    "32": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    },
+    "42": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    }
+   }
+  },
+  "raster-detector|window|clear": {
+   "n": 145,
+   "correct": 114,
+   "precision": 0.7862,
+   "wilson_low": 0.7125,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 2,
+     "correct": 2,
+     "precision": 1.0,
+     "wilson_low": 0.3424,
+     "proven": false
+    },
+    "1": {
+     "n": 6,
+     "correct": 4,
+     "precision": 0.6667,
+     "wilson_low": 0.3,
+     "proven": false
+    },
+    "2": {
+     "n": 25,
+     "correct": 20,
+     "precision": 0.8,
+     "wilson_low": 0.6087,
+     "proven": false
+    },
+    "3": {
+     "n": 21,
+     "correct": 15,
+     "precision": 0.7143,
+     "wilson_low": 0.5004,
+     "proven": false
+    },
+    "4": {
+     "n": 41,
+     "correct": 35,
+     "precision": 0.8537,
+     "wilson_low": 0.7156,
+     "proven": false
+    },
+    "5": {
+     "n": 8,
+     "correct": 8,
+     "precision": 1.0,
+     "wilson_low": 0.6756,
+     "proven": false
+    },
+    "6": {
+     "n": 9,
+     "correct": 7,
+     "precision": 0.7778,
+     "wilson_low": 0.4526,
+     "proven": false
+    },
+    "7": {
+     "n": 7,
+     "correct": 4,
+     "precision": 0.5714,
+     "wilson_low": 0.2505,
+     "proven": false
+    },
+    "8": {
+     "n": 3,
+     "correct": 2,
+     "precision": 0.6667,
+     "wilson_low": 0.2077,
+     "proven": false
+    },
+    "9": {
+     "n": 4,
+     "correct": 4,
+     "precision": 1.0,
+     "wilson_low": 0.5101,
+     "proven": false
+    },
+    "10": {
+     "n": 4,
+     "correct": 4,
+     "precision": 1.0,
+     "wilson_low": 0.5101,
+     "proven": false
+    },
+    "11": {
+     "n": 3,
+     "correct": 1,
+     "precision": 0.3333,
+     "wilson_low": 0.0615,
+     "proven": false
+    },
+    "12": {
+     "n": 2,
+     "correct": 1,
+     "precision": 0.5,
+     "wilson_low": 0.0945,
+     "proven": false
+    },
+    "13": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    },
+    "14": {
+     "n": 2,
+     "correct": 1,
+     "precision": 0.5,
+     "wilson_low": 0.0945,
+     "proven": false
+    },
+    "15": {
+     "n": 2,
+     "correct": 2,
+     "precision": 1.0,
+     "wilson_low": 0.3424,
+     "proven": false
+    },
+    "16": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    },
+    "17": {
+     "n": 2,
+     "correct": 2,
+     "precision": 1.0,
+     "wilson_low": 0.3424,
+     "proven": false
+    },
+    "19": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    },
+    "42": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    }
+   }
+  },
+  "raster-ocr-labels|balcony": {
+   "n": 159,
+   "correct": 145,
+   "precision": 0.9119,
+   "wilson_low": 0.8576,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 86,
+     "correct": 75,
+     "precision": 0.8721,
+     "wilson_low": 0.7853,
+     "proven": false
+    },
+    "1": {
+     "n": 73,
+     "correct": 70,
+     "precision": 0.9589,
+     "wilson_low": 0.886,
+     "proven": false
+    }
+   }
+  },
+  "raster-ocr-labels|bathroom": {
+   "n": 189,
+   "correct": 185,
+   "precision": 0.9788,
+   "wilson_low": 0.9469,
+   "proven": false,
+   "counts": {
+    "1": {
+     "n": 189,
+     "correct": 185,
+     "precision": 0.9788,
+     "wilson_low": 0.9469,
+     "proven": false
+    }
+   }
+  },
+  "raster-ocr-labels|bedroom": {
+   "n": 277,
+   "correct": 241,
+   "precision": 0.87,
+   "wilson_low": 0.8253,
+   "proven": false,
+   "counts": {
+    "1": {
+     "n": 118,
+     "correct": 101,
+     "precision": 0.8559,
+     "wilson_low": 0.7814,
+     "proven": false
+    },
+    "2": {
+     "n": 88,
+     "correct": 76,
+     "precision": 0.8636,
+     "wilson_low": 0.7766,
+     "proven": false
+    },
+    "3": {
+     "n": 57,
+     "correct": 52,
+     "precision": 0.9123,
+     "wilson_low": 0.8105,
+     "proven": false
+    },
+    "4": {
+     "n": 12,
+     "correct": 11,
+     "precision": 0.9167,
+     "wilson_low": 0.6461,
+     "proven": false
+    },
+    "5": {
+     "n": 1,
+     "correct": 1,
+     "precision": 1.0,
+     "wilson_low": 0.2065,
+     "proven": false
+    },
+    "6": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    }
+   }
+  },
+  "raster-ocr-labels|kitchen": {
+   "n": 273,
+   "correct": 266,
+   "precision": 0.9744,
+   "wilson_low": 0.948,
+   "proven": false,
+   "counts": {
+    "1": {
+     "n": 273,
+     "correct": 266,
+     "precision": 0.9744,
+     "wilson_low": 0.948,
+     "proven": false
+    }
+   }
+  },
+  "raster-ocr-labels|sauna": {
+   "n": 117,
+   "correct": 98,
+   "precision": 0.8376,
+   "wilson_low": 0.7602,
+   "proven": false,
+   "counts": {
+    "1": {
+     "n": 117,
+     "correct": 98,
+     "precision": 0.8376,
+     "wilson_low": 0.7602,
+     "proven": false
+    }
+   }
+  },
+  "raster-ocr-labels|wc_room": {
+   "n": 278,
+   "correct": 244,
+   "precision": 0.8777,
+   "wilson_low": 0.834,
+   "proven": false,
+   "counts": {
+    "0": {
+     "n": 173,
+     "correct": 147,
+     "precision": 0.8497,
+     "wilson_low": 0.7889,
+     "proven": false
+    },
+    "1": {
+     "n": 92,
+     "correct": 87,
+     "precision": 0.9457,
+     "wilson_low": 0.879,
+     "proven": false
+    },
+    "2": {
+     "n": 12,
+     "correct": 10,
+     "precision": 0.8333,
+     "wilson_low": 0.552,
+     "proven": false
+    },
+    "3": {
+     "n": 1,
+     "correct": 0,
+     "precision": 0.0,
+     "wilson_low": 0.0,
+     "proven": false
+    }
+   }
+  }
+ }
+}

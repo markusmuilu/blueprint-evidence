@@ -269,3 +269,12 @@ def add_checks(path: str, checks, abstained: bool = False, value=None, estimate:
         answer_line = f"ABSTAINED: would answer {value}, a consistency check failed"
         note = (note + "; " if note else "") + "the boxes show what the route read; the failed check is below"
     return finish(img, Path(path), question, answer_line, note, checks=checks)
+
+
+def mark_estimate(path: str, value, reason: str, checks=None) -> str:
+    """Redraw an evidence image's header as an estimate with its reason (a tier lowered after rendering)."""
+    if path not in _STASH:
+        return path
+    img, question, answer_line, note = _STASH[path]
+    note = (note + ". " if note else "") + f"Estimate because: {reason}"
+    return finish(img, Path(path), question, f"Answer: {value}   ESTIMATE", note, checks=checks)

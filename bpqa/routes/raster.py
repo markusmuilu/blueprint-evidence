@@ -25,6 +25,7 @@ import numpy as np
 from PIL import Image
 
 from ..answer import Answer, abstain, estimate
+from .. import calibration
 from ..evidence import AMBER, BLUE, GREY, PALETTE, ImageCanvas, evidence_path, finish
 from .labels import ROOM_PATTERNS, dedupe, find_rooms, fuzzy_reads, is_word, label_reads, quad_box
 from .ocr import ocr_image
@@ -63,13 +64,16 @@ def answer(ctx, q) -> Answer:
         ans = Answer(value=value, unit="count", route=ROUTE, confidence=0.85 if value == 1 else 0.75, tier="proven",
                      items=[{"panel": i + 1, "xywh": b} for i, b in enumerate(boxes)],
                      explanation=f"{value} separate drawing panel(s) on the white canvas")
+        calibration.apply(ans, q.obj)
         if ctx.evidence:
             cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
             for i, (x, y, w, h) in enumerate(boxes):
                 cv.box((x, y, x + w, y + h), n=i + 1, color=PALETTE[i % len(PALETTE)], width=4)
             ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                                  f"Answer: {value}   route: {ROUTE} (cost $0)",
-                                  note="each numbered box is one separately scanned floor panel")
+                                  f"Answer: {value}" + ("   ESTIMATE" if ans.tier == "estimate" else "   proven")
+                                  + f"   route: {ROUTE} (cost $0)",
+                                  note="each numbered box is one separately scanned floor panel"
+                                       + (f". Estimate because: {ans.tier_reason}" if ans.tier == "estimate" else ""))
         return ans
 
     first = None
@@ -128,6 +132,7 @@ def room_labels(ctx, q, img) -> Answer:
         if misread:
             estimate(ans, f"the OCR misreads room labels on this plan ({', '.join(f'{t} as {w}' for t, w in misread[:4])}), "
                           f"so a zero is not proof of absence")
+    calibration.apply(ans, q.obj)
     if ans.tier == "estimate":
         ans.confidence = 0.3
         ans.uncertain = [{"label": h["text"], "xyxy": [round(v) for v in h["box"]]} for h in hits]
