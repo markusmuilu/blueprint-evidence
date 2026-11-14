@@ -268,17 +268,20 @@ def space_openings(M, sp, poly):
     return out
 
 
+WALL_TOL = 0.1   # m: a room edge within this distance of a wall or column footprint is a wall face
+
+
 def wall_faces(M, sp, poly):
     """The part of the room outline that runs along a wall or column (IfcWall, IfcColumn footprints within
-    0.1 m): tiles go on wall faces, not across an open side of the room. Returns (lines, length, how);
-    falls back to the whole outline when no walls are found along at least 30% of it."""
+    WALL_TOL). Reported as a note on the takeoff (a room open to another has edges without a wall); not
+    used as the wall length, see wall_rooms. Returns (lines, length, how)."""
     st = M.storey_of(sp)
     if not hasattr(M, "_wallunion"):
         M._wallunion = {}
     if st not in M._wallunion:
         gs = [M.footprint(e)[0] for cls in ("IfcWall", "IfcColumn") for e in M.m.by_type(cls) if M.storey_of(e) == st]
         gs = [g for g in gs if g is not None and not g.is_empty]
-        M._wallunion[st] = unary_union(gs).buffer(0.1) if gs else None
+        M._wallunion[st] = unary_union(gs).buffer(WALL_TOL) if gs else None
     U = M._wallunion[st]
     full = wallmod.ring_length(poly)
     if U is None:
@@ -299,10 +302,15 @@ def wall_rooms(M, used):
         poly = fp.simplify(0.005)
         h, hsrc = space_height(M, sp)
         mnet, _ = M.qto(sp, ["NetWallArea"])
-        lines, plen, how = wall_faces(M, sp, poly)
+        # the whole outline is the wall length. Counting only the edges along wall footprints (wall_faces)
+        # was tried and validated worse against the models' own GrossWallArea (46% vs 66% within 2%):
+        # space outlines often sit more than 0.1 m off the wall footprints. It is reported as a note.
+        _, along, _ = wall_faces(M, sp, poly)
+        full = wallmod.ring_length(poly)
+        note = "" if along >= 0.95 * full else f"; only {along:.2f} m of it runs along a wall within {WALL_TOL} m (open side or offset outline)"
         rooms.append({"label": space_display(sp), "number": sp.Name, "floor_area": area,
-                      "floor_src": f"IfcSpace {M.space_area(sp)[1]}", "poly": poly, "wall_lines": lines,
-                      "perimeter": plen, "perimeter_src": f"IfcSpace geometry: {how}", "outline_m": wallmod.ring_length(poly),
+                      "floor_src": f"IfcSpace {M.space_area(sp)[1]}", "poly": poly,
+                      "perimeter": full, "perimeter_src": f"IfcSpace geometry outline{note}",
                       "height": h, "height_src": hsrc, "openings": space_openings(M, sp, poly),
                       "model_net_wall": mnet * M._area_scale() if mnet is not None else None, "guid": sp.GlobalId})
     return rooms, ""

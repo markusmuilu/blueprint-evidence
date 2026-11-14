@@ -89,10 +89,10 @@ def main(argv=None):
                  "model_perimeter": mp, "perimeter_src": mps, "height": h, "height_src": hsrc,
                  "n_openings": len(ops), "dup_of": None}
             if h:
-                rw = W.room_walls({"perimeter": wper, "height": h, "height_src": hsrc, "openings": ops}, {})
+                rw = W.room_walls({"perimeter": per, "height": h, "height_src": hsrc, "openings": ops}, {})
                 r.update(gross=rw["gross"], net=rw["net"])
-                rw0 = W.room_walls({"perimeter": per, "height": h, "height_src": hsrc, "openings": ops}, {})
-                r.update(gross_full_outline=rw0["gross"], net_full_outline=rw0["net"])
+                rw0 = W.room_walls({"perimeter": wper, "height": h, "height_src": hsrc, "openings": ops}, {})
+                r.update(gross_along_walls=rw0["gross"], net_along_walls=rw0["net"])
             if mg is not None:
                 r["model_gross"] = mg * M._area_scale()
             if mn is not None:
@@ -120,8 +120,8 @@ def main(argv=None):
     report["excluded_models"] = sorted(bad)
     for name, a, b in (("perimeter (whole outline)", "perimeter", "model_perimeter"),
                        ("gross wall area", "gross", "model_gross"), ("net wall area", "net", "model_net"),
-                       ("gross wall area, whole outline", "gross_full_outline", "model_gross"),
-                       ("net wall area, whole outline", "net_full_outline", "model_net")):
+                       ("gross wall area, edges along walls only (rejected variant)", "gross_along_walls", "model_gross"),
+                       ("net wall area, edges along walls only (rejected variant)", "net_along_walls", "model_net")):
         errs = [rel(r[a], r[b]) for r in ok if r.get(a) is not None and r.get(b)]
         errs = [e for e in errs if e is not None]
         models = sorted({r["model"] for r in ok if r.get(a) is not None and r.get(b)})

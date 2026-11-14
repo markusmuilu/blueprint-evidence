@@ -4,9 +4,9 @@
 
 Inputs and where they come from (each one is stated in the answer, with its source):
 
-  perimeter     IFC: the part of the IfcSpace outline (geometry projected to the floor) that runs along a wall or
-                column, so an open side of a room is not tiled; DXF: the whole ROOM_OUTLINE polygon (stated).
-                Holes (columns, shafts inside the room) add their ring length.
+  perimeter     the room outline: IfcSpace geometry projected to the floor (IFC), ROOM_OUTLINE polygon (DXF).
+                Holes (columns, shafts inside the room) add their ring length. An open side of a room (no wall)
+                is counted too; the IFC answer notes how much of the outline runs along walls.
   height        IFC: the space's own height quantity (FinishCeilingHeight, ClearHeight, Height), else the
                 height of the space geometry, else the storey height; drawings: an ASSUMED ceiling height
                 (2.50 m unless the question gives one), never hidden.

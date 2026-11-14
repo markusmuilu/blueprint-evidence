@@ -1145,13 +1145,13 @@ def answer(ctx, q) -> Answer:
                            f"lookup by keyword rules; check that the lookup line answers what was asked")
     if ctx.evidence:
         try:
-            ans.evidence = render(ctx, M, L, text, cited)
+            ans.evidence = render(ctx, M, L, text, cited, estimate=ans.tier == "estimate")
         except Exception:
             ans.evidence = None
     return ans
 
 
-def render(ctx, M, L, text, cited):
+def render(ctx, M, L, text, cited, estimate=False):
     """Evidence: the answer table as text beside a plan of the storey holding most cited elements,
     with those elements highlighted (blue) and numbered in the order of the table where possible."""
     from PIL import Image, ImageDraw
@@ -1184,7 +1184,12 @@ def render(ctx, M, L, text, cited):
                     c = g.representative_point()
                     cv.text((c.x, c.y), space_display(e)[:24], size=11)
                 else:
-                    cv.box(g.bounds, n=i + 1 if len(hl) <= 60 else None, color=BLUE, pad=0.05)
+                    if e.is_a("IfcDoor") or e.is_a("IfcWindow") or not hasattr(g, "area") or g.area < 0.5:
+                        cv.box(g.bounds, n=i + 1 if len(hl) <= 60 else None, color=BLUE, pad=0.05)
+                    else:     # walls, slabs, beams: the element's own footprint, filled
+                        for p in getattr(g, "geoms", [g]):
+                            if hasattr(p, "exterior"):
+                                cv.poly(list(p.exterior.coords), fill=BLUE + (150,), outline=BLUE, width=1)
             d = ImageDraw.Draw(cv.img)
             d.text((10, 6), f"Storey {storey.Name}: {len(hl)} of {len(cited)} cited entities highlighted", fill=INK, font=font(14))
             plan_img = cv.img
@@ -1207,5 +1212,6 @@ def render(ctx, M, L, text, cited):
         img = panel
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     first = lines[0] if lines else ""
-    return finish(img, out, ctx.q.question, f"Answer: {first[:110]}   route: {ROUTE} (cost $0)",
+    tag = "ESTIMATE (lookup chosen by keyword rules)" if estimate else "proven"
+    return finish(img, out, ctx.q.question, f"Answer [{tag}]: {first[:90]}   route: {ROUTE} (cost $0)",
                   note=f"Lookup: {L.describe()}" + (f"; {L.storey_note}" if L.storey_note else ""))
