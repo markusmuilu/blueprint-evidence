@@ -1207,6 +1207,9 @@ def answer(ctx, q) -> Answer:
     path = ctx.model_ifc()
     if path is None:
         return abstain(ROUTE, "no IFC model for this drawing")
+    if q.extra.get("takeoff") is not None:
+        return abstain(ROUTE, "takeoff question (area to order for a room type): answered by the ifc takeoff route, "
+                              "not by a property lookup")
     M = load(str(path))
     question = ctx.q.question
     L = plan(M, question)

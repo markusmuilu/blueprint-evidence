@@ -443,6 +443,25 @@ def infer_space_types(M, spaces):
     return res
 
 
+def toilet_rooms_fallback(M, floor, tk):
+    """(spaces, takeoff, why) for "the toilets" on a model with no space named or typed as a WC: the
+    rooms that contain a toilet (takeoff.toilet_fallback). A space holding a WC pan counts as having a
+    toilet, a space holding only other sanitary fixtures as having none, a space with no fixture
+    attached as unknown; with no sanitary fixture on the floor at all the rule falls back to the
+    bathroom labels alone. why is the reason to abstain with when no room qualifies."""
+    fx = _space_fixtures(M, floor)
+    kinds = {sid: {fixture_kind(e) for e, _ in fl} for sid, fl in fx.items()}
+    def has_toilet(r):
+        k = kinds.get(r["sp"].id())
+        return None if not k else "wc" in k
+    wrapped = [{"name": space_type_label(sp), "sp": sp} for sp in floor]
+    used, _, tk2 = takeoff.toilet_fallback(wrapped, tk, has_toilet=has_toilet if any(kinds.values()) else None)
+    tr = tk2.get("toilet_rooms")
+    if not tr:
+        return [], tk, ""
+    return [r["sp"] for r in used], tk2, ("; ".join(filter(None, [tr["why"]])) if not used else "")
+
+
 def space_display(sp) -> str:
     n, ln = sp.Name or "", getattr(sp, "LongName", None) or ""
     return f"{ln} ({n})" if ln and n and ln != n else (ln or n)
@@ -484,6 +503,7 @@ def answer(ctx, q) -> Answer:
 
     used, value, note, unit = [], None, "", ""
     inferred, inf_note = {}, ""
+    tk_eff = q.extra.get("takeoff")       # the takeoff as interpreted (the toilets fallback may rewrite its types)
     if q.measure == "count":
         if q.obj not in CLASSES:
             return abstain(ROUTE, f"no IFC class for {q.obj}")
@@ -502,7 +522,7 @@ def answer(ctx, q) -> Answer:
             if storey is not None:
                 spaces = [s for s in spaces if M.storey_of(s) == storey]
             if q.variant == "type_sum":
-                tk = q.extra["takeoff"]
+                tk = tk_eff
                 want = set(tk["types"]) | ({"bathroom", "wc"} if "wet" in tk["types"] else set())
                 by_name = [sp for sp in spaces if takeoff.room_types(space_type_label(sp)) & set(tk["types"])]
                 spaces = by_name
@@ -514,6 +534,12 @@ def answer(ctx, q) -> Answer:
                               if sp.id() in inf and inf[sp.id()][0] & want]
                     if spaces:
                         inferred = {sp.id(): inf[sp.id()][1] for sp in spaces}
+                if not spaces and "wc" in tk["types"]:
+                    # "the toilets" with no separate WC room (by name or by fixtures): the rooms that contain a toilet
+                    floor = [sp for sp in M.entities("room") if storey is None or M.storey_of(sp) == storey]
+                    spaces, tk_eff, fb_why = toilet_rooms_fallback(M, floor, tk)
+                    if not spaces and fb_why:
+                        return abstain(ROUTE, fb_why)
                 if not spaces:
                     names = sorted({space_type_label(sp) for sp in M.entities("room")} - {""})
                     return abstain(ROUTE, f"no IfcSpace of type {', '.join(tk['types'])} "
@@ -570,7 +596,7 @@ def answer(ctx, q) -> Answer:
             st = M.storey_of(e)
             rows.append({"label": space_display(e), "area": v, "number": e.Name,
                          "source": f"IfcSpace {M.space_area(e)[1]}" + (f", storey {st.Name}" if st is not None else "")})
-        ans.value, ans.items, expl = takeoff.summary(rows, q.extra["takeoff"])
+        ans.value, ans.items, expl = takeoff.summary(rows, tk_eff)
         for it, (e, _) in zip(ans.items, used):
             it["guid"] = e.GlobalId
         ans.explanation = expl + f" Source: {path.name}, {note}" + (f"; {sheet_note}." if sheet_note else ".")
@@ -583,7 +609,9 @@ def answer(ctx, q) -> Answer:
                         + "; ".join(f"{space_display(sp)}: {inferred[sp.id()]}" for sp, _ in used[:8])
                         + (" ..." if len(used) > 8 else "") + ".")
             ans.explanation += inf_note
-        tk = q.extra["takeoff"]
+        tk = tk_eff
+        if tk.get("toilet_rooms") and not inferred:
+            ans.tier, ans.tier_reason = "estimate", takeoff.fallback_reason(tk)
         if wallmod.surfaces(tk)[1]:
             rooms, why = wall_rooms(M, used)
             if rooms is None:
