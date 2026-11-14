@@ -108,6 +108,12 @@ question themselves, and they missed:
 - Not reproduced: Tyneside "how many bathrooms" is 1 (estimate, adopted from the shower check), on AY's own branch too
   with today's caches; AY reported 2. The detector's two bathroom boxes now hold Bedroom labels (scores 0.77, 0.32), so
   the label filter drops both.
+- Shower check on CubiCasa dev (`eval.py --split dev --sources cubicasa5k --objects shower_or_bath`, main before this
+  branch against this branch): the first 469 questions in path order are identical (423 correct both times). The full
+  run was too slow on the shared machine to finish in the session.
+- Integration case list (70 questions from the branch reports over IFC, Swiss, scans, unseen plans and Stoa's sample)
+  and the 57 unseen questions: every reported value holds except those named above; the unseen set is 46 of 57 correct,
+  as on main.
 - Dataset parses (6,821 distinct questions, rules only): 2 changed, "Can you give me the list of all room types?" and
   "... list of each room available in house A?" now read as text questions (not understood before). Dev eval on
   swiss_dwellings and ifc_models (28,400 questions): every answer, tier and route identical before and after.
