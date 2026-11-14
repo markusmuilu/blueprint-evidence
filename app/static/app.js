@@ -355,7 +355,7 @@ drop.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.fi
 $("#fileInput").addEventListener("change", (e) => { if (e.target.files.length) upload(e.target.files); e.target.value = ""; });
 
 /* Files that share a stem (plan.pdf + plan.dxf) are twins of one drawing and go in one request; every other
-   file is its own drawing. One request per drawing keeps each under the 30 MB request limit. */
+   file is its own drawing. One request per drawing keeps each under the 200 MB request limit. */
 const UPLOAD_TYPES = "PDF, DXF, IFC, PNG, JPEG, TIFF or SVG";
 const UPLOADS_KEY = "bpe-uploads", UPLOAD_KEEP_MS = 24 * 60 * 60 * 1000 - 60 * 1000;   // the server deletes an upload after 24 hours
 const stemOf = (n) => { const i = n.lastIndexOf("."); return (i > 0 ? n.slice(0, i) : n).toLowerCase(); };
