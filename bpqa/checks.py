@@ -206,6 +206,30 @@ def check_fixture_bounds(F, obj, v):
     return out
 
 
+def detected_count(file, obj):
+    """The raster-detector's count for obj on this image (its tuned policy), or None without a model."""
+    from .routes import detector
+    c = detector.config(obj)
+    if not c:
+        return None
+    model = detector.REPO / "models" / c["model"]
+    views = detector.detect_views(Path(file), model=model, imgsz=c["imgsz"], tile=c["tile"], tta=c["tta"])
+    if views is None:
+        return None
+    return detector.count_views(views, detector.combine(views), obj, c)[0]
+
+
+def check_bathroom_from_showers(F, obj, v, file=None):
+    """A shower or bathtub the detector finds stands in a bathroom: a zero bathroom count conflicts with it."""
+    if obj != "bathroom" or v >= 1 or file is None:
+        return None
+    n = detected_count(file, "shower_or_bath")
+    if not n:
+        return None
+    return Check("bathroom>=1-if-shower", "fail",
+                 f"the detector counts {n} shower(s) or bathtub(s), each in a bathroom; answer {v}", "abstain", 1)
+
+
 CHECKS = [check_numbered, check_summary_bedrooms, check_summary_kitchen, check_summary_sauna,
           check_utility_kitchen, check_floor_names, check_stairs, check_fixture_bounds]
 
@@ -220,6 +244,9 @@ def run(file: Path, obj: str, value) -> list[Check]:
     for fn in CHECKS:
         r = fn(F, obj, v)
         out += r if isinstance(r, list) else ([r] if r else [])
+    r = check_bathroom_from_showers(F, obj, v, file)
+    if r:
+        out.append(r)
     return out
 
 
@@ -228,7 +255,7 @@ LOWER_FACTOR = 0.5
 # an estimate either way). Chosen on the dev split (answers.jsonl of a dev run, see CHANGELOG): only where the
 # implied value was right more often than the route's own count on dev answers that failed the check.
 ADOPT = {"numbered-labels", "summary-kitchen", "summary-sauna", "utility-kitchen", "floor-names", "stairs-label",
-         "showers>=bathrooms"}
+         "showers>=bathrooms", "bathroom>=1-if-shower"}
 TIERS = True     # False: the pre-tier behaviour (a failed "abstain" check withdraws the answer)
 
 
