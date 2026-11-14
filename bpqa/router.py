@@ -28,6 +28,7 @@ from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
 from . import phrasing
+from . import piping
 from . import second_opinion
 from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_plan, sheet_scale
 
@@ -108,6 +109,8 @@ def text_routes(ctx: Context):
     the IFC model (ifc-props) and over PDF schedules (pdf-text). Every value comes from the file."""
     routes = []
     twins = not ctx.pdf_only or ctx.q.ext != "pdf"
+    if piping.parse_piping(ctx.q.question) is not None:
+        routes.append(piping.text_answer)     # numeric piping questions (bpqa/piping.py): length, by system / diameter, fittings
     if ctx.q.ext == "pdf":
         routes.append(pdf_text.answer)
     if twins and ctx.model_ifc() is not None:

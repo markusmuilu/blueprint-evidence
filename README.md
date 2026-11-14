@@ -337,6 +337,20 @@ Tiers: narrow lookups (one element, one room, an extreme, the storey list, fire 
 "every value is read from the file, but the lookup was chosen by keyword rules". Evidence: the answer table
 beside a plan of the storey holding most cited elements, walls and slabs filled, doors and windows boxed.
 
+### Evaluation question types: baseboards, slabs, piping
+
+| question | how it is answered | tier |
+|---|---|---|
+| baseboard / skirting length ("linear metres of baseboard for the bedrooms") | room perimeter minus door widths, per room (`bpqa/baseboard.py`, on the wall takeoff): IfcSpace outline and IfcDoor widths, Swiss ROOM_OUTLINE and DOOR leaves, a scan's measured room region (doors not detectable there). Windows are not deducted, balconies are left out of "all rooms", waste only if the question states it | proven on IFC / DXF with perimeters read, estimate on scans |
+| slab area by type and thickness (`bpqa/slabs.py`) | per IfcSlab: NetArea or GrossArea from its quantity set; thickness from a quantity, property or layer set; grouped by type and millimetre. Without a quantity the footprint or z extent is computed from the geometry | proven when read, estimate when computed (and says so) |
+| rebar / bars in slabs | "cannot prove": no model in the dataset has IfcReinforcingBar / Mesh; the answer says what the model does know (slab count, area, thickness) | abstains |
+| pipe length, by system or diameter; pipe segments; pipe fittings and valves (`bpqa/piping.py`, IFC) | pipes are IfcPipeSegment, or in IFC2x3 an IfcFlowSegment whose type names a pipe (not duct or cable); length from a length quantity or the Pset `Length`, summed in the model unit; checked against the segments' geometry on a sample (5% rule); system from IfcSystem or the Revit type name; diameter from a nominal-diameter property or Size. Fittings: IfcPipeFitting, or IfcFlowFitting connected through ports to a pipe. Evidence: GUIDs of every segment in the items list, the plan of the storey with most of them highlighted | proven when read from quantities; estimate when a segment has no length and it is computed from the geometry (stated) |
+| piping on a PDF or scan | "cannot prove": no pipe objects to read, and pipes drawn on a plan are not measured | abstains |
+
+Checked by hand against the IFC: duplex plumbing 151442.44 mm of Dimensions.Length over 231 pipe segments = 151.44 m and 227 port-connected
+fittings; fzk-haus slab NetArea 120 + 99.836 + 82.561 + 82.561 = 384.96 m2 and perimeters 144.52 m less 8.33 m of doors = 136.19 m of baseboard.
+The clinic plumbing model (56 MB, 2893 segments) takes about five minutes per question; the duplex model about 15 s.
+
 Nemotron (only when no rule lookup matches and the fallback is on) is asked to choose one lookup from a
 closed schema built from the model's class and storey names; it never supplies a value, and its answers are
 estimates. On the first 60 full-set dev questions the rules leave unmapped it chose a runnable lookup for 24,

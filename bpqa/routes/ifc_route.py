@@ -27,6 +27,7 @@ from shapely.ops import unary_union
 
 from .. import takeoff
 from .. import walls as wallmod
+from .. import baseboard
 from .. import qualifiers
 from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
@@ -655,6 +656,9 @@ def answer(ctx, q) -> Answer:
         storey = M.find_storey(q.level)
         if storey is None:
             return abstain(ROUTE, f"storey '{q.level}' not in model")
+    if q.variant == "slab_report":
+        from .. import slabs
+        return slabs.answer(ctx, q, M, path, storey)
     sheet_note = ""
     counted = q.obj in CLASSES or q.obj in ROOM_COUNTS or q.obj in SINK_OBJS or q.obj == "apartment"
     if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or counted and sheet_scope_applies(ctx, q)
@@ -739,6 +743,9 @@ def answer(ctx, q) -> Answer:
                 want = set(tk["types"]) | ({"bathroom", "wc"} if "wet" in tk["types"] else set())
                 floor = [sp for sp in M.entities("room") if storey is None or M.storey_of(sp) == storey]
                 by_name = [sp for sp in spaces if takeoff.room_types(space_type_label(sp)) & set(tk["types"])]
+                if tk.get("all_rooms"):     # baseboard for every room: spaces with no recognisable name too
+                    by_name = baseboard.select_rooms([{"name": space_type_label(sp), "sp": sp} for sp in floor], tk)
+                    by_name = [r["sp"] for r in by_name]
                 spaces = by_name
                 if not spaces:
                     inf = infer_space_types(M, floor)
@@ -857,6 +864,7 @@ def answer(ctx, q) -> Answer:
             if rooms is None:
                 return abstain(ROUTE, why)
             ans.value, ans.items, wexpl, totals = wallmod.summary(rooms, tk, ctx.q.question)
+            ans.unit = totals.get("unit", ans.unit)
             for it, r in zip(ans.items, rooms):
                 it["guid"] = r["guid"]
             ans.items.append({"totals": totals})
@@ -866,7 +874,7 @@ def answer(ctx, q) -> Answer:
                 ans.tier, ans.tier_reason = "estimate", "computed wall area differs from the model's own NetWallArea by more than 5%"
                 if scope_why:
                     ans.tier_reason += "; " + scope_why
-            if any("ASSUMED" in r.get("height_src", "") for r in rooms) or not any(r["height"] for r in rooms):
+            if not baseboard.is_baseboard(tk) and (any("ASSUMED" in r.get("height_src", "") for r in rooms) or not any(r["height"] for r in rooms)):
                 ans.tier = "estimate"
                 ans.tier_reason = (ans.tier_reason + "; " if ans.tier_reason else "") + "room height assumed"
             if ctx.evidence:
@@ -925,16 +933,19 @@ def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate="", t
             o["deducted"] = d["area"]
 
     def lab(i, r):
-        w = wallmod.room_walls(r, inp)
-        return f"{i + 1}. {r['label'][:22]}: floor {r['floor_area']:.2f}, walls {w['net']:.2f} m²"
+        return wallmod.room_caption(i, r, inp)
 
     wallmod.draw_rooms(cv, rooms, BLUE, BLUE, AMBER, lab)
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     hs = sorted({r["height_src"].split(" (")[0] for r in rooms})
     nop = sum(len(r["openings"]) for r in rooms)
+    note = (f"Walls = outline (thick blue) x height - {nop} openings (amber boxes). Height: {'; '.join(hs)}. "
+            f"Surfaces: {totals['surfaces']}. Storey {storey.Name if storey is not None else '-'}.")
+    if baseboard.is_baseboard(tk):
+        note = (f"Baseboard = room outline (thick blue) minus {nop} door opening(s) (amber boxes, width in m); windows do not "
+                f"interrupt it. Outline: IfcSpace geometry, doors: IfcDoor width. Storey {storey.Name if storey is not None else '-'}.")
     return finish(cv.img, out, ctx.q.question, wallmod.answer_line(value, totals, ROUTE, short_reason(estimate)),
-                  note=(f"Walls = outline (thick blue) x height - {nop} openings (amber boxes). Height: {'; '.join(hs)}. "
-                        f"Surfaces: {totals['surfaces']}. Storey {storey.Name if storey is not None else '-'}."), checks=checks)
+                  note=note, checks=checks)
 
 
 def render(ctx, M, storey, used, q, value, unit, note):

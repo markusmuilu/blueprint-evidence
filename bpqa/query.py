@@ -358,7 +358,8 @@ class RuleParser(QueryParser):
         # label, a room number, an apartment, the numbered-indoor total).
         if not qs and not q.room_no and not q.apartment and q.variant != "net_indoor_total":
             from .takeoff import parse_takeoff
-            tk = parse_takeoff(question)
+            from .baseboard import parse_baseboard
+            tk = parse_baseboard(question) or parse_takeoff(question)
             if tk is not None:
                 q.measure, q.obj, q.variant, q.label = "area", "room", "type_sum", None
                 # a breakdown per room is part of every takeoff answer, so "with a breakdown by
@@ -371,7 +372,11 @@ class RuleParser(QueryParser):
                     # unlike a quoted room name, which keeps the abstaining guard (routes/scope_guard.py)
                     tk["single_type"] = True
                 q.extra["takeoff"] = tk
-        return attach_qualifier(question, q)
+        from .slabs import apply as slab_apply
+        q = attach_qualifier(question, q)
+        if q.obj in (None, "slab"):                      # slab area by type / thickness (bpqa/slabs.py)
+            q = slab_apply(question, q)
+        return q
 
 
 def single_type_asked(f: str, tk: dict) -> bool:

@@ -966,7 +966,11 @@ def takeoff_answer(ctx, q, img):
     # one-letter labels (S, K) only when printed upper case: OCR noise reads stray strokes as "s"
     labelled = [{"name": r.label, "room": r} for r in pa.rooms if r.label
                 and not (len(r.label.strip(" .")) == 1 and not r.label.strip(" .").isupper())]
-    if "wc" in tk["types"] and full and find_rooms(full, "wc_room"):
+    from .. import baseboard
+    bb = baseboard.is_baseboard(tk)
+    if tk.get("all_rooms"):           # baseboard for every labelled room (balconies out)
+        used = baseboard.select_rooms(labelled, tk)
+    elif "wc" in tk["types"] and full and find_rooms(full, "wc_room"):
         used = takeoff.select(labelled, tk)[0]     # a WC label exists (maybe only read sideways): WC rooms only
     else:
         # "toilets" and no WC label: the rooms that contain a toilet, by their bathroom labels (a scan
@@ -1079,19 +1083,35 @@ def takeoff_answer(ctx, q, img):
         for it, r in zip(items, rows):
             it["area_kind"] = r["kind"]
         items.append({"totals": totals})
-        expl += (f" Walls on a scan are an ESTIMATE: perimeter of the measured room region x an ASSUMED ceiling height "
+        if bb:
+            expl += (f" Baseboard on a scan is an ESTIMATE: perimeter of the measured room region x scale; door openings are not "
+                     f"detectable here and are NOT deducted, so the length is an upper bound. The room perimeters are typically off "
+                     f"by about {PERIM_BAND['median']:.0%} (8 in 10 within {PERIM_BAND['p80']:.0%}; region against annotated room "
+                     f"outlines of {PERIM_BAND['n']} dev and test rooms). ") + basis_txt + " " + scale_txt + "." + band_note
+        else:
+          expl += (f" Walls on a scan are an ESTIMATE: perimeter of the measured room region x an ASSUMED ceiling height "
                  f"({wallmod.DEFAULT_CEILING_M:.2f} m unless the question gives one); door and window openings are NOT deducted "
                  f"(not detectable here), so the wall area is gross and an upper bound. "
                  f"The room perimeters are typically off by about {PERIM_BAND['median']:.0%} (8 in 10 within {PERIM_BAND['p80']:.0%}; "
                  f"region against the annotated room outlines of {PERIM_BAND['n']} dev and test rooms), before the height assumption. ") + basis_txt + " " + scale_txt + "." + band_note
-        if approx:
+        if approx and bb:
+            approx_txt = (f"About {total:.0f} m of baseboard (approximation): {pa.no_scale_why()}; scale from {OS.scale_short(sc)}. "
+                          f"Perimeters come from the measured room regions and no door openings are deducted, so it is an upper bound. "
+                          f"Room perimeters are typically off by about {PERIM_BAND['median']:.0%} (8 in 10 within {PERIM_BAND['p80']:.0%}); check before ordering.")
+            expl = approx_txt + " Details: " + expl
+        elif approx:
             approx_txt = OS.approx_text(total, [r["area"] for r in meas_rows], sc, pa.no_scale_why(), want).replace(
                 "Typical error for", "Walls add the assumed height. Typical floor-area error for") + (" " + warn if nts else "")
             expl = approx_txt + " Details: " + expl
         est = "walls: perimeter x assumed height, openings not deducted" + ("; some rooms measured" if meas_rows else "")
-        ans = Answer(value=total, unit="m2", route=ROUTE, confidence=0.45, items=items, explanation=expl)
+        ans = Answer(value=total, unit=totals.get("unit", "m2"), route=ROUTE, confidence=0.45, items=items, explanation=expl)
+        if bb:
+            est = "baseboard on a scan: room perimeter from the measured region, door openings not deducted (upper bound)" + ("; some rooms measured" if meas_rows else "")
         ans.tier, ans.tier_reason = "estimate", est + ("; " + bt if meas_rows else "") + ("; " + fb if fb else "")
-        head = (f"Answer [ESTIMATE]: {total:.2f} m2 = floor {totals['floor_m2'] or 0:.2f} + walls {totals['walls_m2']:.2f}"
+        if bb:
+            head = baseboard.answer_line(total, totals, ROUTE, "perimeter of measured regions, doors not deducted")
+        else:
+          head = (f"Answer [ESTIMATE]: {total:.2f} m2 = floor {totals['floor_m2'] or 0:.2f} + walls {totals['walls_m2']:.2f}"
                 f" + {totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}   route: {ROUTE}") if want_floor else                (f"Answer [ESTIMATE]: {total:.2f} m2 = walls {totals['walls_m2']:.2f} + {totals['waste_pct']:g}% waste "
                 f"{totals['waste_m2']:.2f}   route: {ROUTE}")
     else:
@@ -1182,7 +1202,9 @@ def takeoff_answer(ctx, q, img):
                 dashed_rect(cv.d, rect, GREY, max(1, round(cv.k)), max(4, round(5 * cv.k)))
                 record_context(cv.img, rect, "scale")
         lines = "; ".join(f"{i + 1}. {row['label']} {row['area']:.2f} m2 ({row['kind']})" for i, row in enumerate(rows))
-        if want_walls:
+        if want_walls and bb:
+            extra = f" Baseboard {totals['net_m']:.2f} m: whole room perimeter, door openings not deducted."
+        elif want_walls:
             extra = f" Walls {totals['walls_m2']:.2f} m2 gross: perimeter x assumed {wallmod.DEFAULT_CEILING_M:.2f} m, openings not deducted."
         else:
             extra = (f" Floor area plus {tk['waste_pct']:g}% waste." if tk.get("waste_pct") else " Floor area only, no waste allowance.")
