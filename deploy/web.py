@@ -35,7 +35,7 @@ from fastapi import Request                      # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse, Response   # noqa: E402
 from starlette.routing import Mount              # noqa: E402
 
-os.environ.setdefault("NEMO_DEADLINE_S", "25")   # live app: Nemotron gets 25 s per call, then an honest "cannot prove"
+os.environ.setdefault("NEMO_DEADLINE_S", "15")   # live app: Nemotron gets 15 s per call, then an honest "cannot prove"
 from app import server                           # noqa: E402
 
 server.UPLOAD_EXT = UPLOAD_EXT                   # read at call time by server.upload
