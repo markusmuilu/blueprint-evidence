@@ -253,6 +253,9 @@ def _solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         # language-model reading (a network call) is not needed
         big = ctx.q.ext in RASTER_EXT and sheet_plan.applies(ctx)
         query = phrasing.read(ctx.q.question, use_llm=use_nemo and not big)
+    if query.extra.get("takeoff"):
+        from .takeoff import settle
+        settle(query.extra["takeoff"], ctx.q.question)     # one waste number for every route and parser
     if ctx.q.ext in RASTER_EXT and query.obj != "scale" and sheet_plan.applies(ctx):
         # a large drawing sheet: read once at the resolution each step needs (bpqa/sheet.py); the scan routes below
         # were built for 2000 px images and would run out of memory on it

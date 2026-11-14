@@ -48,3 +48,12 @@ def test_duplex_plumbing():
     q = SimpleNamespace(extra={"piping": P.parse_piping(ctx.q.question)})
     a = P.answer(ctx, q, M, DUPLEX)
     assert a.value == 227
+
+
+def test_parse_ducts():
+    assert P.parse_piping("How long are the ducts?") == {"kind": "length", "by": None, "medium": "duct"}
+    assert P.parse_piping("How many duct fittings are there?")["medium"] == "duct"
+    assert P.parse_piping("How many ducts are there?") == {"kind": "segments", "by": None, "medium": "duct"}
+    assert P.parse_piping("Duct length by system")["by"] == "system"
+    assert P.parse_piping("How long are the pipes and ducts?") is None          # two media: the property route
+    assert P.parse_piping("What duct types are in the model?") is None

@@ -1,5 +1,9 @@
 """Piping (IFC): "total pipe length", "pipe length by system or diameter", "how many pipe fittings".
 
+Ducts (IFC4 IfcDuctSegment and IfcDuctFitting; in IFC2x3 an IfcFlowSegment / IfcFlowFitting whose type names a duct) are
+read the same way: "how long are the ducts", by system, how many duct segments or fittings. A question that names ducts
+and pipes together is left to the property route.
+
 A pipe segment is an IfcPipeSegment (IFC4) or, in IFC2x3 where pipes are exported as the generic IfcFlowSegment, a flow
 segment whose type or object type names a pipe ("Pipe Types:Cold Water", "Rohrtypen:...") and not a duct, conduit or cable.
 Fittings are IfcPipeFitting, or in IFC2x3 the IfcFlowFitting objects connected through ports to a pipe segment (or, when the
@@ -30,20 +34,32 @@ FITTING_WORDS = re.compile(
     r"\bfittings?\b|\bformstuck\w*|\bformstueck\w*|\bfitting\w*|\bliitin\w*|\braccords?\b|\braccordi\b|\bpipe elbows?\b|\bpipe bends?\b|\bpipe tees?\b")
 COUNT_WORDS = re.compile(r"\bhow many\b|\bwie viele\b|\bwieviele\b|\bnumber of\b|\banzahl\b|\bkuinka monta\b|\bmontako\b|\bcombien\b|"
                          r"\bhur manga\b|\bcount\b|\blukumaara\b|\bantal\w*\b")
+DUCT_WORDS = re.compile(r"\bducts?\b|\bductwork\b|\bduct ?lines?\b|\bluftkanal\w*|\bluftungskanal\w*|\bkanava\w*|\bilmanvaihtokanav\w*|\bgaines?\b")
 BY_SYSTEM = re.compile(r"\bby systems?\b|\bper systems?\b|\beach systems?\b|\bsystems?\b|\bnach system\w*|\bsysteemeittain\b|\bjarjestelm\w*|\bpar systeme\b")
 BY_DIAMETER = re.compile(r"\bdiameters?\b|\bsizes?\b|\bdn ?\d*\b|\bdurchmesser\b|\bhalkaisij\w*|\bdiametre\b|\bdimensions?\b")
 BREADTH = re.compile(r"\bcomprehensive\b|\banalysis\b|\bwhich\b|\bwhat (?:different )?types?\b|\bmaterials?\b|\bdistribut\w*|\blevels?\b|\bstoreys?\b|"
-                     r"\bfloors?\b|\btypes?\b|\bcomponents?\b|\bcategor\w*|\bpercent\w*|\bconnectivity\b|\bflexible\b|\bduct\w*|\bventilation\b|\bwith quantities\b|\bcounts\b|\baccessor\w*")
+                     r"\bfloors?\b|\btypes?\b|\bcomponents?\b|\bcategor\w*|\bpercent\w*|\bconnectivity\b|\bflexible\b|\bwith quantities\b|\bcounts\b|\baccessor\w*")
 
 
 def parse_piping(question: str) -> dict | None:
     """{kind: length | fittings | segments, by: system | diameter | None} for a numeric piping question, else None.
     Questions that ask for a type list, materials, levels or a comprehensive analysis are left to the property route."""
     f = fold(strip_quoted(question))
-    if not PIPE_WORDS.search(f) and not (FITTING_WORDS.search(f) and re.search(r"\bpip", f)):
+    duct = bool(DUCT_WORDS.search(f))
+    pipe = bool(PIPE_WORDS.search(f)) or bool(FITTING_WORDS.search(f) and re.search(r"\bpip", f))
+    if not pipe and not duct:
         return None
+    if pipe and duct:
+        return None          # both media in one question: the property route
     if BREADTH.search(f):
         return None
+    out = _parse_kind(f)
+    if out is not None and duct:
+        out["medium"] = "duct"
+    return out
+
+
+def _parse_kind(f: str) -> dict | None:
     by = "system" if BY_SYSTEM.search(f) else ("diameter" if BY_DIAMETER.search(f) else None)
     if FITTING_WORDS.search(f):
         return {"kind": "fittings", "by": by}
@@ -93,6 +109,27 @@ def _by_type(M, cls):
         return M.m.by_type(cls)
     except RuntimeError:
         return []
+
+
+IS_DUCT = re.compile(r"duct|kanal|luft|lueft|ilmanvaihto|gaine", re.I)
+NOT_DUCT = re.compile(r"pipe|rohr|conduit|cable|wire|tray|electr", re.I)
+
+
+def duct_segments(M):
+    """IfcDuctSegment (IFC4), or in IFC2x3 the IfcFlowSegment whose type names a duct."""
+    segs = _by_type(M, "IfcDuctSegment")
+    if segs:
+        return segs, "IfcDuctSegment"
+    flow = _by_type(M, "IfcFlowSegment")
+    return [e for e in flow if IS_DUCT.search(_names(e)) and not NOT_DUCT.search(_names(e))], "IfcFlowSegment of a duct type"
+
+
+def duct_fittings(M, segs):
+    fit = _by_type(M, "IfcDuctFitting")
+    if fit:
+        return fit, "IfcDuctFitting"
+    flow = _by_type(M, "IfcFlowFitting")
+    return [f for f in flow if IS_DUCT.search(_names(f)) and not NOT_DUCT.search(_names(f))], "IfcFlowFitting of a duct type name"
 
 
 def pipe_segments(M):
@@ -233,6 +270,22 @@ def _diameter(M, e):
     return "diameter not recorded", None, ""
 
 
+def _duct_size(e):
+    """A rectangular duct's size ("400x200 mm") from its Size property or its width and height, else 'size not recorded'."""
+    import ifcopenshell.util.element as E
+    psets = E.get_psets(e)
+    for pset, vals in psets.items():
+        for k, val in vals.items():
+            if k.lower() == "size" and isinstance(val, str) and re.search(r"\d\s*[x\u00d7]\s*\d", val):
+                return val.replace("\u00d7", "x").replace(" ", "") + (" mm" if "mm" not in val else ""), f"property {pset}.Size"
+    for pset, vals in psets.items():
+        w = next((v for k, v in vals.items() if k.lower() in ("width", "nominalwidth", "breite") and isinstance(v, (int, float))), None)
+        h = next((v for k, v in vals.items() if k.lower() in ("height", "nominalheight", "hohe", "h\u00f6he") and isinstance(v, (int, float))), None)
+        if w and h:
+            return f"{w:g}x{h:g}", f"property {pset} width and height"
+    return "size not recorded", ""
+
+
 def _system(e):
     import ifcopenshell.util.element as E
     for g in (E.get_groups(e) if hasattr(E, "get_groups") else []):
@@ -241,7 +294,7 @@ def _system(e):
     t = E.get_type(e)
     nm = str(getattr(t, "Name", None) or getattr(e, "ObjectType", None) or "")
     parts = [p for p in nm.split(":") if p.strip()]
-    if len(parts) >= 2 and IS_PIPE.search(parts[0]):
+    if len(parts) >= 2 and (IS_PIPE.search(parts[0]) or IS_DUCT.search(parts[0])):
         return parts[1].strip(), "system word of the type name"
     return "(no system recorded)", ""
 
@@ -249,11 +302,14 @@ def _system(e):
 def answer(ctx, q, M, path):
     from .answer import Answer, abstain, estimate
     pp = q.extra["piping"]
-    segs, seg_how = pipe_segments(M)
+    duct = pp.get("medium") == "duct"
+    med = "duct" if duct else "pipe"
+    segs, seg_how = duct_segments(M) if duct else pipe_segments(M)
     if pp["kind"] == "fittings":
-        fits, fit_how = pipe_fittings(M, segs)
+        fits, fit_how = duct_fittings(M, segs) if duct else pipe_fittings(M, segs)
         if not fits:
-            a = abstain("ifc", "cannot prove: the model has no pipe fittings (no IfcPipeFitting, no IfcFlowFitting connected to a pipe)")
+            a = abstain("ifc", "cannot prove: the model has no duct fittings (no IfcDuctFitting, no IfcFlowFitting of a duct type)" if duct else
+                        "cannot prove: the model has no pipe fittings (no IfcPipeFitting, no IfcFlowFitting connected to a pipe)")
             a.final = True
             return a
         groups: dict = {}
@@ -268,25 +324,28 @@ def answer(ctx, q, M, path):
         items.append({"groups": glist, "total": len(fits)})
         lines = "; ".join(f"{g['type']}: {g['count']}" for g in glist[:10]) + ("; ..." if len(glist) > 10 else "")
         ans = Answer(value=len(fits), unit="count", route="ifc", confidence=0.9, items=items,
-                     explanation=f"{len(fits)} pipe fittings = {len(fits)} x {fit_how} in {path.name}. By type: {lines}.")
-        if "connected through ports" not in fit_how and "IfcPipeFitting" != fit_how:
+                     explanation=f"{len(fits)} {med} fittings = {len(fits)} x {fit_how} in {path.name}. By type: {lines}.")
+        if "connected through ports" not in fit_how and fit_how not in ("IfcPipeFitting", "IfcDuctFitting"):
             estimate(ans, f"fittings are {fit_how}: the model does not link them to pipes explicitly")
         _evidence(ctx, M, ans, [e for e in fits], q)
         return ans
     if not segs:
-        a = abstain("ifc", "cannot prove: the model has no pipe segments (no IfcPipeSegment, and no IfcFlowSegment of a pipe type)")
+        a = abstain("ifc", "cannot prove: the model has no duct segments (no IfcDuctSegment, and no IfcFlowSegment of a duct type)" if duct else
+                    "cannot prove: the model has no pipe segments (no IfcPipeSegment, and no IfcFlowSegment of a pipe type)")
         a.final = True
         return a
     rows = []
     for e in segs:
         L, src, comp = _length(M, e)
         d, mm, dsrc = _diameter(M, e)
+        if duct and mm is None:
+            d, dsrc = _duct_size(e)
         sysn, ssrc = _system(e)
         rows.append({"e": e, "L": L, "src": src, "comp": comp, "dia": d, "dia_src": dsrc, "sys": sysn, "sys_src": ssrc})
     if pp["kind"] == "segments":
         items = [{"guid": r["e"].GlobalId, "name": getattr(r["e"], "Name", None)} for r in rows]
         ans = Answer(value=len(rows), unit="count", route="ifc", confidence=0.9, items=items,
-                     explanation=f"{len(rows)} pipe segments = {len(rows)} x {seg_how} in {path.name}.")
+                     explanation=f"{len(rows)} {med} segments = {len(rows)} x {seg_how} in {path.name}.")
         _evidence(ctx, M, ans, segs, q)
         return ans
     sysname, sysrx = system_asked(ctx.q.question)
@@ -304,7 +363,7 @@ def answer(ctx, q, M, path):
         rows = keep
     missing = [r for r in rows if r["L"] is None]
     if missing:
-        return abstain("ifc", f"{len(missing)} pipe segment(s) have neither a length quantity nor geometry")
+        return abstain("ifc", f"{len(missing)} {med} segment(s) have neither a length quantity nor geometry")
     total = sum(r["L"] for r in rows)
     comp = [r for r in rows if r["comp"]]
     # the read lengths against the geometry of the same segments (a sample of up to 200)
@@ -317,7 +376,7 @@ def answer(ctx, q, M, path):
         if pairs:
             sa, sb = sum(a for a, _ in pairs), sum(b for _, b in pairs)
             ok = abs(sa - sb) <= 0.05 * sb
-            checks.append({"name": "pipe length vs geometry", "status": "pass" if ok else "fail",
+            checks.append({"name": f"{med} length vs geometry", "status": "pass" if ok else "fail",
                            "detail": f"{len(pairs)} sampled segments: read {sa:.2f} m, geometry {sb:.2f} m"})
             if not ok:
                 tier_why.append(f"the read lengths differ from the segments' geometry by {abs(sa - sb) / sb:.0%} on a sample")
@@ -344,7 +403,7 @@ def answer(ctx, q, M, path):
     head = {"system": f"By system: {fmt(by_sys)}.", "diameter": f"By diameter: {fmt(by_dia)}."}.get(pp["by"] or "", "")
     both = f"By system: {fmt(by_sys)}. By diameter: {fmt(by_dia)}." if not head else head + f" (Also by {'diameter' if pp['by'] == 'system' else 'system'}: {fmt(by_dia if pp['by'] == 'system' else by_sys)}.)"
     ans = Answer(value=round(total, 2), unit="m", route="ifc", confidence=0.9, items=items, checks=checks,
-                 explanation=(f"{total:.2f} m of pipe = sum of the lengths of {len(rows)} pipe segments ({seg_how}); length "
+                 explanation=(f"{total:.2f} m of {med} = sum of the lengths of {len(rows)} {med} segments ({seg_how}); length "
                               f"{' / '.join(srcs)}, model unit {M.len_scale:g} m. {both} Source: {path.name}."))
     if sys_note:
         ans.explanation = sys_note[0].upper() + sys_note[1:] + ". " + ans.explanation

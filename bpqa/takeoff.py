@@ -226,17 +226,39 @@ def parse_takeoff(question: str) -> dict | None:
     m = SCOPE_ID.search(f)
     if m:
         out["scope_named"] = m.group(0)     # "house A": not resolvable from labels in general
-    # Waste for floor-only takeoffs: a stated percentage, or the default when the question says order/buy.
-    # "needed"/"required" stays net (the dataset's own flooring questions answer net areas).
+    waste_from_question(out, raw, f)
+    return out
+
+
+def waste_from_question(tk: dict, raw: str, f: str | None = None) -> dict:
+    """Waste for floor takeoffs, set on `tk` in place: a stated percentage, or the default when the question
+    says order/buy for a material. "needed"/"required" stays net (the dataset's own flooring questions answer
+    net areas). Never overwrites a waste that is already set."""
+    if tk.get("waste_pct") is not None:
+        return tk
+    f = f if f is not None else fold(QUOTED.sub(" ", raw))
     from .walls import parse_inputs, DEFAULT_WASTE_PCT
     inp = parse_inputs(raw)
-    if "waste_pct" in inp:
-        out["waste_pct"], out["waste_src"] = inp["waste_pct"], "given in the question"
-    elif out["material"] and re.search(r"\b(order|buy|purchase|tilata|tilaan|ostaa|bestellen|kaufen|commander|acheter|"
-                                       r"ordinare|comprare)\w*", f):
-        out["waste_pct"] = DEFAULT_WASTE_PCT
-        out["waste_src"] = f"default {DEFAULT_WASTE_PCT:g}% cutting allowance (say 'with 15% waste' or 'no waste' to change)"
-    return out
+    if inp.get("waste_pct") is not None:
+        tk["waste_pct"], tk["waste_src"] = inp["waste_pct"], "given in the question"
+    elif tk.get("material") and re.search(r"\b(order|buy|purchase|tilata|tilaan|ostaa|bestellen|kaufen|commander|acheter|"
+                                          r"ordinare|comprare)\w*", f):
+        tk["waste_pct"] = DEFAULT_WASTE_PCT
+        tk["waste_src"] = f"default {DEFAULT_WASTE_PCT:g}% cutting allowance (say 'with 15% waste' or 'no waste' to change)"
+    return tk
+
+
+def settle(tk: dict | None, question: str) -> dict | None:
+    """Make a takeoff read by any parser (rules or language model) carry its waste the same way, so every route's
+    total is built from one number. The language model's reading keeps a stated waste under tk["inputs"]; the
+    question text is checked again by the same rules the rule parser uses. Called once, in router._solve."""
+    if not tk or tk.get("surface") == "baseboard" or tk.get("waste_pct") is not None:
+        return tk
+    given = (tk.get("inputs") or {}).get("waste_pct")
+    if given is not None:
+        tk["waste_pct"], tk["waste_src"] = float(given), "given in the question"
+        return tk
+    return waste_from_question(tk, question)
 
 
 def describe(tk: dict) -> str:

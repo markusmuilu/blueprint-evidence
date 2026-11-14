@@ -1281,7 +1281,7 @@ function correctedValue(a) {
   // a removed room takes out its own floor and wall area plus the waste on them (QA 14 Nov: a tiling total did
   // not change after "Not this one" because the value includes walls and waste, not just the floor area)
   const tot = (a.items || []).find((it) => it && it.totals)?.totals || null;
-  const w = tot && tot.waste_pct ? tot.waste_pct / 100 : 0;
+  const w = tot && tot.waste_pct && tot.waste_in_value !== false ? tot.waste_pct / 100 : 0;
   const floorCounts = !tot || tot.floor_m2 == null || tot.floor_m2 > 0;
   let v = a.value;
   for (const r of checkItems(a)) {
@@ -1316,7 +1316,7 @@ function renderStrip() {
     ${own ? `<span class="corr" id="corrLine">${esc(corrLine(a))}</span>
       ${isCount(a) ? `<button class="btn btn-quiet" type="button" id="addMode" aria-pressed="${state.addMode}">${icon("plus")}Add missed item</button>` : ""}
       <button class="btn" type="button" id="saveCorr" ${corrected() ? "" : "disabled"}>Save correction</button>
-      <a class="btn btn-quiet" href="/api/corrections.csv" download>${icon("download")}Export</a>`
+      <a class="btn btn-quiet" id="exportCorr" href="/api/corrections.csv" download>${icon("download")}Export</a>`
       : `<span class="meta">${esc(a.format)} witness. Corrections apply to the answer.</span>
       <button class="btn btn-quiet" type="button" id="backToAnswer">Back to the answer</button>`}`;
   const img = viewer.img;
@@ -1357,6 +1357,7 @@ function renderStrip() {
   }));
   $("#addMode")?.addEventListener("click", () => setAddMode(!state.addMode));
   $("#saveCorr")?.addEventListener("click", saveCorrection);
+  $("#exportCorr")?.addEventListener("click", exportCorrections);
   $("#backToAnswer")?.addEventListener("click", () => showEvidence(state.answer, false));
 }
 function drawThumb(cv, img, r, dim, poly) {
@@ -1438,6 +1439,20 @@ async function saveCorrection() {
     });
     toast(`Correction saved, ${r.n} on record. Export downloads them as CSV.`);
   } catch (e) { toast("Could not save: " + e.message, true); }
+}
+
+/* Export: an unsaved correction is saved first, and an empty record says so instead of downloading a header-only file */
+async function exportCorrections(e) {
+  const link = e.currentTarget;
+  if (link.dataset.go) { delete link.dataset.go; return; }
+  e.preventDefault();
+  try {
+    if (corrected()) await saveCorrection();
+    const r = await api("/api/corrections");
+    if (!(r.corrections || []).length) { toast("No corrections saved yet. Remove or add items, then Save correction.", true); return; }
+    link.dataset.go = "1";
+    link.click();
+  } catch (err) { toast("Could not export: " + err.message, true); }
 }
 
 /* ================================================================ ask */
@@ -1811,14 +1826,14 @@ async function loadWitnessSummary() {
 }
 
 /* ---------------------------------------------------------------- CSV */
-const CSV_COLS = ["drawing", "question", "value", "unit", "status", "route", "confidence", "checks_passed", "checks_failed", "cost_usd", "response_ms", "evidence"];
+const CSV_COLS = ["drawing", "question", "value", "unit", "status", "route", "confidence", "checks_passed", "checks_failed", "cost_eur", "response_ms", "evidence"];
 function csvRow(a) {
   const checks = a.checks || [];
   const vals = {
     drawing: a.path, question: a.question, value: a.status === "cannot" ? "" : a.value, unit: a.unit,
     status: a.status === "cannot" ? "cannot prove: " + (a.abstain || "") : a.status, route: a.route,
     confidence: a.confidence, checks_passed: checks.filter((c) => c.status === "pass").length,
-    checks_failed: checks.filter((c) => c.status === "fail").length, cost_usd: Number(a.cost_usd || 0).toFixed(4),
+    checks_failed: checks.filter((c) => c.status === "fail").length, cost_eur: (Number(a.cost_usd || 0) / USD_PER_EUR).toFixed(4),
     response_ms: Math.round(a.time_ms), evidence: a.evidence_id ? location.origin + "/api/evidence/" + a.evidence_id + ".png" : "",
   };
   const cell = (v) => { const s = String(v ?? ""); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
@@ -2385,9 +2400,9 @@ async function compareOpen(x) {
     return t && t.offsetParent ? t.closest(".try") : $("#exampleChips");
   };
   const STEPS = [
-    { el: () => $("#drawList"), side: ["right", "left"], text: "Drawings are grouped by type. Open a group to see its drawings." },
+    { el: () => $("#drawList"), side: ["right", "left"], text: "Drawings are grouped by type. Open a group to see its drawings. Building models also open in a 3D view." },
     { el: () => $("#drop"), side: ["right", "left"], text: "Add your own drawing here. Uploads are deleted after 24 hours." },
-    { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language." },
+    { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language. Scanned plans are the hardest. Try those too." },
     { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
     { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
     { el: () => $('.rail-btn[data-view="compare"]'), side: ["right", "bottom"], text: "Compare shows prepared questions answered by a large vision model alone and by this app, with totals." },   // compare-tab

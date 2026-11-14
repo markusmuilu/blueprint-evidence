@@ -52,6 +52,13 @@ def answer(ctx, q) -> Answer:
             return abstain(ROUTE, "unreadable image")
         from . import raster_area
         return raster_area.takeoff_answer(ctx, q, img)
+    whole_flat = q.obj == "room" and not q.label and not q.room_no and not q.apartment
+    if whole_flat and ((q.measure == "area" and q.variant in ("total", "max")) or (q.measure == "count" and q.variant is None)):
+        # the flat's own printed summary line ("3H+KT+S 73,50 m2"), or the largest printed room area
+        from . import raster_summary
+        a = (raster_summary.largest_room(ctx, q) if q.variant == "max" else raster_summary.answer(ctx, q))
+        if a.answered or q.measure == "area":
+            return a
     if q.measure != "count":
         return abstain(ROUTE, "raster route only counts (and room-type area takeoffs)")
     img = cv2.imread(str(ctx.file))
