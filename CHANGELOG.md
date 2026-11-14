@@ -3,6 +3,50 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: doors and windows, error analysis and detector v3, branch `detector-v3`
+
+### Error analysis (tune images only, `tools/det_errors.py`)
+
+Main's door and window counts (the policy in `models/detector_thresholds.json`: tiled `yolo26s`, doors
+without TTA at 0.40, windows with TTA fused at 0.50) on the 624 held-out train-split tune images: doors
+59.6% exact (445 images with a door question), windows 50.0% (624). For each wrong image the counted
+boxes were matched to the public CubiCasa5K annotation of the same plan (Stoa's counts are the
+annotation counts: 99.6-100% agreement on train-split images, `count_check.json`), and each unmatched
+box got a cause. The image's cause is the one with most boxes. The sample is the first 60 wrong images
+per object by a stable hash; every sampled image has a sheet (annotation green, counted blue,
+below-threshold amber) in `out/det_errors/<object>/`, and the boxes were looked at by eye.
+
+| cause | letter | doors: sample of 60 (boxes) | doors: all 180 wrong | windows: sample of 60 (boxes) | windows: all 312 wrong |
+|---|---|---|---|---|---|
+| detector misses the object (no box at all) | a | 9 (12) | 26 | 7 (18) | 40 |
+| false positive on an annotated wall or room | b | 18 (31) | 62 | 1 (11) | 19 |
+| false positive off the annotated unit (neighbouring flat, stairwell, cut-off edge) | c | 19 (38) | 45 | 9 (31) | 34 |
+| one box over two annotated objects (merge) | c | 1 (2) | 3 | 16 (50) | 58 |
+| two boxes over one annotated object (split) | c | 0 (0) | 0 | 9 (30) | 44 |
+| annotated object scored below the threshold (more than 0.15 under) | d | 6 (10) | 15 | 14 (33) | 63 |
+| box within 0.15 of the threshold (either side) | d | 7 (25) | 28 | 4 (37) | 54 |
+| annotation count differs from Stoa's answer | c | 0 | 1 | 0 | 0 |
+| direction of the error | | 43 over, 17 under | 131 over, 49 under | 20 over, 40 under | 114 over, 198 under |
+
+What the boxes are, by eye:
+
+- Doors, false positives on the unit (30 boxes): 16 are openings in a wall with no leaf or swing drawn
+  (Stoa's wording: "open doorways without a door leaf do not count"), 7 are hand edits on the scan
+  (doors crossed out in red or blue, a swing drawn in by hand), 3 are real doors on one plan whose
+  annotation is offset, 2 are cut off at the image edge or in a storage room, 1 is a window mark, 1 unclear.
+- Doors off the annotated unit (20 boxes): real hinged doors with swings in a neighbouring flat, the
+  stairwell or a second apartment on the same sheet (one sheet shows flats B51 and B52, only B52 is
+  annotated). Stoa counts the one annotated unit, so these are definition mismatches the detector
+  cannot see on a 1,024 px tile.
+- Windows, merge and split (25 of 60 images): the annotation's pane convention. On some plans one frame
+  with a mullion is annotated as two windows and the detector draws one box; on others a three-pane
+  window is one annotated window and the detector draws three. Both directions occur, so no counting
+  rule fixes it (see below).
+- Windows below the threshold (15 boxes): small windows (4), interior glass (shower and sauna glass
+  walls, 3), balcony glazing (1-2), and windows in unusual wall styles (thick black or hatched walls).
+
+The checks of open doorways and of the other rules are below; none of them won on the tune images.
+
 ## 2026-11-14 morning: English and German room labels, evidence colours, app tiers and results, branch `polish`
 
 Problem: on the unseen-drawing set the room-label route read only Finnish and Swedish words, so the two

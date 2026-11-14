@@ -12,6 +12,7 @@ Per object (toilet, sink, shower_or_bath, door, window), for the given model and
     correct minus --lam x wrong among proven answers (lam 1 is the policy used before tiers)
   - an object whose proven tier would still be wrong more often than right gets no proven tier
     (`enabled` false: every answer is an estimate)
+With --model a.pt+b.pt the views of both models are fused the same way (an ensemble).
 With --tta both ways of combining the eight views are tried (`fuse`: boxes fused across views, `median`:
 the median of the per-view counts) and the better one by exact accuracy is kept.
 Reports 2-fold cross-validated numbers (fit on one half of the images, measured on the other), which
@@ -103,7 +104,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stoa", default=str(DEFAULT_DATA), help="dataset root with questions.jsonl")
     ap.add_argument("--images", default="", help="file listing dataset-relative image paths (default: all dev CubiCasa images)")
-    ap.add_argument("--model", default=str(det.MODEL), help="detector weights inside models/ (default models/detector.pt)")
+    ap.add_argument("--model", default=str(det.MODEL),
+                    help="detector weights inside models/ (default models/detector.pt); a.pt+b.pt fuses both models' views")
     ap.add_argument("--imgsz", type=int, default=1280)
     ap.add_argument("--tile", type=int, default=0, help="tile size for tiled inference (0: whole image)")
     ap.add_argument("--tile-scale", type=float, default=2.0)
@@ -115,9 +117,10 @@ def main():
     ap.add_argument("--out", default=str(det.THRESHOLDS))
     a = ap.parse_args()
     root = Path(a.stoa)
-    model = Path(a.model).resolve()
-    if model.parent != (REPO / "models").resolve():
+    models = [Path(m).resolve() if Path(m).parent != Path(".") else (REPO / "models" / m).resolve() for m in a.model.split("+")]
+    if any(m.parent != (REPO / "models").resolve() for m in models):
         raise SystemExit("put the weights in models/ (the route loads models/<name>)")
+    model_name = "+".join(m.name for m in models)
     tile = {"tile": a.tile, "scale": a.tile_scale, "overlap": a.tile_overlap, "max_side": a.tile_max_side} if a.tile else None
     if a.images:
         paths = {l.strip() for l in Path(a.images).read_text(encoding="utf-8").splitlines() if l.strip()}
@@ -128,11 +131,11 @@ def main():
     print(f"tuning on {len(gold)} train-split images", file=sys.stderr)
     views = {}
     for i, p in enumerate(sorted(gold)):
-        views[p] = det.detect_views(root / p, model=model, imgsz=a.imgsz, tile=tile, tta=a.tta)
+        views[p] = det.views_for(root / p, {"model": model_name, "imgsz": a.imgsz, "tile": tile, "tta": a.tta})
         if (i + 1) % 100 == 0:
             print(f"  detected {i + 1}/{len(gold)}", file=sys.stderr)
-    mode = {"model": model.name, "imgsz": a.imgsz, "tile": tile, "tta": a.tta}
-    out = {"_imgsz": a.imgsz, "_tuned_on": f"{len(gold)} Stoa train-split images", "_model": det.model_tag(model),
+    mode = {"model": model_name, "imgsz": a.imgsz, "tile": tile, "tta": a.tta}
+    out = {"_imgsz": a.imgsz, "_tuned_on": f"{len(gold)} Stoa train-split images", "_model": "+".join(str(det.model_tag(m)) for m in models),
            "_lam": a.lam}
     report = {"_mode": mode}
     for obj in a.objects.split(","):
