@@ -454,6 +454,7 @@ function watchReading(path, first) {
 }
 
 /* ---------------------------------------------------------------- select a drawing */
+const floatingPicker = window.matchMedia("(min-width: 761px) and (max-width: 1080px)");
 async function selectDrawing(path, keepAnswer = false) {
   try {
     const d = await api("/api/drawing?path=" + encodeURIComponent(path));
@@ -468,6 +469,12 @@ async function selectDrawing(path, keepAnswer = false) {
     if (d.split) bits.push(d.split + " split");
     $("#drawMeta").textContent = bits.join("  ·  ");
     $("#pdfOnly").closest(".check").hidden = !(d.ext === "pdf" && d.twins?.length);
+    /* between 761 and 1080 px the library floats over the question bar: once a drawing is open it steps aside (the
+       rail's Drawings button brings it back). Not while picking several, where the library is the point */
+    if (floatingPicker.matches && !batch.on && !$("#view-ask").classList.contains("no-picker")) {
+      $("#view-ask").classList.add("no-picker");
+      $("#pickerToggle").setAttribute("aria-expanded", "false");
+    }
     setup3d(d);
     renderDrawingQuestions(d);
     renderExamples();
@@ -1032,6 +1039,8 @@ function deriveLayerSteps(a, row) {
   return S;
 }
 const m2 = (s) => String(s ?? "").replace(/(\d)\s?m2\b/g, "$1 m²");
+/* text as read by OCR: only the square-metre sign is put right ("8,7 m?" and "8,7 m2" are how OCR reads "8,7 m²") */
+const ocrM2 = (s) => String(s ?? "").replace(/(\d)\s?m(?:2|\?)(?![\w?])/g, "$1 m²");
 function layerRow(a, i) { return checkItems(a).find((r) => String(r.i) === String(i)) || null; }
 
 function openSteps(i, zoom = true) {
@@ -1099,7 +1108,7 @@ function drawLayers() {
   const mids = vr.filter(Boolean).map((v) => v[1] + v[3] / 2).sort((p, q) => p - q);
   const split = mids.length > 1 ? (mids[Math.floor((mids.length - 1) / 2)] + mids[Math.floor(mids.length / 2)]) / 2 : Infinity;
   s.steps.forEach((st, k) => {
-    const cap = esc(m2(st.cap || st.note || st.text || st.title).slice(0, 48));
+    const cap = esc(ocrM2(m2(st.cap || st.note || st.text || st.title)).slice(0, 48));
     if (st.rs) {
       let hole = "";
       st.rs.forEach((q, j) => {
@@ -1174,7 +1183,7 @@ function renderStepsCard() {
       ${s.steps.map((st, k) => `<li><button type="button" class="sc-step${st.r || st.pts || st.rs ? "" : " flat"}" data-k="${k}" aria-pressed="false">
         <span class="cite">${k + 1}</span><span class="k">${esc(st.title)}</span>
         <span class="v">${st.kind === "model" ? `<span class="sc-3d">Select in 3D</span>`
-          : `${st.text ? `<span class="mono">${esc(raw(st) ? st.text : m2(st.text))}</span>` : ""}${st.note ? `${st.text ? " → " : ""}<span class="note">${esc(m2(st.note))}</span>` : ""}`}</span>
+          : `${st.text ? `<span class="mono">${esc(raw(st) ? ocrM2(st.text) : m2(st.text))}</span>` : ""}${st.note ? `${st.text ? " → " : ""}<span class="note">${esc(ocrM2(m2(st.note)))}</span>` : ""}`}</span>
       </button></li>`).join("")}
     </ol>
     ${geo ? `<p class="sc-foot">Hover or click a step to show only its layer.</p>` : ""}`;
@@ -1631,7 +1640,7 @@ function renderAnswer(a) {
         ${gold}
         <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
         <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>
-        <dt>Model calls</dt><dd>${aiCalls(a).length ? `yes (${aiCalls(a).length})` : "none"}</dd>
+        <dt>Model calls</dt><dd>${modelCallsText(a)}</dd>
       </dl>
       ${usedLine(a)}
       ${costMeter(a)}
@@ -1757,6 +1766,15 @@ function aiCalls(a) {
   if (imageEst) calls.push(second ? "Nemotron second opinion" : "Nemotron image estimate");
   return calls;
 }
+/* the Model calls row: "none" only when no language model was involved at all. A question read by the language model
+   from its cache made no new call, but the reading came from a model, so the row says so (judge review 14 Nov) */
+function modelCallsText(a) {
+  const calls = aiCalls(a);
+  if (calls.length) return `yes (${calls.length}: ${calls.join(", ")})`;
+  const ex = (a.query || {}).extra || {};
+  if (ex.parse_cached && (a.query?.parser === "llm" || ex.parse_cost_orig_usd || ex.parse_cost_usd)) return "none new (question reading by the language model, cached)";
+  return "none";
+}
 function usedLine(a) {
   const q = a.query || {}, ex = q.extra || {}, c = a.compute || {};
   const llm = q.parser === "llm";
@@ -1860,6 +1878,11 @@ async function loadCosts() {
   state.costs = c;
   const el = $("#costTable");
   if (!el) return;
+  /* no measured routes in this build (out/cost/cost_by_route.json missing): hide the panel, as the witness panel does,
+     instead of a table with only the baseline row and a note about measurements that are not there */
+  const panel = el.closest(".panel");
+  if (panel) panel.hidden = !(c.routes || []).length;
+  if (!(c.routes || []).length) return;
   const as = c.assumed || {};
   const head = `<thead><tr><th>Route</th><th class="num">Questions</th><th class="num">Answered</th><th class="num">Median wall</th><th class="num">p90 wall</th><th class="num">Cold median</th><th class="num">CPU s, mean</th><th class="num">€ per 1,000, CPU</th><th class="num">€ per 1,000, detector on a GPU</th></tr></thead>`;
   const line = (r, cls = "") => `<tr class="${cls}"><td>${esc(r.label || ROUTE_LABEL[r.route] || r.route)}${r.route && r.route !== "all" ? ` <span class="mono dim">${esc(r.route)}</span>` : ""}</td><td class="num">${num(r.n)}</td><td class="num">${num(r.answered)}</td>
