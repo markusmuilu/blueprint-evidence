@@ -119,6 +119,8 @@ def combine(obj: str, o: int, o_proven: bool, d: int, cfg: dict, n_unsure: int =
         proven = rule == "agree" or (rule == "agree_ocr" and o_proven) or (rule == "agree_clean" and n_unsure == 0)
         return o, proven, "both"
     pref = cfg.get("prefer", "ocr_proven")
+    if pref == "off":
+        return o, o_proven, "ocr_only"
     if pref == "det" or (pref == "ocr_proven" and not o_proven):
         return d, False, "det"
     return o, False, "ocr"
@@ -129,8 +131,8 @@ def answer(ctx, q) -> Answer:
         return raster.answer(ctx, q)
     cfg = thresholds().get(q.obj)
     img = cv2.imread(str(ctx.file))
-    if img is None:
-        return raster.answer(ctx, q)
+    if img is None or not cfg or cfg.get("prefer") == "off":
+        return raster.answer(ctx, q)       # no tuning, or on the tune images the OCR route alone did better
     keep_ev = ctx.evidence
     ctx.evidence = False                      # the OCR reading is drawn below, with the rooms
     try:

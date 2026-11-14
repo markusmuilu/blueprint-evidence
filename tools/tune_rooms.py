@@ -8,11 +8,13 @@ The tune images are Stoa train-split CubiCasa images whose public plans were hel
   thr, band      detector score threshold with the best exact-count accuracy on the tune images, and
                  a band of +-0.1 around it for "uncertain" boxes
   tta            whether the median count over the eight rotations/mirrors beats a single view
-  prefer         which reading answers when detector and OCR disagree: "ocr", "det" or "ocr_proven"
+  prefer         which reading answers when detector and OCR disagree: "ocr", "det" or "ocr_proven";
+                 or "off" (the type keeps the OCR route's answer unchanged)
   proven_rule    when an agreement is proven: "agree", "agree_ocr", "agree_clean" or "none"; the rule
                  with the most proven answers that are right on at least AGREE_MIN of the tune images
                  (at least 20 proven answers)
-Accuracies are also reported with 2-fold cross-validation over images (choices fitted on one half,
+The policy and proof rule are scored after the checking layer (bpqa/checks.py), as the router applies it,
+so a type whose OCR answer the checks already repair is not made worse. Accuracies are also reported with 2-fold cross-validation over images (choices fitted on one half,
 scored on the other), so the choice is not only scored on the images it was fitted on.
 """
 from __future__ import annotations
@@ -30,10 +32,24 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 from bpqa.data import split_of  # noqa: E402
 from bpqa.query import parse  # noqa: E402
+from bpqa import checks  # noqa: E402
+from bpqa.answer import Answer  # noqa: E402
 from bpqa.routes import raster, raster_rooms as rr  # noqa: E402
 
 AGREE_MIN = 0.95
 GRID = [round(0.10 + 0.05 * i, 2) for i in range(16)]       # 0.10 .. 0.85
+STOA = None
+_CHECKED = {}
+
+
+def checked(path, q, val, proven):
+    """(value, proven) after the checking layer, as the router applies it to a raster answer."""
+    key = (path, q.obj, val, proven)
+    if key not in _CHECKED:
+        ans = Answer(value=val, unit="count", route=rr.ROUTE, tier="proven" if proven else "estimate")
+        ans = checks.apply(SimpleNamespace(file=STOA / path), q, ans)
+        _CHECKED[key] = (ans.value, ans.tier == "proven")
+    return _CHECKED[key]
 
 
 def load(stoa: Path, tune: list[str]):
@@ -70,7 +86,7 @@ def choose(rows, obj, imgs):
                 best = (ok, cfg)
     cfg = dict(best[1])
     scores = {}
-    for pref in ("ocr", "det", "ocr_proven"):
+    for pref in ("ocr", "det", "ocr_proven", "off"):
         c = {**cfg, "prefer": pref}
         scores[pref] = sum(value(rows[i][obj], obj, c)[0] == rows[i][obj][0] for i in imgs)
     cfg["prefer"] = max(scores, key=lambda k: (scores[k], k == "ocr_proven"))
@@ -86,18 +102,23 @@ def choose(rows, obj, imgs):
 
 
 def value(row, obj, cfg):
-    gold, o, op, v1, v8 = row
+    gold, o, op, v1, v8, path, q = row
+    if "prefer" not in cfg:
+        d, _, unsure = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)
+        return rr.combine(obj, o, op, d, cfg, len(unsure))
     d, _, unsure = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)
-    return rr.combine(obj, o, op, d, cfg, len(unsure))
+    val, proven, which = rr.combine(obj, o, op, d, cfg, len(unsure))
+    val, proven = checked(path, q, val, proven)
+    return val, proven, which
 
 
 def score(rows, obj, imgs, cfg):
     s = {"n": len(imgs), "ocr": 0, "det": 0, "combined": 0, "proven": 0, "proven_ok": 0}
     for i in imgs:
-        gold, o, op, v1, v8 = rows[i][obj]
-        d, _, unsure = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)
-        val, proven, _ = rr.combine(obj, o, op, d, cfg, len(unsure))
-        s["ocr"] += o == gold
+        gold, o, op, v1, v8, path, q = rows[i][obj]
+        d = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)[0]
+        val, proven, _ = value(rows[i][obj], obj, cfg)
+        s["ocr"] += checked(path, q, o, op)[0] == gold
         s["det"] += d == gold
         s["combined"] += val == gold
         s["proven"] += proven
@@ -113,7 +134,8 @@ def main():
     ap.add_argument("--out", default=str(rr.THRESHOLDS))
     ap.add_argument("--no-tta", action="store_true")
     a = ap.parse_args()
-    stoa = Path(a.stoa)
+    global STOA
+    stoa = STOA = Path(a.stoa)
     tune = [l.strip() for l in Path(a.tune).read_text(encoding="utf-8").splitlines() if l.strip()]
     bad = [p for p in tune if split_of(p) != "dev"]
     if bad:
@@ -126,7 +148,7 @@ def main():
         for obj, g in gold[p].items():
             question, q = qtext[(p, obj)]
             o, op = ocr_reading(stoa, p, q, question)
-            rows[p][obj] = (g, o, op, v1, v8)
+            rows[p][obj] = (g, o, op, v1, v8, p, q)
         if (k + 1) % 50 == 0:
             print(f"  {k + 1}/{len(gold)}", file=sys.stderr)
     out, report = {}, {}
@@ -149,7 +171,7 @@ def main():
     (REPO / "out" / "rooms" / "tune_report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     for obj, r in report.items():
         f, c = r["fit"], r["cv2"]
-        pp = lambda s: f"ocr {s['ocr'] / s['n']:.1%} det {s['det'] / s['n']:.1%} comb {s['combined'] / s['n']:.1%} " \
+        pp = lambda s: f"ocr+checks {s['ocr'] / s['n']:.1%} det {s['det'] / s['n']:.1%} comb {s['combined'] / s['n']:.1%} " \
                        f"proven {s['proven']} ({s['proven_ok'] / max(1, s['proven']):.1%})"
         print(f"{obj:9s} n={f['n']:4d}  fit: {pp(f)}   cv2: {pp(c)}   {r['cfg']}")
 
