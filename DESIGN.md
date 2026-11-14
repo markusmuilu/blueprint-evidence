@@ -160,6 +160,17 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
   group, then "Show more (n left)". Grouping uses the catalog's `ext` filter, no backend change. The
   source filters and the groups overlap (source is where a file came from, group is what it is); they
   are kept because they answer different questions, and both narrow the same list.
+- First-visit tour (v2.6): replaces the static "How it works" card. On a first visit a small offer at the
+  top right of the app ("First time here? Take a 30-second tour", Start, No thanks) sits over the app; the
+  library groups start folded. Start runs five steps: library groups, upload box, question box, "Try these",
+  the answer panel. Each step is a 2px accent outline around the real element (the rest dimmed, the one place
+  a large dimming spread is used, like the reticle) and a 300px overlay-surface bubble with the step count,
+  Back, Next and "Skip all tips" (the last step has Done instead). Step 4's button reads "Try one": it loads
+  the Swiss plan and asks the bathroom area, then moves on. Keyboard: focus moves to the bubble on every step,
+  Tab stays inside it, Escape ends the tour. Any ending (done, skipped, declined) is kept in localStorage
+  (`bpe-tour`, try/catch; without storage the offer shows on every load). "How it works" in the app bar
+  replays it. Only at 1081px and wider: below that the panels float or stack, so the offer and the button
+  are hidden and there is no tour on phones.
 - Try these: the empty answer panel opens with four one-click examples (tiling on a Swiss plan, room
   area from an IFC model with the 3D view, a window count on a scan, and an upload hint), each a text
   command with one muted sentence, followed by the "each answer reads like this" table. A row is
