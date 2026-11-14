@@ -53,8 +53,19 @@ A route either proves an answer or abstains with a reason, and the router then t
 raster routes (labels and detector) instead give their best count in one of two tiers: "proven" when the
 conditions tuned for a provable answer hold, "estimate" otherwise, with the reason and the boxes or labels
 a person should check (drawn amber on the evidence image). They abstain only when there is nothing to go
-on. All
-routes are deterministic and cost $0 per question in model calls; the eval reports cost per question so
+on.
+
+Proven has to mean "you can rely on it", so a scan answer stays proven only where dev measured it: the
+route's own conditions must hold, and the route's proven answers for that object (or that object and that
+count, or that count under a condition the route met, such as a "clear" detector count: every rotated view
+agrees and no box is within 0.20 of the threshold) must have been right at least 98% of the time over at least
+100 dev drawings
+(`bpqa/calibration.py`, table `bpqa/scan_calibration.json`, written by `tools/calibrate_tiers.py`). Every
+other scan answer is an estimate whose reason quotes the measured precision, for example "detector window
+counts on scans are about 78% exact on dev (209 of 269 drawings), below the 98% a proven answer needs; check the
+numbered boxes". A consistency check can lower a tier, never raise one.
+
+All routes are deterministic and cost $0 per question in model calls; the eval reports cost per question so
 an LLM route can be compared on the same table later.
 
 ### Rules that carry the accuracy (all measured on the dev split)
@@ -83,9 +94,9 @@ Raster (CubiCasa scans):
 | storeys | multi-storey plans paste each floor as its own scan onto a white canvas; count the large non-white panels |
 | bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE), a few Swedish ones, and English and German room words (BEDROOM, KITCHEN, BATHROOM, TOILET, BALCONY, SCHLAFZIMMER, KUCHE, BADEZIMMER, BALKON ...; "Bed room" is joined to one word); apartment summaries like "3H+K+S" are skipped |
 | OCR errors | an English or German word of 6+ letters also matches with one letter wrong, missing or extra ("bedrocm3", "bathroon"); such a read is marked fuzzy. The short Finnish abbreviations never match fuzzily |
-| proven or estimate | proven: kitchen, bathroom, sauna when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels. A count that needs a fuzzy read, and a zero on a plan where any label was read only fuzzily, are estimates (the OCR misreads this plan, so a missing label may be misread beyond recognition). Every other count is an estimate |
+| proven or estimate | proven: kitchen, bathroom, sauna when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels. A count that needs a fuzzy read, and a zero on a plan where any label was read only fuzzily, are estimates (the OCR misreads this plan, so a missing label may be misread beyond recognition). Every other count is an estimate. On top of these rules the calibration step (above) applies: on dev no room-label count reaches 98% (bathrooms 97.9%, kitchens 97.4%, the others 84-91%), so room-label counts on scans are currently all estimates |
 | rooms labelled 'X' | the readings of that label on the scan (spaces and punctuation ignored, a room number allowed); always an estimate, since no Stoa scan question asks it and there is nothing to tune it on |
-| toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold, over the eight rotations and mirrors of the image; an estimate when boxes score close to the threshold, the views disagree, or the object is one the detector is wrong on more often than right (see "Detector") |
+| toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold, over the eight rotations and mirrors of the image; an estimate when boxes score close to the threshold, the views disagree, or the object is one the detector is wrong on more often than right (see "Detector"); after calibration proven only for a "clear" count (all views agree, no box within 0.20 of the threshold) of one WC seat, one shower or bath, or two sinks, the only counts dev measured at 98% or better |
 
 Every counted label is boxed and numbered on the scan (blue when the count is proven, amber when it is an
 estimate); the other room labels that were read are boxed in grey, so a zero answer can be checked too. The OCR is the slow part (about 5-15 s per image for eight
@@ -737,19 +748,21 @@ Cost is $0 per question on every line (no model calls; Nemotron fallback off).
 
 | test set | questions | accuracy | precision when answered | proven: n / precision | estimate: n / precision | source |
 |---|---|---|---|---|---|---|
-| Stoa full set, test split | 39,807 | **80.4%** | 81.4% | 32,041 / 89.8% | 7,278 / 44.6% | `eval.py --data ../data/stoa-full/junction-dataset --split test` (684 s with warm OCR and detector caches), `out/test-junction-dataset/summary.txt` |
-| Stoa preview set, test split | 2,701 | **85.7%** | 87.5% | 2,292 / 94.1% | 354 / 44.6% | `eval.py --split test`, `out/test/summary.txt` |
-| Stoa preview set, dev split (rules developed here) | 5,289 | 80.5% | 84.6% | 4,225 / 91.9% | 808 / 46.5% | `eval.py --split dev`, `out/dev/summary.txt` |
+| Stoa full set, test split | 39,807 | **81.2%** | 81.5% | 15,441 / 98.4% | 24,218 / 70.7% | `eval.py --data ../data/stoa-full/junction-dataset --split test` (1,026 s with warm OCR and detector caches), `out/test-junction-dataset/summary.txt` |
+| Stoa preview set, test split | 2,701 | **86.8%** | 87.0% | 1,459 / 99.5% | 1,237 / 72.2% | `eval.py --split test`, `out/test/summary.txt` |
+| Stoa preview set, dev split (rules developed here) | 5,289 | 83.1% | 84.1% | 2,557 / 98.5% | 2,665 / 70.4% | `eval.py --split dev`, `out/dev/summary.txt` |
 | Naive AI baseline sample: 150 preview test questions | 150 | router **94.0%** (141), Nemotron with a plain prompt 39.3% (59) | Nemotron 51.3% (answers 115) | - | - | `out/baseline_nemotron.json`; router side re-scored from `out/test/answers.jsonl` (82.0% when the baseline was recorded, before tiers) |
 | Unseen public drawings (12 drawings not in Stoa's data) | 50 | **82.0%** (41 correct, 3 wrong, 4 abstained, 2 correctly abstained) | 93.2% (41 of 44) | 0 proven answers wrong | the 3 wrong answers are estimates | `tools/unseen_run.py --data ../data/unseen`, detector on, `out/unseen/results.jsonl` |
 
-Full set, test split, by source: CubiCasa scans 73.5% (27,160 questions), Swiss dwellings 99.0% (11,408; counts
-100.0%, areas 97.0%), IFC models 87.7% (838; 99.7% precise), IFC-Bench 27.8% (381 free-text questions; 1.3% before the
+Proven on the full test split is 98.4% precise after the scan calibration (90.1% before, 31,997 answers): on CubiCasa scans 3,192 proven at 97.8% (before 19,748 at 84.8%), the other sources unchanged (12,249 at 98.6%). Accuracy is the same before and after; 16,556 answers moved from proven to estimate (CHANGELOG.md).
+
+Full set, test split, by source: CubiCasa scans 74.2% (27,160 questions), Swiss dwellings 99.0% (11,408; counts
+100.0%, areas 97.0%), IFC models 87.9% (838; 96.8% precise), IFC-Bench 27.8% (381 free-text questions; 1.3% before the
 `ifc-props` route), OpeningDesign 70.0% (20; 0% before the generic schedule reader). With those two sources
 the full test split is 80.7% (32,127 of 39,807; computed from the per-source change, the other sources not
 re-run). Per CubiCasa question type: storeys 90.5%, toilets 88.3%,
 bathrooms 87.9%, balconies 85.8%, WC rooms 81.2%, sinks 78.7%, showers/baths 76.0%, bedrooms 75.1%, kitchens
-64.0%, saunas 63.6%, doors 55.4%, windows 46.4%.
+64.0%, saunas 63.6%, doors 59.6%, windows 49.2%.
 
 Unseen drawings by format (50 distinct questions; the three DXF questions asked again on the PDF rendered from
 the DXF are left out):
@@ -861,10 +874,12 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 - CubiCasa scans are 53% of the questions. With the tiled detector, toilets, sinks and showers/baths
   are mostly right; doors and windows remain the weak counts (many objects per plan, where one missed or
   extra box makes the answer wrong). See the full-test-split table above.
-- "Proven" means the route's tuned conditions held, not that the answer is certain: the policy was tuned
-  to accept an answer when it is right more often than wrong, so proven door and window counts are about
-  70% precise. Estimates are much weaker (20-60% per object) and are labelled as such, with the boxes or
-  labels to check.
+- "Proven" on a scan means dev measured that kind of answer at 98% or better over at least 100 drawings
+  (`bpqa/calibration.py`). That leaves few proven scan answers: clear counts of one WC seat, one shower or
+  bath, or two sinks (on the full test split 3,192 answers, 97.8% precise; two sinks came out at 96.6%). Every
+  other scan answer is an estimate that says how often that kind of answer was right on dev (doors about 74%,
+  windows about 78%, room labels 84-98%, storeys 92%), with the boxes or labels to check. Dev overstates the
+  detector somewhat, since its thresholds were tuned on the same images.
 - Estimates for kitchens and bathrooms are below a constant answer (one of each): when no label or two
   labels are read, the plan's own evidence is missing or misread. `eval.py --prior` shows that constant
   as a baseline column; it is never used as an answer.

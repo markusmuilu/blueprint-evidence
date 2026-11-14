@@ -3,6 +3,77 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: calibrated proven tier on scans, branch `proven-calibration`
+
+Problem: QA found proven scan answers that were wrong (colorful-11196 doors 10 for 9 and windows 5 for 8;
+high_quality_architectural-10026 WC seats 2 for 1, showers/baths 2 for 1, windows 6 for 4, sinks 4 for 2), each
+with "0 boxes near threshold" and passing checks. The detector's proven tier was tuned to accept a count when it
+is right more often than wrong, so proven scan counts were about 85% precise. Proven has to mean "you can rely
+on it".
+
+- `bpqa/calibration.py`: a scan answer (any `raster*` route) stays proven only where dev measured the route's
+  proven answers for that object, or that object and count, at >= 98% exact over >= 100 distinct drawings (an
+  English and a Finnish question on one image count once). Everything else becomes an estimate whose reason
+  quotes the measurement, e.g. "detector door counts on scans are about 74% exact on dev (225 of 302 drawings),
+  below the 98% a proven answer needs; check the numbered boxes". The app shows it in the Status line, the
+  evidence header in "Estimate because". Calibration only lowers a tier.
+- Detector "clear" condition (`Answer.tier_cell`): every rotated and mirrored view gives the same count and no
+  box of the object scores within 0.20 of the threshold. Measured as its own cell; the only cells over the line.
+- Checks can no longer raise a tier: the router restores the earlier tier if the checking layer ever returns
+  proven for an answer that was not (it did not before either; now a test pins it). A passing check, such as
+  doors >= rooms - 1, is shown but changes nothing.
+- Detector evidence: counted boxes are blue only when the answer is proven, amber otherwise.
+- `tools/calibrate_tiers.py` writes the table (`bpqa/scan_calibration.json`) from a dev answers file run with
+  `eval.py --no-calibration` (new flag). Detector answers on its training images (ds_cubi train/val) are left out.
+
+Dev measurement: full set, dev split, the 657 CubiCasa drawings with cached detector and OCR results (the 624
+detector tune images plus preview dev; detector cells use only drawings the detector did not train on).
+Proven precision per drawing, before calibration:
+
+| route / object | proven drawings | precision | "clear" drawings | "clear" precision | kept proven |
+|---|---|---|---|---|---|
+| detector WC seats | 605 | 90.2% | 486 | 94.4% | clear count 1: 308 of 314 (98.1%) |
+| detector sinks | 562 | 83.1% | 360 | 93.3% | clear count 2: 200 of 204 (98.0%) |
+| detector showers/baths | 518 | 82.0% | 201 | 92.5% | clear count 1: 156 of 158 (98.7%) |
+| detector doors | 302 | 74.5% | 89 | 91.0% | none |
+| detector windows | 269 | 77.7% | 145 | 78.6% | none |
+| room labels: bathrooms / kitchens | 189 / 273 | 97.9% / 97.4% | - | - | none (just under the line) |
+| room labels: balconies, bedrooms, WC rooms, saunas | 117-278 | 83.8-91.2% | - | - | none |
+| panels (storeys) | 643 | 91.9% | - | - | none |
+| printed areas (raster-area) | no Stoa area questions on scans | - | - | - | none: estimate, "no dev measurement" |
+
+Other conditions looked at (dev, detector proven answers): views unanimous vs split (toilets 94.0% vs 73.4%,
+doors 91.1% vs 67.5%); nearest box at least 0.20 from the threshold (toilets 93.6%, sinks 91.5%, windows 77.4%);
+the room-label check giving exactly the count (showers/baths 94.4%, windows 40.0%: no help for windows); image long
+side (no trend). Only the combination of unanimous views, a 0.20 margin and a small count reaches 98%. A split-half
+check on dev (choose the cells on one half of the drawings, measure on the other, five seeds) held at 97.5-98.0%
+pooled. Caveat: the detector's thresholds were tuned on the same 624 images, so dev overstates its precision; on
+the test split the route's own proven tier was 1-6 points less precise per object than on dev.
+
+Test split, once, at the end (`eval.py --data ../data/stoa-full/junction-dataset --split test`, run twice: with
+`--no-calibration` for before, without for after; a full run, not a rescore, since eval.py has none):
+| full set, test split | questions | accuracy | proven: n / precision | estimate: n / precision |
+|---|---|---|---|---|
+| all sources, before | 39,807 | 81.2% | 31,997 / 90.1% | 7,662 / 45.6% |
+| all sources, after | 39,807 | 81.2% | 15,441 / 98.4% | 24,218 / 70.7% |
+| CubiCasa scans, before | 27,160 | 74.2% | 19,748 / 84.8% | 7,412 / 46.1% |
+| CubiCasa scans, after | 27,160 | 74.2% | 3,192 / 97.8% | 23,968 / 71.1% |
+
+Every value and every correct/wrong is identical between the two runs (checked answer by answer); only tiers
+moved. 16,556 answers moved from proven to estimate, 13,622 of them correct (82.3%): storeys 2,928 (92.2% were
+correct), sinks 1,852 (72.4%), showers/baths 1,774 (72.5%), WC seats 1,490 (79.7%), doors 1,474 (70.6%), WC rooms
+1,278 (82.0%), bedrooms 1,276 (86.4%), windows 1,208 (72.2%), kitchens 1,170 (98.8%), bathrooms 816 (96.8%),
+balconies 772 (87.6%), saunas 518 (81.9%). Proven on scans after, per kept cell: one WC seat 1,478 at 98.2%, one
+shower or bath 728 at 98.6%, two sinks 986 at 96.6% (below the 98% it showed on dev; not changed, the test split
+is not used to set anything). The other sources are untouched (12,249 proven at 98.6% before and after).
+Preview set with calibration (`eval.py --split dev` / `--split test`): dev 83.1%, proven 2,557 at 98.5% (CubiCasa
+382 at 95.8%); test 86.8%, proven 1,459 at 99.5% (CubiCasa 152 at 100%). The accuracy differences from the
+README's earlier preview numbers come from branches merged since, not from this one.
+All ten QA cases (twenty questions with the Finnish ones) are estimates; the two high_quality_architectural-10026
+window answers were already estimates on main, after the three-scale door and window detector. Kitchen and
+bathroom label counts sit just under the line on dev (97.4%, 97.9%), so they are estimates now; whether 97% on dev
+is enough for blue is a product call (MIN_PRECISION in `bpqa/calibration.py`), not something to read off test.
+
 ## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
 
 Problem: on a scan with some printed room areas a takeoff abstained for every room that prints none, and wall
