@@ -1722,7 +1722,7 @@ function renderAnswer(a) {
         ${a.status === "cannot" ? `<dd class="wide cannot-reason"><p class="plain-reason">${esc(plainReason(a))}</p><details class="reason-more"><summary>Details</summary><p>${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</p></details></dd>` : ""}
         ${gold}
         <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
-        <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}</dd>
+        <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}${a.waited_for_background_s >= 1 ? `<span class="meta">, after ${Math.round(a.waited_for_background_s)} s reading the drawing</span>` : ""}</dd>
       </dl>
       ${usedLine(a)}
       <div class="fine-pop" id="finePrint" role="region" aria-label="Time and cost details" hidden>
