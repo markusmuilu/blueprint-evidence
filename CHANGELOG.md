@@ -25,6 +25,75 @@ test image for the label routes (several hours), so this baseline is detector qu
 
 For comparison, `cubi1` on the same questions: toilets 74.8%, sinks 38.8%, doors 24.9%, windows 18.7%.
 
+### Tiers instead of abstaining
+
+Every detector and label answer now comes with a tier (`tier`, `tier_reason`, `uncertain` in the answer
+JSON). "proven" is exactly the set the route answered before (the tuned band, count range and
+per-object switch, and no failed check); everything that used to be an abstention is now the route's
+best count as an "estimate", with the reason and the boxes or labels to check by eye (amber on the
+evidence image). The route abstains only when there is nothing to go on (no model, unreadable image).
+A failed consistency check demotes the answer to an estimate instead of withdrawing it. The `--prior`
+fallback is gone from the route; `eval.py --prior` reports the dev-majority answer per object as a
+baseline column only. `eval.py --no-tiers` reproduces the old behaviour (checked: identical dev numbers
+to the README, 64.8% overall, CubiCasa 45.3%, with cubi1).
+
+Checks with an implied value: when a failed check implies a count (a "MH3" label, a summary listing K or
+S, floor names, a stair label, bathrooms needing showers), that value replaces the route's count for the
+seven checks where, on dev answers that failed the check, the implied value was right more often than
+the route (`ADOPT` in `bpqa/checks.py`; dev, cubi1, questions failing each check: numbered-labels 8 vs
+0 right, summary-kitchen 18 vs 0, summary-sauna 14 vs 0, utility-kitchen 2 vs 0, floor-names 4 vs 0,
+stairs-label 8 vs 2, showers>=bathrooms 66 vs 8; not adopted: sinks 2 vs 10, toilets 4 vs 2,
+summary-rooms 10 vs 8, doors 6 vs 6, windows 0 vs 0).
+
+Full set, test split, detector questions, same flags as the baseline (14,108 questions, checks off):
+
+| object | baseline exact | tiers exact | tiers + TTA exact | proven: share / precision | estimate precision |
+|---|---|---|---|---|---|
+| toilet | 81.0% | 82.5% | 84.9% | 96.8% / 86.1% | 49.0% |
+| sink | 57.5% | 64.8% | 69.7% | 83.2% / 76.6% | 35.6% |
+| door | 23.2% | 50.0% | 52.0% | 54.5% / 68.5% | 32.1% |
+| window | 25.0% | 38.7% | 39.7% | 36.4% / 67.9% | 23.5% |
+| shower/bath | 0% | 34.9% | 40.6% | 0% / - | 40.6% |
+| **all** | 38.6% | 54.6% | 57.9% | 54.8% / 77.6% | 33.8% |
+
+With tiers alone the proven tier is the old answered set exactly (7,084 answers, 76.8% precise); TTA
+then re-tunes each object's policy, so its proven tier is larger (7,738) and slightly more precise.
+
+Preview dev, cubi2 (5,289 questions; the detector's dev images are among its tuning images, so the
+detector rows are slightly optimistic):
+
+| | overall | CubiCasa | CubiCasa proven: n / precision | CubiCasa estimate: n / precision |
+|---|---|---|---|---|
+| before tiers (`--no-tiers`) | 66.2% | 47.9% | 1672 / 83.3% | - |
+| tiers, implied values from checks | 76.0% | 65.7% | 1656 / 83.3% | 1252 / 42.5% |
+| tiers, implied values, TTA | 76.6% | 66.7% | 1688 / 84.4% | 1220 / 42.3% |
+
+On cubi1 (dev, CubiCasa) the steps were 45.3% -> 60.0% (tiers) -> 62.9% (implied values) -> 64.0% (TTA).
+
+Where estimates are weak (dev, cubi2 + TTA): kitchens (104 estimates, 23% right) and bathrooms (66,
+15%): no label or two labels read while the plan has one; the dev-majority baseline answers those
+questions right 93% and 91% of the time, but it is a constant, not a reading of the plan, so it is not
+used. Shower/bath counts are all estimates (48% right on dev, the constant gets 76%).
+
+### Test-time augmentation (`tta` per object in the thresholds file)
+
+The detector runs on the eight rotations and mirrors of the image; boxes are mapped back and either
+fused across views (a box found by fewer views is discounted) or the median per-view count is taken,
+whichever is better per object on the tune images. The spread of per-view counts is one more reason for
+"estimate". Tuned on the 624 held-out train-split images (2-fold cross-validated exact-count accuracy,
+every image answered):
+
+| object | cubi1 | cubi1 + TTA | cubi2 | cubi2 + TTA | TTA mode (cubi2) |
+|---|---|---|---|---|---|
+| toilet | 76.8% | 77.9% | 81.7% | 82.7% | median |
+| sink | 58.8% | 63.4% | 65.5% | 70.2% | fuse |
+| shower/bath | 28.8% | 35.9% | 36.2% | 41.5% | median |
+| door | 42.2% | 45.8% | 48.8% | 51.9% | median |
+| window | 37.7% | 39.3% | 41.7% | 43.8% | fuse |
+
+TTA won on every object for both models, so the route uses it for all five (eight detector passes per
+image instead of one; still $0; the full-set run took under 1 s per image on the RTX 5070 while it was also training).
+
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
 Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the
