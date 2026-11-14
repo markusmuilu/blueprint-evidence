@@ -317,6 +317,14 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .pin.bad { --tone: var(--err); }
 .pin.on { --tone: var(--accent); border-width: 2.5px; }
 .pin.on span { color: var(--accent-fg); }
+/* measured rooms are outlined along their traced walls; the pin is only the number at the outline's top-left corner */
+.pin.room { border: 0; }
+.room-outlines { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
+.room-outlines polygon { fill: none; stroke: oklch(0.50 0.13 240); stroke-width: 2; stroke-linejoin: round; }
+.room-outlines polygon.warn { stroke: oklch(0.72 0.15 70); }
+.room-outlines polygon.bad { stroke: var(--err); }
+.room-outlines polygon.off { opacity: 0.35; stroke-dasharray: 5 4; }
+.room-outlines polygon.on { stroke: var(--accent); stroke-width: 3.5; fill: oklch(0.70 0.12 240 / 0.12); }
 .viewer.adding { cursor: crosshair; }
 /* a place where two formats disagree: circled in the estimate amber, darkened for paper */
 .dis { position: absolute; border: 2.5px solid oklch(0.66 0.16 60); border-radius: 50%; }

@@ -718,13 +718,22 @@ function pinTone(t) { return t === "amber" ? "warn" : t === "grey" ? "bad" : "bl
 /* every counted item gets a pin in the app's own layer, numbered like the overlay */
 function drawPins(a) {
   const own = a === state.answer;
+  const off = headerOff(a);
+  let outlines = "";               // measured rooms: the traced room outline, not its bounding box (QA 14 Nov: the box spilled into neighbours)
   const html = checkItems(a).map((r) => {
     if (!r.rect) return "";
-    const off = own && state.corr.removed.has(r.n) ? " off" : "";
+    const dim = own && state.corr.removed.has(r.n) ? " off" : "";
     const v = viewer.rectToView(r.rect);
-    return `<div class="pin ${pinTone(r.tone)}${off}" data-i="${r.i}" style="left:${v[0]}px;top:${v[1]}px;width:${v[2]}px;height:${v[3]}px"><span>${esc(r.n)}</span></div>`;
+    const pts = r.mark && r.mark.kind === "poly" && r.mark.pts && r.mark.pts.length > 2 ? r.mark.pts : null;
+    if (pts) {
+      const vp = pts.map(([px, py]) => viewer.pointToView(px, py + off));
+      outlines += `<polygon class="${pinTone(r.tone)}${dim}" data-i="${r.i}" points="${vp.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")}"/>`;
+      const [x0, y0] = vp.reduce(([ax, ay], [x, y]) => (y < ay - 0.5 || (Math.abs(y - ay) <= 0.5 && x < ax) ? [x, y] : [ax, ay]), [Infinity, Infinity]);
+      return `<div class="pin room ${pinTone(r.tone)}${dim}" data-i="${r.i}" style="left:${x0}px;top:${y0}px;width:0;height:0"><span>${esc(r.n)}</span></div>`;
+    }
+    return `<div class="pin ${pinTone(r.tone)}${dim}" data-i="${r.i}" style="left:${v[0]}px;top:${v[1]}px;width:${v[2]}px;height:${v[3]}px"><span>${esc(r.n)}</span></div>`;
   }).join("");
-  const off = headerOff(a);
+  const rooms = outlines ? `<svg class="room-outlines" aria-hidden="true">${outlines}</svg>` : "";
   const added = own ? state.corr.added.map((p, j) => {
     const [vx, vy] = viewer.pointToView(p.x, p.y + off);
     return `<div class="pin add" style="left:${vx - 9}px;top:${vy - 9}px;width:18px;height:18px"><span>+${j + 1}</span></div>`;
@@ -737,12 +746,12 @@ function drawPins(a) {
     const [vx, vy] = viewer.pointToView(d.x * mk.w, d.y * mk.h + off);
     return `<div class="dis ${d.kind}" title="${esc(tip)}" style="left:${vx - R}px;top:${vy - R}px;width:${2 * R}px;height:${2 * R}px"></div>`;
   }).join("") : "";
-  $("#marks").innerHTML = html + added + dis + '<div class="reticle" hidden></div>';
+  $("#marks").innerHTML = rooms + html + added + dis + '<div class="reticle" hidden></div>';
 }
 let lastFocus = null;            // the selected item's rect and index, so a rotation can redraw its reticle
 function clearMarks() { $("#marks").innerHTML = ""; clearFocus(); lastFocus = null; }
 function clearFocus() {
-  document.querySelectorAll(".item.on, .pin.on, .thumb.on").forEach((b) => b.classList.remove("on"));
+  document.querySelectorAll(".item.on, .pin.on, .thumb.on, .room-outlines polygon.on").forEach((b) => b.classList.remove("on"));
   const ret = $("#marks .reticle");
   if (ret) ret.hidden = true;
 }
@@ -754,10 +763,11 @@ function focusRect(r, i, focus) {
   }
   if (!r || state.layer !== "evidence") return;
   clearFocus();
-  if (i != null) document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"], #marks .pin[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
+  if (i != null) document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"], #marks .pin[data-i="${i}"], #marks polygon[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
   lastFocus = { r, i };
   const ret = $("#marks .reticle");
-  if (ret) {
+  const room = i != null && document.querySelector(`#marks polygon[data-i="${i}"]`);
+  if (ret && !room) {               // a room is shown by its own outline turning accent; a box would cover the neighbours
     const pad = 4, v = viewer.rectToView(r);
     Object.assign(ret.style, { left: v[0] - pad + "px", top: v[1] - pad + "px", width: v[2] + pad * 2 + "px", height: v[3] + pad * 2 + "px" });
     ret.hidden = false;
