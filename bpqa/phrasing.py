@@ -333,6 +333,8 @@ def normalise(d, question: str) -> tuple[dict | None, str]:
     if intent == "area_room_named" and not quotes(question) and not d.get("room_no"):
         nm = d.get("name") or d.get("label")
         t = TK.room_types(nm) - {"room"} if isinstance(nm, str) and fold(nm).strip() in f else set()
+        if not t and isinstance(nm, str) and fold(nm).strip() in f:    # "bastun" (the sauna), "keittiota"
+            t = {k for k in named if TK._Q_TYPE_RE[k].search(fold(nm))}
         if t:                                   # "kuinka iso kylpyhuone on" -> name 'kylpyhuone' is a room type
             intent, d = "area_rooms_of_type", {**d, "types": sorted(t), "name": None, "label": None}
     if intent == "area_rooms_of_type" and unknown and not named:
@@ -538,7 +540,16 @@ def _llm_reading(question: str) -> tuple[dict | None, str, float, float]:
     try:
         if path.exists():
             d = json.loads(path.read_text(encoding="utf-8"))
-            _mem[key] = (d["reading"], d["why"], d.get("cost", 0.0), d.get("latency", 0.0))
+            reading, why = d["reading"], d["why"]
+            # the cache holds a validated reading; validate it again so a stricter normaliser applies to old entries
+            # (the raw reply, kept since 14 Nov, is validated afresh)
+            if d.get("raw") is not None:
+                reading, why = normalise(d["raw"], question)
+            elif reading is not None:
+                again = {k: v for k, v in reading.items() if k != "inputs"}
+                again.update(reading.get("inputs") or {})
+                reading, why = normalise(again, question)
+            _mem[key] = (reading, why, d.get("cost", 0.0), d.get("latency", 0.0))
             return _mem[key]
     except (OSError, ValueError, KeyError):
         pass
@@ -555,7 +566,8 @@ def _llm_reading(question: str) -> tuple[dict | None, str, float, float]:
     _mem[key] = out
     try:
         PARSE_CACHE.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"reading": out[0], "why": out[1], "cost": cost, "latency": lat}), encoding="utf-8")
+        path.write_text(json.dumps({"reading": out[0], "why": out[1], "cost": cost, "latency": lat, "raw": d},
+                                   ensure_ascii=False, default=str), encoding="utf-8")
     except OSError:
         pass
     return out

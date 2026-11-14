@@ -51,6 +51,13 @@ QA asked 50 casual questions on the live app: 30 fine, 3 wrong proven, the rest 
   answers). The router now skips it for IFC sheets, CAD and vector PDFs (kept for scans and scanned PDFs;
   NEMO_ESTIMATE_VECTOR=1 restores it), so those "cannot" answers return in about a second instead of about 16 s.
 
+- **Cached model readings are validated again** on every read (the raw reply is now kept in out/parse_cache), so a
+  stricter normaliser also applies to readings cached before it.
+
+Paraphrase benchmark (tools/paraphrase_bench.py): held-out (306) rules only 70.3% -> 73.5%, rules + model 98.4% ->
+98.4% (the same 301 cases right); tune base cases rules 222 -> 229 of 306, rules + model 300 -> 300. The 36 QA cases
+added here (set qa, tune): 36 right, 31 of them by the rules alone.
+
 Dataset parses (all 6,789 distinct full-set questions, through `phrasing.read` without the model): 5 parses changed,
 all IFC-Bench / OpeningDesign text questions (meeting and office rooms now typed; "largest room ... first floor" and the
 office questions keep their compound or unresolved-scope route), and 4 more now abstain instead of summing every room

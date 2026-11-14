@@ -99,7 +99,8 @@ SCALE_Q = re.compile(r"\bscale\b|massstab|\bechelle\b|\bscala\b|mittakaava|maale
 # "paljonko ikkunoita" (colloquial Finnish "how much / how many"): a count only for an object that is counted; a size
 # word ("paljonko tilaa", "kuinka paljon neliöitä") keeps it an area question (bpqa/takeoff.py AREA_WORD)
 # also "laske pesualtaat", "count doors", "Fensteranzahl bitte", "show me the toilets" (QA 14 Nov, box round 1)
-CASUAL_COUNT = re.compile(r"(\b(paljonko|kuinka paljon|laske|laskekaa|count|zahle|zaehle|rakna|show me|nayta|zeig\w*)\b"
+CASUAL_COUNT = re.compile(r"(\b(paljonko|kuinka paljon|laske|laskekaa|count|zahle|zaehle|rakna|show me|nayta|zeig\w*|"
+                          r"maara|lukumaara)\b"
                           r"|anzahl\b)(?!.*\b(tilaa|pinta-ala\w*|nelio\w*|alaa|m2|area|flache|size)\b)")
 COUNTABLE = {"door", "window", "toilet", "sink", "washbasin", "shower", "bathtub", "shower_or_bath", "sauna", "kitchen",
              "bedroom", "bathroom", "balcony", "wc_room", "apartment", "column", "beam", "stair", "wall", "slab",
