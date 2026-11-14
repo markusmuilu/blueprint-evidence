@@ -3,6 +3,29 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: qualifiers follow-up, branch `qualifiers-2`
+
+QA retest of the qualifier rule (20 of 24 phrasings passed). Four fixes.
+
+- **Entrance doors** are a qualifier kind (entrance, front / main door, Eingangstür, Haustür, porte d'entrée,
+  sisäänkäynti, entrédörr). Swiss CAD marks no entrance door on any layer (WALL, DOOR, FIXTURE, ROOM_*, WINDOW), so
+  site3387 "How many entrance doors?" is now a final abstention instead of 20 proven (all door leaves). On IFC: an
+  entrance property if any door has one, else door and type names that say entrance (estimate), else IsExternal as the
+  closest recorded property (estimate, "includes doors that are not entrances"), else cannot prove. "interior doors and
+  entrance doors together / combined / confondues" still means all doors and carries no qualifier.
+- **Colloquial Finnish**: "montako", unhyphenated compounds (paloovi, ulkoovi, liukuovi, lasiovi, sisäovi, etuovi,
+  pääovi) and their inflections (ovea, ovet, ovia ...). "Montako paloovea?" is understood by the rules, so it no longer
+  waits for the model parse (30.9 s before it gave up); it answers 27 on Esplanades 1.korrus.
+- **Exits**: "How many emergency exits / fire exits / exits?" counts doors with the emergency kind (counts only, the
+  text questions about fire exits keep their parse). IFC filters on a FireExit / emergency property
+  (Pset_DoorCommon.FireExit); Esplanades has none, so: cannot prove, 211 doors in the model, final, instantly. It
+  previously went to the Nemotron parse and listed door types as an estimate after 21.9 s.
+- **IsExternal gaps** are said: "40 of 46 doors with IsExternal = False (1 door has no IsExternal value and is in
+  neither answer)" and the same for exterior (5 of 46), so interior 40 + exterior 5 = 45 of 46 is explained.
+
+Dataset parses: all 6,789 distinct full-set questions parsed before and after: 0 changed. Dev (ifc_models, ifc_bench,
+swiss_dwellings, 28,839 questions): identical, accuracy 96.5%, precision 98.5%, proven 99.2%, 0 changed answers.
+
 ## 2026-11-14: qualifiers are never dropped, branch `qualified-objects`
 
 QA found a wrong answer marked proven: "How many fire doors are on this floor?" parsed as {count, door}, the word

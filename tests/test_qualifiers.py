@@ -204,5 +204,84 @@ def test_drawings_that_do_not_record_fire_ratings_abstain(path):
     assert not a.answered and a.final and "fire" in a.abstain
 
 
+# ---- follow-up: entrance doors, colloquial Finnish, emergency exits, IsExternal gaps -------------------------
+@pytest.mark.parametrize("question,kind", [
+    ("How many entrance doors are there?", "entrance"),
+    ("How many front doors are there?", "entrance"),
+    ("How many main doors are there?", "entrance"),
+    ("Wie viele Eingangstüren gibt es?", "entrance"),
+    ("Combien de portes d'entrée y a-t-il ?", "entrance"),
+    ("Kuinka monta sisäänkäyntiä on?", "entrance"),
+    ("Montako paloovea?", "fire"),
+    ("Montako paloovea on tässä kerroksessa?", "fire"),
+    ("Kuinka monta paloovea on?", "fire"),
+    ("Montako ulkoovea on?", "external"),
+    ("Montako liukuovea on?", "sliding"),
+    ("How many emergency exits?", "emergency"),
+    ("How many fire exits are there?", "emergency"),
+])
+def test_followup_phrasings(question, kind):
+    q = parse(question)
+    assert q.ok() and q.obj == "door" and q.measure == "count"
+    assert q.extra["qualifier"]["kind"] == kind or kind in kinds(question)
+
+
+def test_sisaankaynti_is_not_an_interior_door():
+    assert parse("Kuinka monta sisäänkäyntiä on?").extra.get("external") is None
+
+
+@pytest.mark.parametrize("question", [
+    "How many doors (interior doors and entrance doors together) are drawn on this floor plan?",
+    "How many doors, interior and entrance doors combined, are drawn?",
+    "Wie viele Türen (Innentüren und Eingangstüren zusammen) sind auf diesem Grundriss eingezeichnet?",
+    "Combien de portes (portes intérieures et portes d'entrée confondues) sont dessinées sur ce plan ?",
+])
+def test_entrance_and_interior_combined_means_all_doors(question):
+    assert "qualifier" not in parse(question).extra
+
+
+def test_entrance_needs_a_route_that_marks_them():
+    q = parse("How many entrance doors?")
+    for fn in (dxf_swiss.answer, pdf_text.answer, raster_rooms.answer):
+        assert qualifiers.cannot_honour(fn, q)
+    assert qualifiers.cannot_honour(ifc_route.answer, q) is None
+
+
+def test_emergency_filter_abstains_without_the_property(monkeypatch):
+    patch_props(monkeypatch)
+    doors = [FakeDoor(1), FakeDoor(2)]
+    _, _, _, why = qualifiers.filter_ifc(FakeModel(doors), doors, parse("How many emergency exits?"), None)
+    assert why.startswith("cannot prove: no door in this model carries a fire-exit")
+
+
+def test_emergency_filter_reads_fireexit(monkeypatch):
+    fake = NS(flat_props=lambda e: [("Pset_DoorCommon", "FireExit", e.rating)] if e.rating is not None else [],
+              type_name=lambda e: e.Name)
+    monkeypatch.setattr(qualifiers, "_props", lambda: fake)
+    doors = [FakeDoor(1, True), FakeDoor(2, False), FakeDoor(3), FakeDoor(4, True)]
+    ents, note, _, why = qualifiers.filter_ifc(FakeModel(doors), doors, parse("How many emergency exits?"), None)
+    assert why is None and [d.id_ for d in ents] == [1, 4] and "FireExit" in note
+
+
+def test_entrance_filter_falls_back_to_isexternal_as_an_estimate(monkeypatch):
+    patch_props(monkeypatch)
+    doors = [FakeDoor(1), FakeDoor(2), FakeDoor(3)]
+    M = FakeModel(doors)
+    M.is_external = lambda e: {1: True, 2: False, 3: None}[e.id_]
+    ents, note, tier_reason, why = qualifiers.filter_ifc(M, doors, parse("How many entrance doors?"), None)
+    assert why is None and [d.id_ for d in ents] == [1] and "closest recorded property" in tier_reason
+    M.is_external = lambda e: None
+    assert qualifiers.filter_ifc(M, doors, parse("How many entrance doors?"), None)[3].startswith("cannot prove")
+
+
+def test_isexternal_gap_is_said_in_both_answers():
+    class M:
+        is_external = staticmethod(lambda e: {1: True, 2: False, 3: None}[e.id_])
+    doors = [FakeDoor(1), FakeDoor(2), FakeDoor(3)]
+    for question, kept in (("How many exterior doors?", [doors[0]]), ("How many interior doors?", [doors[1]])):
+        text = ifc_route.external_note(M, doors, kept, parse(question))
+        assert "1 door has no IsExternal value" in text and "1 of 3 doors" in text
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
