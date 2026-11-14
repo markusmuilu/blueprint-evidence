@@ -210,6 +210,21 @@ def _groups(geoms):
     return [unary_union(v) for v in out.values()]
 
 
+SWISS_LAYERS = {"ROOM_OUTLINE", "ROOM_TEXT"}        # the convention this route's rules were built on
+SWISS_OBJECT_LAYERS = {"DOOR", "WINDOW", "FIXTURE"}
+
+
+@lru_cache(maxsize=32)
+def swiss_scheme(dxf_path: str) -> bool:
+    """True when the DXF follows the Swiss Dwellings layer convention: room outlines and room texts
+    on ROOM_OUTLINE / ROOM_TEXT and object layers named DOOR / WINDOW / FIXTURE. Other files go to
+    the generic DXF route, which abstains rather than returning a count of 0 from absent layers."""
+    doc = ezdxf.readfile(dxf_path)
+    used = {e.dxf.layer for e in doc.modelspace()}
+    table = {l.dxf.name for l in doc.layers}
+    return SWISS_LAYERS <= used and SWISS_OBJECT_LAYERS <= table
+
+
 @lru_cache(maxsize=8)
 def load(dxf_path: str) -> SwissFloor:
     return SwissFloor(Path(dxf_path))
@@ -229,6 +244,9 @@ def answer(ctx, q) -> Answer:
     dxf = ctx.sibling("dxf")
     if dxf is None:
         return abstain(ROUTE, "no DXF sibling")
+    if not swiss_scheme(str(dxf)):
+        from . import dxf_generic
+        return dxf_generic.answer(ctx, q, dxf)
     fl = load(str(dxf))
     items, value, rooms_used, boxes, note = [], None, [], [], ""
 
