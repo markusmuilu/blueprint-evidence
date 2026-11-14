@@ -27,6 +27,12 @@ WARM = os.environ.get("BPE_WARM", "0").lower() in ("1", "true", "yes", "on")
 
 IGNORE = ["**/__pycache__", "**/*.pyc", "**/.pytest_cache"]
 
+if modal.is_local():
+    for need, how in ((HERE / "demo_data" / "questions.jsonl", "python deploy/build_demo_set.py"),
+                      (REPO / "models" / "detector_thresholds.json", "copy models/ from the main checkout")):
+        if not need.exists():
+            raise SystemExit(f"{need} is missing: {how}")
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("libgl1", "libglib2.0-0")          # opencv (pulled in by rapidocr) needs these
@@ -39,7 +45,7 @@ image = (
         "CUDA_VISIBLE_DEVICES": "",
         "YOLO_OFFLINE": "1", "YOLO_AUTOINSTALL": "false", "YOLO_VERBOSE": "false",
         "YOLO_CONFIG_DIR": "/tmp/ultralytics",
-        "OMP_NUM_THREADS": "4", "MKL_NUM_THREADS": "4",
+        "OMP_NUM_THREADS": "8", "MKL_NUM_THREADS": "8",
         "STOA_DATA": "/root/demo_data",
         "BPE_MAX_UPLOAD_MB": "30",
         "BPE_UPLOAD_TTL": "900",
@@ -50,8 +56,9 @@ image = (
     .add_local_file(str(HERE / "web.py"), f"{REMOTE}/deploy/web.py")
     .add_local_dir(str(REPO / "models"), f"{REMOTE}/models")
     .add_local_dir(str(HERE / "demo_data"), "/root/demo_data")
-    .add_local_dir(str(HERE / "demo_results"), f"{REMOTE}/out")
 )
+if (HERE / "demo_results").is_dir():      # eval outputs for the Results view (optional)
+    image = image.add_local_dir(str(HERE / "demo_results"), f"{REMOTE}/out")
 
 
 def nvidia_secret() -> list:
@@ -72,7 +79,7 @@ app = modal.App(APP_NAME)
 
 @app.function(
     image=image,
-    cpu=2.0,                    # 2 physical cores = 4 vCPU; billed on use above the request
+    cpu=4.0,                    # physical cores (8 vCPU): the tiled detector with TTA is CPU-bound
     memory=4096,                # MiB request; torch + detector + a large IFC fit with room to spare
     min_containers=1 if WARM else 0,
     max_containers=1,           # uploads live in the container's temp folder, so one container serves all

@@ -40,6 +40,7 @@ server.UPLOAD_EXT = UPLOAD_EXT                   # read at call time by server.u
 server.MAX_UPLOAD = MAX_BYTES
 app = server.app
 
+STARTED = time.time()
 CREDITS: dict = {}
 if (DEMO / "credits.json").exists():
     CREDITS = json.loads((DEMO / "credits.json").read_text(encoding="utf-8"))
@@ -193,10 +194,9 @@ CREDIT_JS = r"""
   async function show(path) {
     try {
       const c = await (await window.__bpeFetch("/api/credits?path=" + encodeURIComponent(path))).json();
-      bar.innerHTML = "<strong style='color:#c9d1d9'>Drawing credit:</strong> " + esc(c.credit) +
-        (c.licence ? " (" + esc(c.licence) + ")" : "") +
-        (c.url && /^https?:/.test(c.url) ? ' <a href="' + esc(c.url) + '" rel="noopener" target="_blank" style="color:#85b7e0">source</a>' : "") +
-        ". " + link;
+      bar.innerHTML = link + " | <strong style='color:#c9d1d9'>" + esc(c.licence || "licence: see credits") + "</strong>. " +
+        esc(c.credit) +
+        (c.url && /^https?:/.test(c.url) ? ' <a href="' + esc(c.url) + '" rel="noopener" target="_blank" style="color:#85b7e0">source</a>' : "");
       bar.title = bar.textContent;
     } catch (e) { /* keep the generic line */ }
   }
@@ -271,6 +271,8 @@ def deploy_status():
         "memory_peak_mb": mb(_cg("memory.peak") or _cg("memory.max_usage_in_bytes")),
         "process_max_rss_mb": rss,
         "cpus_visible": os.cpu_count(),
+        "process_cpu_s": round(sum(os.times()[:2]), 1),
+        "uptime_s": round(time.time() - STARTED, 1),
         "torch_threads": _torch_threads(),
         "nemotron_enabled": nemotron.enabled(),
         "demo_drawings": len(server.CATALOG.drawings),
@@ -288,20 +290,38 @@ def _torch_threads():
 
 # ---------------------------------------------------------------- prewarm
 
-PREWARM = [  # one raster question loads torch, the detector and the OCR engine (about 25 s on CPU) at start
-    ("data/cubicasa5k/high_quality_architectural-10372.png", "How many windows are shown on this floor plan?"),
-]
-
-
 def _prewarm():
+    """Load torch, the detector weights and the OCR engine at container start (a few seconds of CPU), so the
+    first scan question pays only for its own inference. Runs one tiny inference per model."""
     t0 = time.perf_counter()
-    for path, q in PREWARM:
+    try:
+        import numpy as np
+        from bpqa.routes import detector, ocr
+        names = {c["model"] for k, c in detector.thresholds().items()
+                 if not k.startswith("_") and isinstance(c, dict) and c.get("model")} or {detector.MODEL.name}
+        blank = np.full((640, 640, 3), 255, np.uint8)
+        for name in sorted(names):
+            path = detector.REPO / "models" / name
+            if path.exists():
+                detector._model(str(path)).predict(blank, imgsz=640, verbose=False, device="cpu")
+        ocr._engine()(blank)
+    except Exception as ex:          # prewarm must never take the app down
+        print(f"[prewarm] {type(ex).__name__}: {ex}", flush=True)
+    print(f"[prewarm] models loaded in {time.perf_counter() - t0:.1f}s", flush=True)
+    if os.environ.get("BPE_PRECOMPUTE", "1") == "0":
+        return
+    # detector and OCR results are cached per image on disk; fill that cache for the demo scans, smallest
+    # first, so a judge's first question on one answers in under a second instead of 3 to 26 s on CPU.
+    # Each goes through the normal ask (and its lock), so a user's question waits behind at most one image.
+    scans = sorted((d for d in server.CATALOG.drawings.values() if d.ext in ("png", "jpg", "jpeg")),
+                   key=lambda d: (DEMO / d.path).stat().st_size if (DEMO / d.path).exists() else 0)
+    for d in scans:
         try:
-            if (DEMO / path).exists():
-                server.ask(server.AskBody(path=path, question=q))
-        except Exception as ex:      # prewarm must never take the app down
-            print(f"[prewarm] {path}: {type(ex).__name__}: {ex}", flush=True)
-    print(f"[prewarm] done in {time.perf_counter() - t0:.1f}s", flush=True)
+            server.ask(server.AskBody(path=d.path, question="How many windows are shown on this floor plan?"))
+            server.ask(server.AskBody(path=d.path, question="How many bedrooms are on this floor plan?"))
+        except Exception as ex:
+            print(f"[prewarm] {d.path}: {type(ex).__name__}: {ex}", flush=True)
+    print(f"[prewarm] {len(scans)} demo scans cached in {time.perf_counter() - t0:.1f}s", flush=True)
 
 
 if os.environ.get("BPE_PREWARM", "1") != "0":
