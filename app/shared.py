@@ -104,6 +104,30 @@ def fetch_upload(uid: str, root: Path) -> bool:
     return False
 
 
+# ---------------------------------------------------------------- answers
+
+def publish_answer(key: str, text: str) -> None:
+    """A finished answer record, so a repeat landing on another container is served from the cache too (QA 14 Nov)."""
+    if not enabled():
+        return
+    try:
+        _try(lambda: _d().put(f"ans:{key}", text), tries=2)
+        STATS["puts"] += 1
+    except Exception:
+        pass
+
+
+def fetch_answer(key: str) -> str | None:
+    if not enabled():
+        return None
+    try:
+        val = _try(lambda: _d().get(f"ans:{key}"), tries=2)
+    except Exception:
+        return None
+    STATS["gets"] += 1
+    return val if isinstance(val, str) else None
+
+
 # ---------------------------------------------------------------- evidence
 
 def publish_evidence(eid: str, png: Path, marks: Path) -> None:

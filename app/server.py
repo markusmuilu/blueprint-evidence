@@ -445,9 +445,16 @@ def ask(body: AskBody, cancelled=None, background: bool = True):
     assume = norm_assume(body.assume)          # scale-assumption: validated, None when not given
     key = _cache_key(root, rel, question, body.pdf_only, assume)
     cached = ANSWER_CACHE / f"{key}.json"
+    if not cached.exists() and not body.refresh and shared.enabled():
+        txt = shared.fetch_answer(key)                # answered on another container
+        if txt:
+            cached.write_text(txt, encoding="utf-8")
     if cached.exists() and not body.refresh:
         rec = json.loads(cached.read_text(encoding="utf-8"))
         ev = rec.get("evidence_id")
+        if ev and not (EVIDENCE_DIR / f"{ev}.png").exists() and shared.enabled():
+            f = EVIDENCE_DIR / f"{ev}.png"
+            shared.fetch_evidence(ev, f, marks_path(f))
         if not ev or (EVIDENCE_DIR / f"{ev}.png").exists():
             rec["cached"] = True
             return rec
@@ -517,8 +524,10 @@ def ask(body: AskBody, cancelled=None, background: bool = True):
             "No overlay for this file (its licence does not allow derivatives, or the route draws none). "
             "The numbered items are the evidence.",
     }
-    cached.write_text(json.dumps(rec, ensure_ascii=False, default=str), encoding="utf-8")
-    return JSONResponse(json.loads(json.dumps(rec, ensure_ascii=False, default=str)))
+    txt = json.dumps(rec, ensure_ascii=False, default=str)
+    cached.write_text(txt, encoding="utf-8")
+    shared.publish_answer(key, txt)
+    return JSONResponse(json.loads(txt))
 
 
 # ---------------------------------------------------------------- BEGIN scale-assumption (builder BC)
