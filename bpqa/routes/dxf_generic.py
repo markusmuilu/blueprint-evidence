@@ -48,7 +48,7 @@ ROUTE = "dxf-generic"
 # at camelCase. A word of 4+ letters matches a token that starts with it ("fenster" in
 # "fensterbank" is avoided by the exclusion list below); shorter words must equal the token.
 WORDS = {
-    "door": ["door", "doors", "dr", "tur", "tuer", "tueren", "turen", "porte", "portes", "porta", "porte",
+    "door": ["door", "doors", "dr", "tur", "tuer", "ture", "tuere", "tueren", "turen", "porte", "portes", "porta", "porte",
              "ovi", "ovet", "oven", "dorr", "dorrar", "deur", "deuren", "puerta", "puertas", "dor", "dore",
              "drzwi", "uks", "uksed", "turblatt"],
     "window": ["window", "windows", "wind", "glaz", "glazing", "fenster", "fenetre", "fenetres", "finestra",
@@ -98,7 +98,7 @@ def tokens(name: str) -> list[str]:
     return [t for t in re.split(r"[^a-z0-9]+", fold(s)) if t]
 
 
-def name_classes(name: str) -> set[str]:
+def name_classes(name: str, sfb: bool = True) -> set[str]:
     """Object classes a layer or block name names. 'A-DOOR' -> {door}; 'A-DOOR-IDEN' -> {annotation}."""
     toks = tokens(name)
     out = set()
@@ -108,11 +108,11 @@ def name_classes(name: str) -> set[str]:
                 if t == w or (len(w) >= 4 and t.startswith(w)):
                     out.add(cls)
                     break
-        if t.isdigit() and len(t) == 2 and t in SFB and len(toks) > 1:
+        if sfb and t.isdigit() and len(t) == 2 and t in SFB and len(toks) > 1:
             out.add(SFB[t])
     # ISO 13567 element field written without separators ("A--31---E"): digits after the agent field
     m = re.match(r"^[a-z]-{0,2}(\d{2})", fold(name or ""))
-    if m and m.group(1) in SFB:
+    if sfb and m and m.group(1) in SFB:
         out.add(SFB[m.group(1)])
     if out - {"annotation"} and any(t in MODIFIERS for t in toks[1:]):
         # "A-DOOR-IDEN": door tags, not doors; "A-AREA-IDEN" stays a room-name layer

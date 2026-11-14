@@ -36,6 +36,7 @@ from ..answer import Answer, abstain
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
 from ..pdfvec import PT_M, load_page
 from .dxf_swiss import AREA_RE, NUM_RE, OUTDOOR, SHAFT_VOID, UNIT_RE, _window_groups
+from . import pdf_generic
 from .scope_guard import single_room_problem
 
 ROUTE = "pdf-vector"
@@ -468,6 +469,7 @@ def answer(ctx, q) -> Answer:
         return abstain(ROUTE, f"PDF page is {fl.kind} (no vector linework); needs a raster route")
     sc = fl.scale
     items, value, rooms_used, boxes, note = [], None, [], [], ""
+    gen_conf = None        # set when a convention-free reading (pdf_generic) produced the count
 
     if q.measure == "count":
         table = {"door": fl.doors, "window": fl.windows, "toilet": fl.toilets, "washbasin": fl.washbasins,
@@ -475,18 +477,28 @@ def answer(ctx, q) -> Answer:
         if q.scope == "model":
             return abstain(ROUTE, "question is about the whole model; one PDF sheet shows one level")
         if q.obj in table:
+            why = None
             if not fl.rooms:
-                return abstain(ROUTE, "no room shapes found, so the plan region is unknown")
-            if getattr(fl, "door_style", None) is None:
+                why = "no room shapes found, so the plan region is unknown"
+            elif getattr(fl, "door_style", None) is None:
                 # the object rules assume door openings drawn with swing arcs; without that the
                 # drawing convention is not recognised and a count of 0 would not be proof
-                return abstain(ROUTE, "drawing convention not recognised (no door openings with swing arcs)")
-            boxes = table[q.obj]
-            value = len(boxes)
-            note = {"door": "thin unfilled door-opening quads in the door stroke style",
-                    "window": "frame rectangles with two glazing lines (or three strips)",
-                    "toilet": "ellipse outlines without a drain circle", "washbasin": "ellipse outlines with a drain circle",
-                    "bathtub": "rounded-rectangle tub outlines 1.2-2.3 m", "shower": "square shower-tray outlines"}[q.obj]
+                why = "drawing convention not recognised (no door openings with swing arcs)"
+            if why and q.obj == "door":
+                # another office's convention: count door swings (arc + leaf), which needs no scale
+                gboxes, how = pdf_generic.swing_doors(fl.vp, sc.m_per_pt if sc.known else None)
+                if gboxes is None:
+                    return abstain(ROUTE, f"{why}; generic reading: {how}")
+                boxes, value, note, gen_conf = gboxes, len(gboxes), how, 0.7
+            elif why:
+                return abstain(ROUTE, why + "; no convention-free rule for " + q.obj)
+            else:
+                boxes = table[q.obj]
+                value = len(boxes)
+                note = {"door": "thin unfilled door-opening quads in the door stroke style",
+                        "window": "frame rectangles with two glazing lines (or three strips)",
+                        "toilet": "ellipse outlines without a drain circle", "washbasin": "ellipse outlines with a drain circle",
+                        "bathtub": "rounded-rectangle tub outlines 1.2-2.3 m", "shower": "square shower-tray outlines"}[q.obj]
         elif q.obj == "apartment":
             if not fl.units:
                 return abstain(ROUTE, "no apartment labels found")
@@ -496,9 +508,23 @@ def answer(ctx, q) -> Answer:
         elif q.obj == "room" and q.label:
             rooms_used = _match_room_label(fl, q.label)
             if not rooms_used and not any(r["name"] for r in fl.rooms):
-                return abstain(ROUTE, "no named room shapes found")
-            value = len(rooms_used)
-            note = f"room shapes labelled '{q.label}'"
+                # rooms drawn without closed shapes: each printed label is one room
+                spans = pdf_generic.label_spans(fl.vp, q.label)
+                if not spans:
+                    return abstain(ROUTE, "no named room shapes found, and no text label equal to "
+                                          f"'{q.label}' on the sheet")
+                boxes, value, gen_conf = [s.bbox for s in spans], len(spans), 0.7
+                note = f"text labels '{q.label}' on the sheet (no room shapes; each label is one room)"
+            else:
+                value = len(rooms_used)
+                note = f"room shapes labelled '{q.label}'"
+        elif q.obj in pdf_generic.ROOM_TYPE_OBJ:
+            rtype = pdf_generic.ROOM_TYPE_OBJ[q.obj]
+            spans = pdf_generic.type_spans(fl.vp, rtype)
+            if not spans:
+                return abstain(ROUTE, f"no text label naming a {rtype}; a 0 from labels is not proof")
+            boxes, value, gen_conf = [s.bbox for s in spans], len(spans), 0.7
+            note = f"text labels naming a {rtype} ({', '.join(s.text for s in spans[:8])}); each label is one room"
         else:
             return abstain(ROUTE, f"no PDF rule for count of {q.obj}")
     elif q.measure == "area":
@@ -555,7 +581,7 @@ def answer(ctx, q) -> Answer:
     elif boxes:
         items = [{"n": i + 1, "bbox_pt": [round(v, 1) for v in b]} for i, b in enumerate(boxes)]
 
-    conf = 0.9
+    conf = 0.9 if gen_conf is None else gen_conf
     if q.measure == "area":
         conf = round(min(conf, sc.confidence), 2)
     unit = "count" if q.measure == "count" else "m2"
