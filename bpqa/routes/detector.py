@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -60,6 +61,11 @@ def model_tag(model: Path = MODEL) -> str | None:
     return hashlib.sha1(f"{st.st_size}-{int(st.st_mtime)}".encode()).hexdigest()[:10]
 
 
+# one prediction at a time on a shared model: the upload precompute (app/precompute.py) runs the detector in a
+# background thread while a question may run it in the request thread, and a YOLO predictor is not thread safe
+PREDICT_LOCK = threading.RLock()
+
+
 @lru_cache(maxsize=4)
 def _model(path: str):
     from ..yolo_env import yolo
@@ -67,7 +73,8 @@ def _model(path: str):
 
 
 def _predict(model: str, img: np.ndarray, imgsz: int, device) -> list[dict]:
-    res = _model(model).predict(img, imgsz=imgsz, conf=MIN_CONF, iou=0.5, max_det=600, verbose=False, device=device)[0]
+    with PREDICT_LOCK:
+        res = _model(model).predict(img, imgsz=imgsz, conf=MIN_CONF, iou=0.5, max_det=600, verbose=False, device=device)[0]
     return [{"cls": CLASSES[int(c)], "conf": round(float(s), 4), "xyxy": [round(float(v), 1) for v in b]}
             for b, s, c in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist(), res.boxes.cls.tolist())]
 
@@ -75,8 +82,9 @@ def _predict(model: str, img: np.ndarray, imgsz: int, device) -> list[dict]:
 def _predict_batch(model: str, imgs: list[np.ndarray], imgsz: int, device, chunk: int = 8) -> list[list[dict]]:
     out = []
     for i in range(0, len(imgs), chunk):
-        res = _model(model).predict(imgs[i:i + chunk], imgsz=imgsz, conf=MIN_CONF, iou=0.5, max_det=600, verbose=False,
-                                    device=device)
+        with PREDICT_LOCK:
+            res = _model(model).predict(imgs[i:i + chunk], imgsz=imgsz, conf=MIN_CONF, iou=0.5, max_det=600,
+                                        verbose=False, device=device)
         for r in res:
             out.append([{"cls": CLASSES[int(c)], "conf": round(float(s), 4), "xyxy": [float(v) for v in b]}
                         for b, s, c in zip(r.boxes.xyxy.tolist(), r.boxes.conf.tolist(), r.boxes.cls.tolist())])

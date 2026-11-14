@@ -225,6 +225,36 @@ Stoa's list of tricky types on unreleased drawings: baseboard linear metres, sla
   stays wrong) and 6 sixty5_plumbing property questions, which now see the model's IFC2x3 pipes and fittings (before: "No pipe
   elements in this model"; one more correct, none lost). Overall 27819 correct against 27818. Swiss and ifc_models unchanged.
   Type and breakdown questions ("pipe fitting types and quantities") are kept off the piping route and stay with ifc-props.
+processes during the run, so these are upper bounds (AQ measured 50 s for the first question on 4 idle cores).
+
+Reading at upload (`app/precompute.py`, added the same day): an uploaded PNG / JPG starts being read in a background
+thread as soon as it is stored. A large sheet runs three stages, each cached by its own module: text (OCR tiles and
+the scale), room outlines (wall tracing), doors and windows (detector tiles). They run outside the server's solve
+lock, so other requests are not blocked. A question on that sheet waits, outside the lock, only for the stage it
+needs (doors / windows: all three; areas, perimeters, skirting: room outlines; counts by name, scale: text). The
+per-drawing locks in `sheet.analyse` and `sheet_plan.detect` make sure the work is done once; a text question reads
+the finished text without waiting behind the wall tracing (the tracing works on a copy, swapped in when done). A scan
+gets one normal solve of a window question under the solve lock (3 to 26 s), and a question on it waits for that.
+One worker thread, one job at a time, in upload order. The detector's predict calls now take a lock, since the
+background thread and a request can both run the shared YOLO model. `GET /api/precompute?path=` gives the progress;
+the app shows it under the drawing title ("Reading the drawing: text 75% now, room outlines and doors and windows
+next. You can ask now; a question waits only for the part it needs.").
+
+Measured through the app on 8 pinned cores (`deploy.web`, the sample uploaded through `/api/upload`, machine shared
+with other sessions):
+
+| | asked at | answered after | of which waiting for the background |
+|---|---|---|---|
+| whole background reading | | 120 to 125 s (text 16 to 24 s, rooms about 34 s, doors about 70 s) | |
+| classrooms, asked right after upload | 0 s | 15.8 s | 15.4 s |
+| area of the hall, next | 16 s | 34.3 s | 33.5 s |
+| doors, next | 50 s | 72.4 s | 71.4 s (same detector run, not a second one) |
+| doors, after the reading finished | | 0.9 s | 0 |
+| windows / library area / toilets, after | | 0.7 to 0.8 s | 0 |
+
+Before the per-stage fix, a count question asked right after upload took 56 s (it waited behind the wall tracing).
+A question on another drawing while the sheet is read is not blocked, only slowed by the shared CPU (a cold scan
+question took 31 s during the OCR stage).
 
 ## 2026-11-14: area approximation on scans that print no areas, branch `scale-approximation` (ON)
 

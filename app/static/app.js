@@ -417,12 +417,43 @@ async function upload(fileList) {
     renderUploads();
     batchAddUploaded({ drawings: added, path: added[0].path, name: added[0].name });   // ask-several: uploads join the selection
     await selectDrawing(added[0].path);
+    if (added[0].precompute) watchReading(added[0].path, added[0].precompute);   // background reading progress
     renderUploads();
     const msg = added.length === 1 ? `Uploaded ${added[0].name}` : `Uploaded ${added.length} drawings. The first one is open; the others are under Your uploads.`;
     toast([msg, ...notes, ...errors].join(" "), errors.length > 0);
   } else {
     toast("Upload failed: " + errors.join(" "), true);
   }
+}
+
+/* the background reading started at upload (app/precompute.py): a status line under the drawing title */
+let readT = null;
+function showReading(st) {
+  let el = $("#readStatus");
+  if (!el) {
+    el = document.createElement("p");
+    el.id = "readStatus";
+    el.className = "meta read-status";
+    el.setAttribute("role", "status");
+    $("#drawMeta").after(el);
+  }
+  el.textContent = st ? st.message : "";
+  el.hidden = !st;
+}
+function watchReading(path, first) {
+  clearTimeout(readT);
+  const tick = (st) => {
+    if (state.drawing?.path !== path) { showReading(null); return; }   // another drawing was opened
+    showReading(st);
+    if (st.state === "queued" || st.state === "running") {
+      readT = setTimeout(async () => {
+        try { tick(await api("/api/precompute?path=" + encodeURIComponent(path))); } catch { showReading(null); }
+      }, 2000);
+    } else {
+      readT = setTimeout(() => showReading(null), st.state === "done" ? 6000 : 12000);
+    }
+  };
+  tick(first);
 }
 
 /* ---------------------------------------------------------------- select a drawing */
