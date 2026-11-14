@@ -48,7 +48,7 @@ PREVIEW_CACHE = APP_OUT / "preview"
 UPLOADS = Path(tempfile.gettempdir()) / "blueprint-evidence" / "uploads"
 UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff"}
 MAX_UPLOAD = 200 * 1024 * 1024
-CACHE_VERSION = "2"
+CACHE_VERSION = "3"
 
 for d in (EVIDENCE_DIR, RENDER_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
     d.mkdir(parents=True, exist_ok=True)
@@ -369,6 +369,141 @@ def ask(body: AskBody):
     }
     cached.write_text(json.dumps(rec, ensure_ascii=False, default=str), encoding="utf-8")
     return JSONResponse(json.loads(json.dumps(rec, ensure_ascii=False, default=str)))
+
+
+class WitnessBody(BaseModel):
+    path: str
+    question: str
+    refresh: bool = False
+
+
+def _keep_evidence(drawn: str | None, key: str) -> tuple[str | None, dict | None]:
+    """Copy a route's evidence PNG (and its marks sidecar) to EVIDENCE_DIR under a per-answer id."""
+    if not drawn:
+        return None, None
+    d = Path(drawn)
+    if not d.exists() or RENDER_DIR.resolve() not in d.resolve().parents:
+        return None, None
+    ev_id = f"{d.stem[:60]}__{key[:10]}"
+    evp = EVIDENCE_DIR / f"{ev_id}.png"
+    shutil.copyfile(d, evp)
+    marks = None
+    if marks_path(d).exists():
+        shutil.copyfile(marks_path(d), marks_path(evp))
+        try:
+            marks = json.loads(marks_path(d).read_text(encoding="utf-8"))
+        except ValueError:
+            marks = None
+    return ev_id, marks
+
+
+@app.post("/api/witnesses")
+def witnesses(body: WitnessBody):
+    """The same question answered from every format of the drawing (DXF, IFC, PDF alone, PNG), side by side."""
+    from bpqa import witnesses as wit
+    question = body.question.strip()
+    if not question or len(question) > 1000:
+        raise HTTPException(400, "empty or too long question")
+    root, rel = resolve(body.path)
+    key = _cache_key(root, rel, question, False)
+    cached = ANSWER_CACHE / f"w{key}.json"
+    if cached.exists() and not body.refresh:
+        rec = json.loads(cached.read_text(encoding="utf-8"))
+        if all(not w.get("evidence_id") or (EVIDENCE_DIR / f"{w['evidence_id']}.png").exists() for w in rec["witnesses"]):
+            rec["cached"] = True
+            return rec
+
+    def keep(row, ans):
+        wkey = hashlib.sha1(f"{key}|{row['format']}".encode()).hexdigest()
+        row["evidence_id"], row["marks"] = _keep_evidence(ans.evidence, wkey)
+        a = ans.as_dict()
+        row["items"] = a.get("items") or []
+        row["route_name"] = ROUTES.get(row["route"] or "", (row["route"],))[0]
+        row["compute"] = costs.compute_record(row["wall_s"], row["cpu_s"], row["route"])
+        row.pop("evidence", None)
+
+    t0 = time.perf_counter()
+    with SOLVE_LOCK:
+        res = wit.run(root, rel, question, out_dir=RENDER_DIR, evidence=True, on_answer=keep)
+    res.update(path=body.path, question=question, time_ms=round((time.perf_counter() - t0) * 1000, 1), cached=False,
+               gold=CATALOG.gold(rel, question) if not body.path.startswith("upload:") else None)
+    cached.write_text(json.dumps(res, ensure_ascii=False, default=str), encoding="utf-8")
+    return JSONResponse(json.loads(json.dumps(res, ensure_ascii=False, default=str)))
+
+
+# ---------------------------------------------------------------- corrections (human verification record)
+
+CORRECTIONS = APP_OUT / "corrections.jsonl"
+CORR_COLS = ["at", "drawing", "question", "route", "status", "answer_value", "corrected_value", "unit", "removed", "added",
+             "evidence_id"]
+
+
+class CorrectionBody(BaseModel):
+    path: str
+    drawing: str = ""
+    question: str
+    route: str | None = None
+    status: str | None = None
+    answer_value: float | int | str | None = None
+    corrected_value: float | int | str | None = None
+    unit: str = ""
+    removed: list = []        # item numbers struck out ("not this one")
+    added: list = []          # [{x, y}] points clicked on the evidence image, body pixels
+    evidence_id: str | None = None
+
+
+@app.post("/api/corrections")
+def add_correction(body: CorrectionBody):
+    rec = {"at": time.strftime("%Y-%m-%dT%H:%M:%S"), **body.model_dump()}
+    with CORRECTIONS.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return {"ok": True, "n": sum(1 for _ in CORRECTIONS.open(encoding="utf-8"))}
+
+
+def _corrections() -> list[dict]:
+    if not CORRECTIONS.exists():
+        return []
+    rows = []
+    for line in CORRECTIONS.read_text(encoding="utf-8").splitlines():
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            pass
+    return rows
+
+
+@app.get("/api/corrections")
+def list_corrections():
+    return {"corrections": _corrections(), "file": str(CORRECTIONS.relative_to(REPO)).replace("\\", "/")}
+
+
+@app.get("/api/corrections.csv")
+def corrections_csv():
+    import csv
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(CORR_COLS)
+    for r in _corrections():
+        w.writerow([" ".join(map(str, r.get(c) or [])) if c == "removed" else
+                    " ".join(f"{p.get('x')},{p.get('y')}" for p in r.get(c) or []) if c == "added" else r.get(c, "")
+                    for c in CORR_COLS])
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="corrections.csv"'})
+
+
+@app.get("/api/witness_summary")
+def witness_summary():
+    f = REPO / "out" / "witness" / "summary.json"
+    if not f.exists():
+        return {"missing": "out/witness/summary.json not found; run tools/witness_eval.py"}
+    return json.loads(f.read_text(encoding="utf-8"))
+
+
+@app.get("/api/costs")
+def cost_table():
+    t = costs.cost_table()
+    return t if t is not None else {"routes": [], "assumed": costs.assumptions(), "baseline": costs.baseline_cost(),
+                                    "missing": "out/cost/cost_by_route.json not found; run tools/cost_eval.py"}
 
 
 @app.get("/api/evidence/{eid}.png")

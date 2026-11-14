@@ -126,6 +126,11 @@
           <a class="tool" id="openImg" aria-label="Open image in a new tab" target="_blank" rel="noopener" hidden><svg class="ico"><use href="#i-external"/></svg></a>
         </div>
       </div>
+
+      <section class="strip" id="strip" aria-label="Verify the counted items" hidden>
+        <div class="strip-head" id="stripHead"></div>
+        <ol class="strip-list" id="stripList"></ol>
+      </section>
     </main>
 
     <aside class="detail" id="detail" aria-label="Answer" aria-live="polite">
@@ -155,6 +160,18 @@
         <h2 class="h-panel" id="hOverview">Results by test set</h2>
         <div class="table-wrap"><table class="tbl" id="overviewTable"></table></div>
         <p class="meta">Each number names the questions it was measured on and the file it was read from. The tables below show one eval run at a time.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="hCost">
+        <h2 class="h-panel" id="hCost">Cost and latency per route</h2>
+        <div class="table-wrap"><table class="tbl" id="costTable"><tbody><tr><td class="dim">Loading</td></tr></tbody></table></div>
+        <p class="meta" id="costNote"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="hWitSum">
+        <h2 class="h-panel" id="hWitSum">Witness agreement and correctness</h2>
+        <div class="table-wrap"><table class="tbl" id="witTable"><tbody><tr><td class="dim">Loading</td></tr></tbody></table></div>
+        <p class="meta" id="witNote"></p>
       </section>
 
       <p class="headline" id="runHeadline"></p>

@@ -31,6 +31,9 @@ const state = {
   source: "", query: "", offset: 0, total: 0,
   drawing: null, answer: null,
   layer: "drawing", showHeader: false,
+  shown: null,                 // what the viewer shows: the answer, or one witness
+  corr: { removed: new Set(), added: [] }, addMode: false,
+  witnesses: null, costs: null,
 };
 
 /* ================================================================ toast */
@@ -287,18 +290,25 @@ const viewer = (() => {
   }, { passive: false });
   vp.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".viewer-tools") || !img.naturalWidth) return;
-    drag = { px: e.clientX, py: e.clientY, x, y };
+    drag = { px: e.clientX, py: e.clientY, x, y, moved: false };
     vp.setPointerCapture(e.pointerId);
     vp.classList.add("dragging");
   });
   vp.addEventListener("pointermove", (e) => {
     if (!drag) return;
+    if (Math.abs(e.clientX - drag.px) + Math.abs(e.clientY - drag.py) > 4) drag.moved = true;
     x = drag.x + e.clientX - drag.px;
     y = drag.y + e.clientY - drag.py;
     apply();
   });
   const end = () => { drag = null; vp.classList.remove("dragging"); };
-  vp.addEventListener("pointerup", end);
+  vp.addEventListener("pointerup", (e) => {
+    if (drag && !drag.moved && state.addMode) {
+      const r = vp.getBoundingClientRect();
+      addItemAt((e.clientX - r.left - x) / k, (e.clientY - r.top - y) / k);
+    }
+    end();
+  });
   vp.addEventListener("pointercancel", end);
   vp.addEventListener("dblclick", (e) => {
     if (e.target.closest(".viewer-tools")) return;
@@ -347,6 +357,9 @@ function setLayer(layer) {
 async function showDrawing() {
   clearMarks();
   setLayer("drawing");
+  state.shown = null;
+  setAddMode(false);
+  $("#strip").hidden = true;
   $("#openImg").hidden = true;
   const d = state.drawing;
   if (!d) return;
@@ -366,57 +379,97 @@ function evidenceSrc(a) {
 async function showEvidence(a, refit = true) {
   clearMarks();
   setLayer("evidence");
+  state.shown = a;
+  if (a !== state.answer) setAddMode(false);
+  $("#layerTag").textContent = a === state.answer ? "Evidence" : `${a.format} witness`;
   const src = evidenceSrc(a);
   await viewer.load(src, refit);
   $("#openImg").href = src;
   $("#openImg").hidden = false;
   drawPins(a);
+  renderStrip();
+  document.querySelectorAll(".wit-row").forEach((r) => r.setAttribute("aria-pressed", String(r.dataset.f === a.format && a !== state.answer)));
 }
 $("#headerToggle").addEventListener("click", (e) => {
   state.showHeader = !state.showHeader;
   e.currentTarget.setAttribute("aria-pressed", String(state.showHeader));
   e.currentTarget.setAttribute("aria-label", state.showHeader ? "Hide the evidence header strip" : "Show the evidence header strip");
-  if (state.answer?.evidence_id) showEvidence(state.answer, true);
+  if (state.shown?.evidence_id) showEvidence(state.shown, true);
 });
 
 /* ---------------------------------------------------------------- pins and reticle on cited items */
-function itemRect(it, a) {
+/* Positions come from the evidence marks sidecar (every numbered box and room polygon the route drew, in
+   evidence pixels), so DXF world coordinates, IFC geometry, PDF points and scan pixels all pin the same way.
+   Raster answers without a sidecar fall back to their source-pixel boxes. */
+function headerOff(a) { return state.showHeader ? (a.marks?.header ?? a.evidence_geometry?.header ?? 0) : 0; }
+function markFor(it, a, i) {
+  const ms = a.marks?.marks;
+  if (!ms || !ms.length) return null;
+  const n = (it && typeof it === "object" && it.n) || i + 1;
+  const polys = ms.filter((m) => m.kind === "poly");
+  const isMeasure = a.unit && a.unit !== "count";
+  if ((isMeasure || typeof it !== "object") && polys[i]) return polys[i];
+  return ms.find((m) => m.kind === "box" && String(m.n) === String(n)) || polys[i] || null;
+}
+function itemRect(it, a, i = 0) {
+  const off = headerOff(a);
+  const m = markFor(it, a, i);
+  if (m) {
+    const [x0, y0, x1, y1] = m.rect;
+    return [x0, y0 + off, Math.max(x1 - x0, 4), Math.max(y1 - y0, 4)];
+  }
   const g = a.evidence_geometry;
   if (!g || g.scale == null || typeof it !== "object" || it === null) return null;
   let r = null;
   if (Array.isArray(it.xyxy) && it.xyxy.length === 4) r = [it.xyxy[0], it.xyxy[1], it.xyxy[2] - it.xyxy[0], it.xyxy[3] - it.xyxy[1]];
   else if (Array.isArray(it.xywh) && it.xywh.length === 4) r = it.xywh;
   if (!r) return null;
-  const off = state.showHeader ? g.header : 0;
   return [r[0] * g.scale, r[1] * g.scale + off, Math.max(r[2] * g.scale, 4), Math.max(r[3] * g.scale, 4)];
 }
 function answerItems(a) {
   return (a.items || []).filter((it) => !(it && typeof it === "object" && "would_answer" in it));
 }
-/* every counted item gets a pin in the app's own layer, numbered like the overlay, so estimates
-   can be checked one by one at any zoom */
+/* the items a person checks: one per counted item or measured room, numbered like the overlay */
+function checkItems(a) {
+  const its = answerItems(a);
+  let rows = its.map((it, i) => {
+    const m = markFor(it, a, i);
+    const [label, extra] = itemLabel(it, a.query && a.query.obj, a.route);
+    const area = typeof it === "object" && it ? (it.area_m2 ?? it.area ?? (a.unit === "m2" && typeof it.value === "number" ? it.value : null)) : null;
+    return { i, n: (it && typeof it === "object" && it.n) || i + 1, it, rect: itemRect(it, a, i), mark: m, label, extra, area,
+             tone: m ? m.tone : a.status === "estimate" ? "amber" : "blue" };
+  });
+  if (!rows.some((r) => r.rect) && a.marks?.marks?.length) {        // items without positions: use the drawn marks
+    const off = headerOff(a);
+    rows = a.marks.marks.map((m, i) => ({ i, n: m.n ?? i + 1, it: null, mark: m, label: m.kind === "poly" ? `region ${i + 1}` : `item ${m.n}`,
+      extra: "", area: null, tone: m.tone, rect: [m.rect[0], m.rect[1] + off, m.rect[2] - m.rect[0], m.rect[3] - m.rect[1]] }));
+  }
+  return rows;
+}
+function pinTone(t) { return t === "amber" ? "warn" : t === "grey" ? "bad" : "blue"; }
+/* every counted item gets a pin in the app's own layer, numbered like the overlay */
 function drawPins(a) {
-  const tone = a.status === "estimate" ? "warn" : a.status === "cannot" ? "bad" : "ok";
-  const html = answerItems(a).map((it, i) => {
-    const r = itemRect(it, a);
-    if (!r) return "";
-    const n = (it && it.n) || i + 1;
-    return `<div class="pin ${tone}" data-i="${i}" style="left:${r[0]}px;top:${r[1]}px;width:${r[2]}px;height:${r[3]}px"><span>${esc(n)}</span></div>`;
+  const own = a === state.answer;
+  const html = checkItems(a).map((r) => {
+    if (!r.rect) return "";
+    const off = own && state.corr.removed.has(r.n) ? " off" : "";
+    return `<div class="pin ${pinTone(r.tone)}${off}" data-i="${r.i}" style="left:${r.rect[0]}px;top:${r.rect[1]}px;width:${r.rect[2]}px;height:${r.rect[3]}px"><span>${esc(r.n)}</span></div>`;
   }).join("");
-  $("#marks").innerHTML = html + '<div class="reticle" hidden></div>';
+  const off = headerOff(a);
+  const added = own ? state.corr.added.map((p, j) =>
+    `<div class="pin add" style="left:${p.x - 9}px;top:${p.y + off - 9}px;width:18px;height:18px"><span>+${j + 1}</span></div>`).join("") : "";
+  $("#marks").innerHTML = html + added + '<div class="reticle" hidden></div>';
 }
 function clearMarks() { $("#marks").innerHTML = ""; clearFocus(); }
 function clearFocus() {
-  document.querySelectorAll(".item.on, .pin.on").forEach((b) => b.classList.remove("on"));
+  document.querySelectorAll(".item.on, .pin.on, .thumb.on").forEach((b) => b.classList.remove("on"));
   const ret = $("#marks .reticle");
   if (ret) ret.hidden = true;
 }
-function markItem(btn, it, a, n, focus) {
-  const r = itemRect(it, a);
+function focusRect(r, i, focus) {
   if (!r || state.layer !== "evidence") return;
   clearFocus();
-  btn.classList.add("on");
-  $(`#marks .pin[data-i="${btn.dataset.i}"]`)?.classList.add("on");
+  if (i != null) document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"], #marks .pin[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
   const ret = $("#marks .reticle");
   if (ret) {
     const pad = 4;
@@ -424,6 +477,144 @@ function markItem(btn, it, a, n, focus) {
     ret.hidden = false;
   }
   if (focus) viewer.focusRect(...r);
+}
+function markItem(btn, it, a, n, focus) {
+  focusRect(itemRect(it, a, +btn.dataset.i), btn.dataset.i, focus);
+}
+
+/* ---------------------------------------------------------------- verification strip */
+function isCount(a) { return a.unit === "count"; }
+function correctedValue(a) {
+  const c = state.corr;
+  if (a.value == null || typeof a.value !== "number") return a.value;
+  if (isCount(a)) return a.value - c.removed.size + c.added.length;
+  let v = a.value;
+  for (const r of checkItems(a)) if (c.removed.has(r.n) && typeof r.area === "number") v -= r.area;
+  return Math.round(v * 100) / 100;
+}
+function corrected() { return state.corr.removed.size > 0 || state.corr.added.length > 0; }
+
+const TW = 104, TH = 78;
+function renderStrip() {
+  const box = $("#strip");
+  const a = state.shown;
+  if (!a || !a.evidence_id || state.layer !== "evidence") { box.hidden = true; return; }
+  const rows = checkItems(a).filter((r) => r.rect);
+  if (!rows.length) { box.hidden = true; return; }
+  box.hidden = false;
+  const own = a === state.answer;
+  const measure = !isCount(a);
+  const nBlue = rows.filter((r) => r.tone !== "amber").length, nAmber = rows.length - nBlue;
+  const scale = measure ? (a.why || []).find((w) => w.kind === "scale") : null;
+  const noun = measure ? (rows.length > 1 ? "rooms" : "room") : rows.length > 1 ? "items" : "item";
+  $("#stripHead").innerHTML = `
+    <h2 class="h-panel">Verify ${rows.length} ${noun}</h2>
+    <span class="legend meta"><span class="key blue" aria-hidden="true"></span>${nBlue} proven${nAmber ? `<span class="key amber" aria-hidden="true"></span>${nAmber} to check` : ""}</span>
+    ${scale ? `<span class="meta scale-src" title="${esc(scale.text)}">Scale: ${esc(scale.text)}</span>` : ""}
+    <span class="strip-gap"></span>
+    ${own ? `<span class="corr mono" id="corrLine">${esc(corrLine(a))}</span>
+      ${isCount(a) ? `<button class="btn btn-quiet" type="button" id="addMode" aria-pressed="${state.addMode}">${icon("plus")}Add missed item</button>` : ""}
+      <button class="btn" type="button" id="saveCorr" ${corrected() ? "" : "disabled"}>Save correction</button>
+      <a class="btn btn-quiet" href="/api/corrections.csv" download>${icon("download")}Export</a>`
+      : `<span class="meta">${esc(a.format)} witness. Corrections apply to the answer.</span>
+      <button class="btn btn-quiet" type="button" id="backToAnswer">Back to the answer</button>`}`;
+  const img = viewer.img;
+  const list = $("#stripList");
+  list.innerHTML = "";
+  const off = headerOff(a);
+  const added = own ? state.corr.added.map((p, j) => ({ add: j, n: `+${j + 1}`, rect: [p.x - 30, p.y + off - 30, 60, 60], tone: "blue", label: "added by you", extra: "" })) : [];
+  for (const r of [...rows, ...added]) {
+    const li = document.createElement("li");
+    const removed = own && r.add == null && state.corr.removed.has(r.n);
+    li.className = "thumb-cell";
+    const name = measure ? r.label : r.add != null ? r.label : r.extra || r.label;
+    li.innerHTML = `
+      <button type="button" class="thumb ${r.tone === "amber" ? "amber" : "blue"}${removed ? " removed" : ""}${r.add != null ? " added" : ""}" ${r.add == null ? `data-i="${r.i}"` : ""}
+        title="${esc(r.label)}${r.extra ? " " + esc(r.extra) : ""}" aria-label="Show item ${esc(r.n)} on the drawing">
+        <canvas width="${TW * 2}" height="${TH * 2}"></canvas>
+        <span class="tn mono">${esc(r.n)}</span>
+        ${r.tone === "amber" ? `<span class="tq" aria-label="to check">${icon("estimate")}</span>` : ""}
+      </button>
+      <span class="tl">${measure && r.area != null ? `<span class="mono">${Number(r.area).toFixed(2)} m²</span> ` : ""}<span class="tname">${esc(name)}</span></span>
+      ${own ? (r.add != null
+        ? `<button type="button" class="tx" data-add="${r.add}" aria-label="Remove added item ${esc(r.n)}">Undo</button>`
+        : `<button type="button" class="tx" data-n="${esc(r.n)}" aria-pressed="${removed}" aria-label="${removed ? "Keep" : "Not this one:"} item ${esc(r.n)}">${removed ? "Keep" : "Not this one"}</button>`) : ""}`;
+    list.appendChild(li);
+    drawThumb(li.querySelector("canvas"), img, r.rect, removed);
+    const t = li.querySelector(".thumb");
+    t.addEventListener("click", () => focusRect(r.rect, r.i, true));
+    t.addEventListener("mouseenter", () => focusRect(r.rect, r.i, false));
+  }
+  list.querySelectorAll(".tx[data-n]").forEach((b) => b.addEventListener("click", () => {
+    const n = isNaN(+b.dataset.n) ? b.dataset.n : +b.dataset.n;
+    if (state.corr.removed.has(n)) state.corr.removed.delete(n); else state.corr.removed.add(n);
+    onCorrection();
+  }));
+  list.querySelectorAll(".tx[data-add]").forEach((b) => b.addEventListener("click", () => {
+    state.corr.added.splice(+b.dataset.add, 1);
+    onCorrection();
+  }));
+  $("#addMode")?.addEventListener("click", () => setAddMode(!state.addMode));
+  $("#saveCorr")?.addEventListener("click", saveCorrection);
+  $("#backToAnswer")?.addEventListener("click", () => showEvidence(state.answer, false));
+}
+function drawThumb(cv, img, r, dim) {
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!img.naturalWidth || !r) return;
+  const cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
+  const w = Math.max(r[2] * 1.8, r[3] * 1.8 * (TW / TH), 48);
+  const h = w * (TH / TW);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h, 0, 0, cv.width, cv.height);
+  if (dim) { ctx.fillStyle = "rgba(20,26,34,0.62)"; ctx.fillRect(0, 0, cv.width, cv.height); }
+}
+function corrLine(a) {
+  if (!corrected()) return isCount(a) ? "Count unchanged" : "Total unchanged";
+  const c = state.corr;
+  const bits = [];
+  if (c.removed.size) bits.push(`${c.removed.size} removed`);
+  if (c.added.length) bits.push(`${c.added.length} added`);
+  return `${fmtValue(a.value)} → ${fmtValue(correctedValue(a))} (${bits.join(", ")})`;
+}
+function setAddMode(on) {
+  state.addMode = on;
+  $("#viewer").classList.toggle("adding", on);
+  $("#addMode")?.setAttribute("aria-pressed", String(on));
+  if (on) toast("Click the drawing where an item was missed. Dragging still pans.");
+}
+function addItemAt(x, y) {
+  const a = state.answer;
+  if (!a || state.shown !== a) return;
+  state.corr.added.push({ x: Math.round(x), y: Math.round(y - headerOff(a)) });
+  onCorrection();
+}
+function onCorrection() {
+  const a = state.answer;
+  drawPins(state.shown);
+  renderStrip();
+  const v = $("#ansValue");
+  if (v) v.textContent = fmtValue(correctedValue(a));
+  const note = $("#corrNote");
+  if (note) {
+    note.hidden = !corrected();
+    const c = state.corr;
+    note.innerHTML = corrected() ? `Corrected by you from <span class="mono">${esc(fmtValue(a.value))}</span>: ${c.removed.size} removed, ${c.added.length} added. Save correction records it.` : "";
+  }
+}
+async function saveCorrection() {
+  const a = state.answer;
+  if (!a || !corrected()) return;
+  try {
+    const r = await api("/api/corrections", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: a.path, drawing: a.drawing, question: a.question, route: a.route, status: a.status,
+        answer_value: a.value, corrected_value: correctedValue(a), unit: a.unit, removed: [...state.corr.removed],
+        added: state.corr.added, evidence_id: a.evidence_id }),
+    });
+    toast(`Correction saved, ${r.n} on record. Export downloads them as CSV.`);
+  } catch (e) { toast("Could not save: " + e.message, true); }
 }
 
 /* ================================================================ ask */
@@ -448,10 +639,13 @@ async function ask(refresh = false) {
       body: JSON.stringify({ path: state.drawing.path, question: q, pdf_only: $("#pdfOnly").checked, refresh }),
     });
     state.answer = a;
+    state.corr = { removed: new Set(), added: [] };
+    state.witnesses = null;
     renderAnswer(a);
     if (a.evidence_id) await showEvidence(a);
     else await showDrawing();
     setHash();
+    loadWitnesses(a, refresh);
   } catch (e) {
     toast("The question failed: " + e.message, true);
   } finally {
@@ -519,20 +713,27 @@ function renderAnswer(a) {
     <div class="ans-head">
       <p class="ans-q">${esc(a.question)}</p>
       <div class="ans-value">
-        ${hasVal ? `<span class="v${isText ? " text" : ""}">${esc(valText)}</span><span class="u">${esc(fmtUnit(a.unit))}</span>`
+        ${hasVal ? `<span class="v${isText ? " text" : ""}" id="ansValue">${esc(valText)}</span><span class="u">${esc(fmtUnit(a.unit))}</span>`
                  : `<span class="v none">No answer</span>`}
       </div>
+      <p class="note corr-note" id="corrNote" hidden></p>
       <span class="badge ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span>
       ${a.status === "cannot" ? `<p class="cannot-reason">${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</p>` : ""}
       ${gold}
       <dl class="facts">
         <dt>Confidence</dt><dd>${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
         <dt>Response</dt><dd>${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}</dd>
-        <dt>Cost</dt><dd>$${Number(a.cost_usd || 0).toFixed(4)}</dd>
+        <dt>CPU</dt><dd>${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</dd>
         <dt>Model calls</dt><dd>${a.cost_usd ? "yes" : "none"}</dd>
       </dl>
-      ${a.cached ? `<p class="note">Served from the answer cache. The response time is from the first run; Run again recomputes it.</p>` : ""}
+      ${costMeter(a)}
+      ${a.cached ? `<p class="note">Served from the answer cache. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
     </div>
+
+    <section class="sec" id="witSec" aria-labelledby="hWit" hidden>
+      <div class="sec-head"><h3 class="h-panel" id="hWit">Witnesses</h3><span class="meta" id="witMeta"></span></div>
+      <div id="witBody"></div>
+    </section>
 
     <section class="sec" aria-labelledby="hWhere">
       <h3 class="h-panel" id="hWhere">Where</h3>
@@ -546,7 +747,7 @@ function renderAnswer(a) {
       <h3 class="h-panel" id="hWhy">Why</h3>
       <ol class="why">
         ${why.map((w, i) => `<li><span class="cite">${i + 1}</span><span class="txt">${whyText(w)}</span></li>`).join("")}
-        ${itemsCite ? `<li><span class="cite">${itemsCite}</span><span class="txt"><span class="kind">Items</span>${items.length} item${items.length > 1 ? "s" : ""} ${a.unit === "count" ? "counted" : "used"}, numbered on the drawing and listed below.${a.evidence_geometry?.scale != null ? " Select one to find it." : ""}</span></li>` : ""}
+        ${itemsCite ? `<li><span class="cite">${itemsCite}</span><span class="txt"><span class="kind">Items</span>${items.length} item${items.length > 1 ? "s" : ""} ${a.unit === "count" ? "counted" : "used"}, numbered on the drawing and in the strip under it.${checkItems(a).some((r) => r.rect) ? " Select one to find it." : ""}</span></li>` : ""}
         <li><span class="cite">${(itemsCite || nWhy) + 1}</span><span class="txt"><span class="kind">Status</span>${esc(a.status_rule || "")}</span></li>
       </ol>
       ${a.no_overlay_reason ? `<p class="note">${esc(a.no_overlay_reason)}</p>` : ""}
@@ -558,7 +759,7 @@ function renderAnswer(a) {
         ${items.map((it, i) => {
           const [l, x] = itemLabel(it, a.query && a.query.obj, a.route);
           const n = (it && it.n) || i + 1;
-          const can = !!itemRect(it, a);
+          const can = !!itemRect(it, a, i);
           const tag = can ? "button" : "div";
           return `<li><${tag} class="item" ${can ? `type="button" data-i="${i}"` : ""}><span class="n">#${esc(n)}</span><span class="l" title="${esc(l)}">${esc(l)}</span><span class="x">${esc(x)}</span></${tag}></li>`;
         }).join("")}
@@ -596,6 +797,135 @@ function whyText(w) {
     return `<span class="st ${pass ? "pass" : "fail"}">${icon(pass ? "proven" : "cannot")}${pass ? "PASS" : "FAIL"}</span>${esc(w.text)}`;
   }
   return kind + esc(w.text);
+}
+
+/* ---------------------------------------------------------------- cost meter */
+function fmtSec(s) { return s == null ? "-" : s < 1 ? Math.round(s * 1000) + " ms" : s.toFixed(1) + " s"; }
+function fmtUsd(v) {
+  if (v == null) return "-";
+  if (v === 0) return "$0";
+  if (v < 0.01) return "$" + v.toPrecision(2);
+  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+/* log scale from $0.0001 to $1,000 per 1,000 questions */
+function meterW(v) { return v <= 0 ? 0 : Math.max(2, Math.min(100, ((Math.log10(v) + 4) / 7) * 100)); }
+function costMeter(a) {
+  const c = a.compute;
+  if (!c) return "";
+  const base = state.costs?.baseline;
+  const as = c.assumed || {};
+  const row = (label, v, cls) => `<div class="meter-row ${cls}"><span class="ml">${label}</span><span class="mb"><i style="width:${meterW(v).toFixed(1)}%"></i></span><span class="mv mono">${fmtUsd(v)}</span></div>`;
+  return `<div class="meter" role="group" aria-label="Cost per 1,000 questions">
+    <span class="label">Cost per 1,000 questions like this</span>
+    ${row("This answer", c.usd_per_1000, "ours")}
+    ${base ? row("Nemotron, plain prompt", base.usd_per_1000, "base") : ""}
+    <p class="note">CPU ${fmtSec(c.cpu_s)}${c.gpu_s ? `, GPU ${fmtSec(c.gpu_s)}` : ""}${c.model_usd ? `, model ${fmtUsd(c.model_usd)}` : ""} at an assumed $${as.cpu_vcpu_hour_usd} per vCPU-hour${c.gpu_s ? ` and $${as.gpu_hour_usd} per GPU-hour` : ""}.${base ? ` Nemotron: ${num(Math.round(base.prompt_tokens_mean + base.completion_tokens_mean))} measured tokens per question at an assumed $${base.price_in_per_mtok} / $${base.price_out_per_mtok} per million in / out.` : ""} Log scale.</p>
+  </div>`;
+}
+
+/* ---------------------------------------------------------------- witnesses */
+const FMT_NAME = { DXF: "DXF layers", IFC: "IFC model", PDF: "PDF alone", PNG: "PNG image" };
+let witT;
+async function loadWitnesses(a, refresh = false) {
+  const sec = $("#witSec");
+  if (!sec || !state.drawing || !(state.drawing.twins || []).length || a.status === "cannot" && !a.query?.obj) return;
+  sec.hidden = false;
+  const t0 = performance.now();
+  const meta = $("#witMeta");
+  $("#witBody").innerHTML = `<p class="meta">Asking the same question of every format of this drawing, each read by its own route.</p>`;
+  clearInterval(witT);
+  witT = setInterval(() => { meta.textContent = `${((performance.now() - t0) / 1000).toFixed(1)} s`; }, 100);
+  try {
+    const w = await api("/api/witnesses", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: a.path, question: a.question, refresh }),
+    });
+    if (state.answer !== a) return;
+    state.witnesses = w;
+    renderWitnesses(a, w);
+  } catch (e) {
+    $("#witBody").innerHTML = `<p class="meta">Could not ask the other formats: ${esc(e.message)}</p>`;
+  } finally {
+    clearInterval(witT);
+    meta.textContent = state.witnesses ? `${fmtSec(state.witnesses.time_ms / 1000)}${state.witnesses.cached ? ", cached" : ""}` : "";
+  }
+}
+function witnessVerdict(w) {
+  const v = w.majority_value != null ? `${fmtValue(w.majority_value)} ${fmtUnit(w.unit)}`.trim() : "";
+  const odd = w.witnesses.filter((r) => r.agrees === false).map((r) => r.format);
+  if (w.level === "all") return { tone: "ok", icon: "proven", text: `${w.n_answered} of ${w.n_formats} formats agree on ${v}` };
+  if (w.level === "majority") return { tone: "warn", icon: "estimate", text: `${w.n_agree} of ${w.n_formats} formats agree on ${v}; ${odd.join(" and ")} ${odd.length > 1 ? "differ" : "differs"}` };
+  if (w.level === "split") return { tone: "bad", icon: "cannot", text: `The formats disagree: check the circled values` };
+  if (w.level === "single") return { tone: "warn", icon: "estimate", text: `Only one format could answer, so nothing corroborates it` };
+  return { tone: "bad", icon: "cannot", text: "No format could answer" };
+}
+function renderWitnesses(a, w) {
+  if (w.n_formats < 2) { $("#witSec").hidden = true; return; }
+  const vd = witnessVerdict(w);
+  let rel = "";
+  if (w.majority_value != null && a.value != null && a.status !== "cannot" && w.n_agree > 1) {
+    const same = a.unit === "count" ? a.value === w.majority_value : Math.abs(a.value - w.majority_value) <= Math.abs(w.majority_value) * 0.02;
+    rel = same ? "The answer above is the agreed value." : "The answer above differs from the agreed value: check it.";
+  }
+  const rows = w.witnesses.map((r) => {
+    const st = r.value == null ? "none" : r.tier === "proven" ? "proven" : "estimate";
+    const vtxt = r.value == null ? "no answer" : `${fmtValue(r.value)}${r.unit && r.unit !== "count" ? " " + fmtUnit(r.unit) : ""}`;
+    const ring = r.agrees === false || (w.level === "split" && r.value != null) ? " ring" : "";
+    const tip = r.value == null ? (r.abstain || "") : `${r.route_name || r.route}, ${r.n_items} items, ${fmtSec(r.wall_s)}`;
+    const can = !!r.evidence_id;
+    return `<li><button type="button" class="wit-row" data-f="${esc(r.format)}" ${can ? "" : "disabled"} aria-pressed="false" title="${esc(tip)}">
+      <span class="wf mono">${esc(r.format)}</span>
+      <span class="wr"><span>${esc(FMT_NAME[r.format] || r.format)}</span><span class="meta">${esc(r.route_name || r.route || "")}</span></span>
+      <span class="wv mono${ring}${r.value == null ? " na" : ""}">${esc(vtxt)}</span>
+      <span class="wt ${st}" aria-label="${st === "none" ? "abstained" : st}">${st === "none" ? "" : icon(st === "proven" ? "proven" : "estimate")}</span>
+    </button></li>`;
+  }).join("");
+  $("#witBody").innerHTML = `
+    <p class="wit-verdict ${vd.tone}">${icon(vd.icon)}<span>${esc(vd.text)}</span></p>
+    <ul class="wit-list">${rows}</ul>
+    <p class="note">${rel ? esc(rel) + " " : ""}Each format is read on its own, twins hidden, no model calls. Select one to see its evidence; circled values disagree with the others.</p>`;
+  $("#witBody").querySelectorAll(".wit-row:not([disabled])").forEach((b) => b.addEventListener("click", () => {
+    const r = w.witnesses.find((x) => x.format === b.dataset.f);
+    if (state.shown && state.shown.format === r.format && state.shown !== state.answer) { showEvidence(state.answer, true); return; }
+    showEvidence({ ...r, status: r.tier === "proven" ? "proven" : "estimate", query: a.query, why: [] }, true);
+  }));
+}
+
+/* ---------------------------------------------------------------- results: cost and witnesses */
+async function loadCosts() {
+  let c;
+  try { c = await api("/api/costs"); } catch (e) { return; }
+  state.costs = c;
+  const el = $("#costTable");
+  if (!el) return;
+  const as = c.assumed || {};
+  const head = `<thead><tr><th>Route</th><th class="num">Questions</th><th class="num">Median wall</th><th class="num">p90 wall</th><th class="num">Cold median</th><th class="num">CPU s, mean</th><th class="num">$ per 1,000, CPU</th><th class="num">$ per 1,000 if on a GPU</th></tr></thead>`;
+  const line = (r, cls = "") => `<tr class="${cls}"><td>${esc(r.label || ROUTE_LABEL[r.route] || r.route)}${r.route && r.route !== "all" ? ` <span class="mono dim">${esc(r.route)}</span>` : ""}</td><td class="num">${num(r.n)}</td>
+    <td class="num">${fmtSec(r.wall_median_s)}</td><td class="num">${fmtSec(r.wall_p90_s)}</td><td class="num">${fmtSec(r.cold_median_s)}</td>
+    <td class="num">${r.cpu_mean_s == null ? "-" : r.cpu_mean_s.toFixed(2)}</td><td class="num">${fmtUsd(r.usd_per_1000_cpu)}</td><td class="num">${fmtUsd(r.usd_per_1000_if_gpu)}</td></tr>`;
+  let body = (c.routes || []).map((r) => line(r)).join("");
+  if (c.all) body += line({ ...c.all, route: "all", label: "All sampled questions" }, "total");
+  const b = c.baseline;
+  if (b) body += `<tr class="base"><td>Nemotron, plain prompt <span class="mono dim">baseline</span></td><td class="num">${num(b.n)}</td><td class="num">${fmtSec(b.latency_median_s)}</td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num" colspan="2">${fmtUsd(b.usd_per_1000)} at measured tokens</td></tr>`;
+  el.innerHTML = head + "<tbody>" + (body || `<tr><td colspan="8" class="dim">${esc(c.missing || "No measurements yet.")}</td></tr>`) + "</tbody>";
+  $("#costNote").textContent = `Assumed prices, not quotes: $${as.cpu_vcpu_hour_usd} per vCPU-hour, $${as.gpu_hour_usd} per GPU-hour (L4 or A10G class)${b ? `, and $${b.price_in_per_mtok} / $${b.price_out_per_mtok} per million input / output tokens for Nemotron, applied to its measured ${num(Math.round(b.prompt_tokens_mean))} input and ${num(Math.round(b.completion_tokens_mean))} output tokens per question (${b.source})` : ""}. `
+    + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off (tools/cost_eval.py, out/cost/cost_by_route.json). CPU seconds count every thread; a cold question is the first one on its drawing.` : "");
+}
+const ROUTE_LABEL = {};
+function datasetName(p) { return /preview/.test(p || "") ? "Stoa preview set" : /junction-dataset/.test(p || "") ? "Stoa full set" : (p || "dataset"); }
+
+async function loadWitnessSummary() {
+  let w;
+  try { w = await api("/api/witness_summary"); } catch (e) { return; }
+  const el = $("#witTable");
+  if (!el) return;
+  if (w.missing) { el.innerHTML = `<tbody><tr><td class="dim">${esc(w.missing)}</td></tr></tbody>`; return; }
+  const head = `<thead><tr><th>Witnesses</th><th class="num">Questions</th><th class="num">Share</th><th class="num">Router answer correct</th><th class="num">Agreed value correct</th></tr></thead>`;
+  const body = w.rows.map((r) => `<tr class="${r.level === "total" ? "total" : ""}"><td>${esc(r.label)}</td><td class="num">${num(r.n)}</td><td class="num">${pct(r.share)}</td>
+    <td class="num">${r.router_correct == null ? "-" : `${pct(r.router_correct)} <span class="dim">(${r.router_correct_n})</span>`}</td>
+    <td class="num">${r.majority_correct == null ? "-" : `${pct(r.majority_correct)} <span class="dim">(${r.majority_correct_n})</span>`}</td></tr>`).join("");
+  el.innerHTML = head + "<tbody>" + body + "</tbody>";
+  $("#witNote").textContent = w.note || "";
 }
 
 /* ---------------------------------------------------------------- CSV */
@@ -649,6 +979,8 @@ async function loadRuns() {
     loadRun(runs[0].id);
     loadOverview();
     loadBaseline();
+    loadCosts();
+    loadWitnessSummary();
   } catch (e) {
     $("#runHeadline").textContent = "Could not read results: " + e.message;
   }
@@ -793,6 +1125,7 @@ function renderObjTable(d) {
   }
   renderExamples();
   loadStatus();
+  loadCosts();
   await loadDrawings();
   const p = new URLSearchParams(location.hash.slice(1));
   if (p.get("path")) {
