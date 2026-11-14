@@ -378,7 +378,7 @@ twice where tiles overlap are merged (same class, IoU >= 0.5 or the smaller box 
 ### Nemotron
 
 NVIDIA Nemotron (`nvidia/nemotron-3.5-super-vl-120b-a12b`, a vision-language reasoning model, called
-through NVIDIA Build's OpenAI-compatible API) is used in three places. It is never the default, and
+through NVIDIA Build's OpenAI-compatible API) is used in three places, plus an opt-in fourth. It is never the default, and
 nothing it says reaches an answer without a check.
 
 1. **Last-resort answer route** (`bpqa/routes/nemotron.py`, route name `nemotron-estimate`). It runs only
@@ -396,7 +396,16 @@ nothing it says reaches an answer without a check.
    model, a plain prompt that asks for just the number, no regions and no checks, on the same questions
    our router answers. It exists to show what the structured routes add (see "Nemotron results" below).
 
-How the outputs are checked (`validate()` in `bpqa/routes/nemotron.py`):
+4. **Second opinion on scan estimates** (`bpqa/second_opinion.py`, opt-in, default OFF). Where the raster route
+   answers a CubiCasa count with tier "estimate", Nemotron is asked for its own count of the plan and, for
+   kitchens and saunas only, its count replaces ours (see "Nemotron second opinion" in `CHANGELOG.md` for the
+   measurement and why doors, windows, sinks, showers and bedrooms are left alone). It is switched on with
+   `NEMO_SECOND=1` (and needs the key and `NEMO_FALLBACK` not 0); each decision is recorded as a
+   `nemotron-second-opinion` check on the answer. It costs one reasoning request per estimate (median 33 s,
+   p90 100 s on the free tier), so it is for batch runs, not interactive answers. `tools/nemo_second.py` is the
+   measurement.
+
+How the outputs are checked (`validate()` in `bpqa/routes/nemotron.py`, route 1):
 
 | check | rule |
 |---|---|
