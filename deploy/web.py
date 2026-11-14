@@ -192,7 +192,16 @@ CREDIT_JS = r"""
   const link = '<a href="/credits" style="color:#85b7e0">All credits</a>';
   const esc = s => String(s || "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   bar.innerHTML = base + link;
-  document.addEventListener("DOMContentLoaded", () => document.body.appendChild(bar));
+  // the bar is fixed at the bottom; the app's full-height panels subtract --foot-h so nothing runs under it
+  const reserve = () => {
+    document.documentElement.style.setProperty("--foot-h", bar.offsetHeight + "px");
+    document.body.style.paddingBottom = bar.offsetHeight + "px";      // phone layout scrolls the page instead
+  };
+  document.addEventListener("DOMContentLoaded", () => {
+    document.body.appendChild(bar);
+    reserve();
+    window.addEventListener("resize", reserve);
+  });
   async function show(path) {
     try {
       const c = await (await window.__bpeFetch("/api/credits?path=" + encodeURIComponent(path))).json();
