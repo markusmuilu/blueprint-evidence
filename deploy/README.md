@@ -84,7 +84,7 @@ Nemotron calls on that key: they come only after every local route abstained, ar
 - `web.py`: wraps `app/server.py` without changing it. Sets `STOA_DATA` to the demo set; uploads limited
   to PDF, DXF, IFC, PNG, JPEG, TIFF and SVG (TIFF and SVG are converted to PNG; DWG is refused with a message unless `dwg2dxf` is installed; several files at once become several drawings, a multi-page PDF one drawing per page; see `app/uploads.py`) and 30 MB per request (checked before the body is read, and in the
   browser before sending); uploads go to the container's temp folder and are deleted, with every cache
-  file derived from them, 15 minutes after upload (`BPE_UPLOAD_TTL`), and in any case when the container
+  file derived from them, `BPE_UPLOAD_TTL` after upload (15 minutes on one container; 24 hours with the shared Volume), and in any case when the container
   stops. Adds `/credits`, `/api/credits?path=`, a credit bar on every page naming the licence and credit
   of the drawing on screen, and `/api/deploy` (memory, CPU seconds, uptime; no secrets). At start it
   loads torch, both detector models and the OCR engine (about 5 s). In warm mode only (`BPE_WARM=1` sets

@@ -39,7 +39,7 @@ from starlette.routing import Mount              # noqa: E402
 # the language-model question reading stays on
 os.environ.setdefault("NEMO_IMAGE_ESTIMATE", "0")
 os.environ.setdefault("NEMO_DEADLINE_S", "15")   # live app: Nemotron gets 15 s per call, then an honest "cannot prove"
-from app import server                           # noqa: E402
+from app import server, shared                   # noqa: E402
 
 server.UPLOAD_EXT = UPLOAD_EXT                   # read at call time by server.upload
 server.MAX_UPLOAD = MAX_BYTES
@@ -133,6 +133,12 @@ def _purge_upload(uid: str):
 def _cleaner():
     while True:
         time.sleep(60)
+        if shared.enabled():
+            try:
+                for uid in shared.purge_expired(UPLOAD_TTL):      # the shared copy (another container may hold the local one)
+                    _purge_upload(uid)
+            except Exception as ex:
+                print(f"[cleaner] shared purge: {type(ex).__name__}: {ex}", flush=True)
         now = time.time()
         for d in list(server.UPLOADS.iterdir()) if server.UPLOADS.is_dir() else []:
             try:
@@ -150,7 +156,8 @@ threading.Thread(target=_cleaner, daemon=True, name="upload-cleaner").start()
 def credit_for(path: str) -> dict:
     if path.startswith("upload:"):
         return {"source": "Your upload", "licence": "yours",
-                "credit": f"Kept in temporary storage only and deleted {UPLOAD_TTL // 60} minutes after upload."}
+                "credit": (f"Kept in temporary storage only and deleted {UPLOAD_TTL // 3600} hours after upload." if UPLOAD_TTL >= 7200
+                   else f"Kept in temporary storage only and deleted {UPLOAD_TTL // 60} minutes after upload.")}
     c = CREDITS.get(path)
     if c is None:
         return {"source": "unknown", "licence": "see /credits", "credit": ""}
@@ -299,6 +306,8 @@ def deploy_status():
         "demo_drawings": len(server.CATALOG.drawings),
         "upload_limit_mb": MAX_BYTES // 2**20,
         "upload_ttl_s": UPLOAD_TTL,
+        "shared_storage": shared.enabled(),
+        "shared_stats": dict(shared.STATS),
         "uploads_held": len(list(server.UPLOADS.iterdir())) if server.UPLOADS.is_dir() else 0,
     }
 
