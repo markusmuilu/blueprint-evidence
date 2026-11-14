@@ -41,7 +41,11 @@ drawing  --> router: cheapest route that can prove the answer
                                 English, German), a trained detector for fixtures, doors and windows;
                                 every count in a tier: "proven" or "estimate" (with the reason)
                5. nemotron      last resort only: a vision-language model reads the image and must return the
-                                value plus boxes of what it relied on; validated, drawn, tier "estimate"
+                                value plus boxes of what it relied on; validated, drawn, tier "estimate";
+                                not tried when a route read the drawing and found that it does not carry the
+                                answer (e.g. bedrooms on a plan whose rooms are all labelled "Piece")
+               sheet-scale      "what is the scale": the ratio printed on the sheet (proven), else derived from
+                                the scale bar, area labels or dimensions (estimate); OCR on scans
           --> checking layer (raster answers): consistency checks across routes; a conflict makes an estimate
           --> answer JSON {value, unit, route, tier, tier_reason, uncertain, confidence, evidence, explanation,
                            items, checks}
@@ -69,10 +73,13 @@ Swiss Dwellings (DXF of the same drawing):
 | toilets vs washbasins | both are 48-vertex ellipses; a washbasin has a drain circle inside, a toilet does not |
 | bathtubs, showers | 69-vertex and 5-vertex FIXTURE outlines |
 | room area | shoelace area of the ROOM_OUTLINE that contains the room's number label |
-| apartment / floor totals | rooms inside the unit outline, outdoor names excluded; rooms printed with a number but no name count only if they contain a sanitary fixture |
+| apartment / floor totals | rooms inside the unit outline, outdoor names excluded; rooms printed with a number but no name count if they contain a sanitary fixture or are wider than 1.0 m (narrower ones are shafts) |
+| bedrooms, bathrooms, kitchens, WC rooms, balconies | ROOM_TEXT labels typed by `takeoff.room_types` (DE, FR, IT); unnamed numbered rooms typed from their fixtures (bathtub or shower = bathroom); generic "Zimmer" / "Piece" / "Stanza" are never counted as bedrooms, and a floor with only generic rooms gets no bedroom count (the plan does not say) |
 
 IFC: counts are entities of the class (subtypes included; stair flights nested in a stair are not
-separate stairs), filtered by storey containment. Room areas come from `NetFloorArea` when the model has
+separate stairs), filtered by storey containment. Bedrooms, bathrooms, WC rooms, kitchens are IfcSpaces
+whose name types them; "toilets" on a floor are the WC / toilet spaces (the dataset's IFC convention),
+"toilet bowls" / "WC seats" the IfcSanitaryTerminals of WC type. Room areas come from `NetFloorArea` when the model has
 quantity sets, otherwise from the footprint of the space geometry. Wall length, side area and volume,
 and slab volume are sums of quantity-set values, converted with the project units.
 
@@ -166,8 +173,11 @@ not a change to them.
   unless walls are asked.
 - **Room types from drawing labels** (`room_types`): Swiss (Bad, Kuche, Bain, Bagno, Schlafzimmer ...),
   IFC (Bathroom 1, Toilet, TUALETTRUUM, doucheruimte, Bad - Dame, 1IZQ-BAN ...) and Finnish
-  abbreviations. Generic "Zimmer" / "Piece" / "Room" are not typed; they are listed in the answer as
-  not included. A label naming two types ("Wohnen/Essen", "PH/KHH") counts for both.
+  abbreviations. Generic "Zimmer" / "Piece" / "Stanza" / "Room" are not typed; they are listed in the answer
+  as not included, and a bedroom or living-room takeoff on a floor whose rooms are only generic abstains
+  (of the 178 Swiss floors in the full set that use "Piece", one also has a "Chambre a coucher"; on 64 of them
+  no living room is labelled, so the living room is a "Piece" too). A label
+  naming two types ("Wohnen/Essen", "PH/KHH") counts for both.
 - **Answer:** value = total m2; `items` = one line per room (label, number, type, area, where the number
   came from); `explanation` = "16.76 m2 = Bad (7.05) 6.01 + ... " plus the interpretation; evidence PNG =
   the rooms filled and numbered with their areas, the total and "floor area only" in the header.

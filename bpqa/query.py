@@ -74,6 +74,33 @@ OBJECTS: list[tuple[str, str]] = [
     ("room", r"\brooms?\b|raume|raum\b|pieces?\b|piece\b|locali|locale\b|\brum\b|rummet|ruumi|ruumide|spaces"),
 ]
 
+# Room types a count question can name without the fixed dataset phrasing above ("how many bedrooms?",
+# "combien de chambres", "wie viele Badezimmer"): the takeoff room-type words (bpqa/takeoff.py, EN FI DE
+# FR IT) mapped to the count objects the routes know. Only used when no object above matched, or only
+# the generic "room".
+COUNT_ROOM_TYPES = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bathroom", "sauna": "sauna",
+                    "balcony": "balcony", "wc": "wc_room"}
+# "toilets" alone is ambiguous: the fixture (Swiss and CubiCasa questions: "toilets (WC)", "toilet bowls")
+# or the room (IFC questions: "how many toilets on the ground floor" answered with WC spaces). It is read as
+# the object toilet with extra["toilet_ambiguous"]; each route applies its dataset's convention. A named
+# room ("toilet rooms", "restrooms", "WC-tila") is a WC room.
+WC_ROOM_WORDS = re.compile(r"\b(wc|toilet|toilette)s?[ -]?(rooms?|tila\w*|raume?|raeume)\b|restrooms?|powder rooms?|"
+                           r"\bvesso|\bvessa|separate wc|erillis\w* wc|tualettruum")
+SCALE_Q = re.compile(r"\bscale\b|massstab|\bechelle\b|\bscala\b|mittakaava|maalestik|\bmalestok|skala\b")
+
+
+def count_room_type(f_obj: str) -> tuple[str | None, bool]:
+    """(count object, toilet_ambiguous) for a count question naming one room type, else (None, False)."""
+    from .takeoff import EXCLUDE, Q_TYPE_RE
+    f = EXCLUDE.sub(" ", f_obj)
+    types = [t for t, rx in Q_TYPE_RE.items() if t in COUNT_ROOM_TYPES and re.search(rx, f)]
+    if len(types) != 1:
+        return None, False
+    if types[0] == "wc":
+        return ("wc_room", False) if WC_ROOM_WORDS.search(f) else ("toilet", True)
+    return COUNT_ROOM_TYPES[types[0]], False
+
+
 QUOTE_RE = re.compile(
     r"(?:(?<=[\s(])'(.+?)'(?=[\s,?)!.:]|$))"   # 'x'  (inner apostrophes allowed)
     r"|«\s*(.+?)\s*»"                            # «x» and « x »
@@ -161,6 +188,20 @@ class RuleParser(QueryParser):
             if q.obj:
                 break
 
+        # "how many bathrooms does the apartment have": the apartment is the scope, not the object
+        apt_scope = q.obj == "apartment" and not re.search(
+            r"apartments|wohnungen|appartements|appartamenti|residential units|unita abitative", f_obj)
+        if q.measure == "count" and (q.obj in (None, "room") or apt_scope) and not (qs and re.search(
+                r"labelled|bezeichnung|designation|denominazione|denominati|designees|named", f)):
+            obj, amb = count_room_type(f_obj)
+            if obj:
+                q.obj = obj
+                if amb:
+                    q.extra["toilet_ambiguous"] = True
+        # "what is the scale of this drawing?": the drawing scale (read off the sheet)
+        if q.obj is None and q.measure in ("text", None) and SCALE_Q.search(f_obj):
+            q.measure, q.obj = "text", "scale"
+
         # Swiss-style room number "room 2.10 ('Zimmer')" in all languages
         m = re.search(r"(?:room|raum|piece|locale|stanza)\s+([A-Z]?\d+(?:\.\d+)?)\s*\(", fold(question), re.I)
         if m:
@@ -210,7 +251,7 @@ class RuleParser(QueryParser):
         if q.obj == "slab" and re.search(r"floor slabs", f):
             q.extra["slab_type"] = "FLOOR"
         # Compound or breakdown questions want a table, not one number: leave them to a text route.
-        compound = re.search(r"\b(types?|breakdown|each|with their|compared|list|distribution|grouped|"
+        compound = re.search(r"\b(types?|breakdown|each|with their|compared|list|distribution|distributed|grouped|"
                              r"along with|and what|which)\b", f)
         schedule_filter = re.search(r"door type [a-z]\d|labelled|bezeichnung|designation|denominazione", f)
         if compound and q.measure != "text" and not schedule_filter:
@@ -218,7 +259,7 @@ class RuleParser(QueryParser):
         # A scope named without quotes ("on level 1", "ground floor", "north facade", "house A")
         # cannot be resolved by the rules; better to abstain than to answer for the whole building.
         if not qs and re.search(r"\b(on|in) (the )?(level|floor|ground|basement|first|second|underground|"
-                                r"north|south|east|west|house)\b", f):
+                                r"third|fourth|fifth|sixth|top|upper|lower|attic|north|south|east|west|house)\b", f):
             q.extra["unresolved_scope"] = True
         if whole_model_asked(question):
             q.extra["whole_model"] = True

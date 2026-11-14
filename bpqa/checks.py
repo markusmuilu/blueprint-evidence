@@ -274,14 +274,20 @@ def apply(ctx, query, ans):
             from .answer import estimate
             estimate(ans, "consistency check failed: " + "; ".join(f"{c.name}: {c.detail}" for c in fails))
             adopt = [c for c in fails if c.name in ADOPT and c.suggest is not None]
+            changed = ""
             if adopt:
                 old = ans.value
                 ans.value = max(c.suggest for c in adopt) if all(c.suggest >= old for c in adopt) else adopt[0].suggest
-                ans.explanation += f"; count changed from {old} to {ans.value} by check {adopt[0].name}"
-                ans.items = [{"route_count": old}] + ans.items
+                by = next((c for c in adopt if c.suggest == ans.value), adopt[0])
+                # the explanation leads with the value given and where it came from; the route's own reading
+                # follows, so value and explanation never disagree
+                changed = f"count changed from {old} to {ans.value} by check {by.name}"
+                ans.explanation = (f"{ans.value} = implied by check {by.name} ({by.detail}); "
+                                   f"the {ans.route} route alone gave {old}: {ans.explanation}")
+                ans.items = [{"route_count": old, "adopted_from_check": by.name}] + ans.items
         if ans.evidence:
             from .evidence import add_checks
-            add_checks(ans.evidence, cs, value=ans.value, estimate=bool(fails))
+            add_checks(ans.evidence, cs, value=ans.value, estimate=bool(fails), changed=changed if fails else "")
         return ans
     if any(c.action == "abstain" for c in fails):
         why = "; ".join(f"{c.name}: {c.detail}" for c in fails)

@@ -22,7 +22,7 @@ from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
-from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster
+from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, sheet_scale
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -77,7 +77,9 @@ def no_derivatives(ctx: Context) -> bool:
     return any("ND" in lic.get(f.name, "").upper().split("-") for f in files)
 
 
-def candidate_routes(ctx: Context):
+def candidate_routes(ctx: Context, query: Query | None = None):
+    if query is not None and query.obj == "scale":
+        return [sheet_scale.answer]     # the sheet's own scale: printed ratio or the drawing's measurements
     routes = []
     twins = not ctx.pdf_only or ctx.q.ext != "pdf"
     has_twin = ctx.sibling("dxf") is not None or ctx.model_ifc() is not None
@@ -143,7 +145,7 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     reasons = []
     if ctx.evidence and no_derivatives(ctx):
         ctx.evidence = False   # answer still given; the JSON items list is the evidence
-    for fn in candidate_routes(ctx):
+    for fn in candidate_routes(ctx, query):
         try:
             a = fn(ctx, query)
         except Exception as ex:  # a broken route must never take the run down
@@ -159,6 +161,8 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         if a.answered and a.tier is None:
             a.tier = "proven"           # structured routes: the answer is derived from the file's own data
         if a.answered or a.checks:      # a check-abstained answer keeps its checks and evidence
+            return query, a
+        if a.final:                     # the drawing was read and does not carry the answer: no guessing
             return query, a
         if a.checks:                    # a check-abstained answer keeps its checks and evidence
             if not use_nemo:

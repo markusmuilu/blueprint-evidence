@@ -38,29 +38,39 @@ GROUPS = {"wet": ("bathroom", "wc", "sauna")}
 LABEL_RE = {
     "bathroom": r"bad|badezimmer|bain|bains|salle de bains?|salle d'eau|bagno|bagni|bathroom\s*\d*|bath|"
                 r"shower(\s*room)?|dusche|douche(ruimte)?|badkamer|badevaerelse|badrum|vannituba|dushiruum|"
-                r"kh\d?|kph\d?|ph\d?|pesuh(uone)?\d?|sh\d?|kylpyhuone|pesuhuone|suihkuhuone|ban|bano|aseo",
+                r"kh\d?|kph\d?|ph\d?|pesuh(uone)?\d?|sh\d?|kylpyhuone|pesuhuone|suihkuhuone|ban|bano|aseo|"
+                r"salle de douche|doccia|bagno di servizio",
     "wc": r"(m\.|w\.|staff|specimen|public|men'?s|women'?s)?\s*(toilet|toilets|toilette|toiletten|wc\d?|w\.c\.|"
-          r"restroom|lavatory|tualett(ruum)?|tualettruum|vessa|sanitair|toilet(ruimte)?)",
+          r"restroom|lavatory|tualett(ruum)?|tualettruum|vessa|sanitair|toilet(ruimte)?|toilettes|gabinetto|"
+          r"servizio igienico|servizi igienici)",
     "sauna": r"sauna|s|leiliruum|bastu|loylyhuone|lh",
     "kitchen": r"kuche|kche|kueche|cuisine|cucina|kitchen(ette)?|keuken|kokken|tekokken|kok|kook|keittio|"
-               r"keittokomero|k|kk|kt|avok|avokeittio|tupak|coc|cocina|kitchen\s*\d*",
+               r"keittokomero|k|kk|kt|avok|avokeittio|tupak|coc|cocina|kitchen\s*\d*|kochnische|cuisinette|"
+               r"coin cuisine|cucinino|angolo cottura",
     "bedroom": r"schlafzimmer|chambre( a coucher)?|chambre a coucher|camera( da letto)?|camera da letto|"
-               r"bedroom\s*\d*|slaapkamer|sovevaerelse|soverum|sovrum|magamistuba|mh\d?|makuuhuone\d?|hab\d?",
+               r"bedroom\s*\d*|slaapkamer|sovevaerelse|soverum|sovrum|magamistuba|mh\d?|makuuhuone\d?|hab\d?|"
+               r"kinderzimmer|elternzimmer|gastezimmer|chambre d'enfants?|chambre parentale|chambre d'amis|"
+               r"camera matrimoniale|camera singola|camera doppia|cameretta",
     "living": r"wohnen|wohnzimmer|sejour|sjour|salon|soggiorno|living( room)?|woonkamer|stue|opholdsrum|"
-              r"elutuba|oh|olohuone|sal",
-    "dining": r"essen|repas|pranzo|dining|eetkamer|spisestue|rt|ruokailu(tila)?|ruokailuh",
+              r"elutuba|oh|olohuone|sal|salle de sejour|salotto|wohnraum|wohnstube|stube",
+    "dining": r"essen|repas|pranzo|dining|eetkamer|spisestue|rt|ruokailu(tila)?|ruokailuh|esszimmer|"
+              r"salle a manger|sala da pranzo",
     "hall": r"korridor|flur|diele|eingang|entree|couloir|corridoio|disimpegno|ingresso|corridor|hall|hallway|"
-            r"foyer|entrance|gang|esik|et|eteinen|aula|tk|tuulikaappi|dist|kaytava",
+            r"foyer|entrance|gang|esik|et|eteinen|aula|tk|tuulikaappi|dist|kaytava|halle|eingangshalle|vestibule|"
+            r"hall d'entree|degagement|anticamera|atrio",
     "utility": r"khh|kodinhoitohuone|buanderie|waschkuche|waschraum|lavanderia|laundry|utility|bijkeuken|"
-               r"bryggers|wasruimte",
+               r"bryggers|wasruimte|waschen|trocknen|sechoir|essiccatoio",
     "storage": r"reduit|rduit|abstellraum|ripostiglio|storage|store|berging|kast|depot|vh\d?|var\d?|varasto|"
-               r"vaatehuone|abiruum|cave|keller|closet|walk-in closet|compartiment cave|vano cantina|kellari",
+               r"vaatehuone|abiruum|cave|keller|closet|walk-in closet|compartiment cave|vano cantina|kellari|"
+               r"kellerabteil|kellerraum|cantina|debarras|dispensa",
     "balcony": r"balkon|balcon|balcone|balcony|loggia|terrasse|terrazza|terrace|sitzplatz|parveke\d?|"
                r"terassi|lasitettu parveke|altan|veranda",
     "stair": r"treppenhaus|treppe|cage d'escalier|vano scala|stair(s|case)?|trappe(rum)?|trepikoda|porras",
     "room": r"zimmer|piece|pice|stanza|room|raum|local|locale|huone|ruum",
 }
 _LABEL_RE = {k: re.compile(rf"(?:{v})") for k, v in LABEL_RE.items()}
+# a label that starts with a WC word and goes on with a qualifier (who it is for, where it is) is a WC room
+WC_HEAD = re.compile(r"(wc|w\.c\.|toilets?|toilette[ns]?|restrooms?|tualettruum)\s+[a-z]")
 
 
 def _fold_label(s: str) -> str:
@@ -85,6 +95,9 @@ def room_types(name: str | None) -> set[str]:
             if rx.fullmatch(p):
                 out.add(t)
                 break
+        else:
+            if WC_HEAD.match(p):                             # "WC Damen West", "Toilet men", "WC Herren"
+                out.add("wc")
     if out - {"room"}:
         out.discard("room")
     return out
@@ -98,17 +111,20 @@ Q_TYPE_RE = {
     "wet": r"wet ?rooms?|wet areas?|markatil|kosteat tilat|kosteisiin tiloihin|nassraum|nassraeume|nasszell|"
            r"pieces humides|locali umidi",
     "bathroom": r"bathrooms?|bath rooms?|washrooms?|shower rooms?|kylpyhuone|pesuhuone|suihkuhuone|badezimmer|"
-                r"\bbad\b|\bbader\b|salles? de bains?|salles? d'eau|bagn[oi]\b",
+                r"\bbad\b|\bbader\b|salles? de bains?|salles? d'eau|salles? de douche|bagn[oi]\b|vannitub|badevaerelse",
     "wc": r"toilets?|\bwcs?\b|w\.c\.|restrooms?|lavator(y|ies)|powder rooms?|water closets?|vessa|vesso|"
-          r"\bwc-|toilette",
+          r"\bwc-|toilette|gabinett[oi]|servizi igienici|tualett",
     "sauna": r"saunas?|saunaan|saunan|saunoihin|saunoj|loylyhuone",
-    "kitchen": r"kitchens?|kitchenette|keittio|keittokomero|\bkuche|cuisines?|cucin[ae]",
-    "bedroom": r"bedrooms?|makuuhuone|schlafzimmer|chambres?( a coucher)?|camer[ae] da letto",
-    "living": r"living ?rooms?|lounge|olohuone|wohnzimmer|sejour|soggiorno",
-    "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|eteinen|eteise|kaytav|korridor|\bflur|couloir",
-    "utility": r"utility rooms?|laundry|kodinhoitohuone|waschkuche|buanderie",
-    "storage": r"storage|store ?rooms?|closets?|walk-in|varasto|vaatehuone|abstellraum|reduit",
-    "balcony": r"balcon(y|ies)|terraces?|parveke|parvekkee|balkon|terrass",
+    "kitchen": r"kitchens?|kitchenette|keittio|keittokomero|\bkuche|cuisines?|cucin[ae]|cucinin[oi]|\bkoo?gi?\b|\bkook|kokken",
+    "bedroom": r"bedrooms?|makuuhuone|schlafzimmer|kinderzimmer|magamistub|sovevaerelse|chambres?( a coucher)?|camer[ae] da letto",
+    "living": r"living ?rooms?|lounge|olohuone|wohnzimmer|sejour|soggiorn[oi]|\bsalons?\b|salott[oi]\b",
+    "dining": r"dining ?rooms?|esszimmer|salles? a manger|sale da pranzo|sala da pranzo",
+    "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|eteinen|eteise|kaytav|korridor|\bflur|couloir|"
+            r"corridoi|ingress[oi]\b|vestibules?\b|disimpegn",
+    "utility": r"utility rooms?|laundry|kodinhoitohuone|waschkuche|buanderie|lavanderi",
+    "storage": r"storage|store ?rooms?|closets?|walk-in|varasto|vaatehuone|abstellraum|reduit|ripostigli|"
+               r"cantin[ae]\b|kellerabteil|debarras",
+    "balcony": r"balcon(y|ies|s|e|i)?\b|terraces?|parveke|parvekkee|balkon|terrass",
 }
 _Q_TYPE_RE = {k: re.compile(v) for k, v in Q_TYPE_RE.items()}
 # Finnish plan abbreviations, matched case-sensitively on the original question
@@ -235,6 +251,92 @@ def precheck(tk: dict) -> str | None:
     """Reason to abstain before any route looks at the drawing, or None. Wall surfaces are measured by the
     routes in WALL_ROUTES (bpqa/walls.py); the router withdraws other routes' floor-only answers."""
     return None
+
+
+# ---------------------------------------------------------------- room-type counts
+
+# count objects of the query parser -> room type of a drawing label
+COUNT_TYPES = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bathroom", "wc_room": "wc",
+               "sauna": "sauna", "balcony": "balcony"}
+# Types a generic room label ("Zimmer", "Piece", "Stanza", "Room") may stand for. Swiss plans label a room
+# either by its use ("Schlafzimmer", "Chambre a coucher") or generically ("Zimmer", "Piece", "Stanza"). Of the
+# 178 floors in the full dataset that use "Piece", one also has a "Chambre a coucher", and 64 label no living room,
+# so there the living room is a "Piece" too. A generic room is never counted as one of these, and a zero is
+# not claimed.
+GENERIC_MAY_BE = {"bedroom", "living"}
+WET = {"bathtub", "shower"}
+
+
+def generic_reason(rooms: list[dict], types, name_key: str = "name") -> str:
+    """Reason to abstain when no room is typed as one of `types` but generic rooms exist that may be
+    them ('' otherwise): the drawing then does not say which rooms they are."""
+    want = set(types)
+    if not want <= GENERIC_MAY_BE or any(room_types(r.get(name_key)) & want for r in rooms):
+        return ""
+    generic = [r for r in rooms if room_types(r.get(name_key)) == {"room"}]
+    if not generic:
+        return ""
+    labs = sorted({str(r.get(name_key)) for r in generic})
+    living = [r for r in rooms if "living" in room_types(r.get(name_key))]
+    names = " or ".join(TYPE_NAMES[t] for t in sorted(want))
+    return (f"no room on this floor is labelled as a {names}; {len(generic)} room(s) carry only the generic label "
+            f"{', '.join(repr(x) for x in labs)} (room)" + ("" if living else ", and no living room is labelled either, so "
+            "the generic rooms include it") + f". The drawing does not say which of them are {names}s, so the count is "
+            f"not given (a model reading the same plan would be guessing)")
+
+
+def count_room_type(rooms: list[dict], obj: str, fixtures=None, name_key: str = "name") -> dict:
+    """'How many bedrooms / bathrooms / WC rooms ...' from room labels on a vector drawing.
+
+    rooms: dicts with a label under name_key (and 'number' where the drawing numbers rooms).
+    fixtures: callable room -> set of fixture kinds drawn inside (toilet, washbasin, bathtub, shower), or None.
+    Returns {value, rooms, note, estimate} or {value: None, why, final}. final=True means the labels were read
+    and the drawing does not carry the answer; the router then does not hand the question to a model."""
+    t = COUNT_TYPES[obj]
+    name = TYPE_NAMES[t]
+    typed = [r for r in rooms if t in room_types(r.get(name_key))]
+    inferred = []
+    if fixtures is not None and t in ("bathroom", "wc"):
+        for r in rooms:
+            if str(r.get(name_key) or "").strip() or not r.get("number"):
+                continue
+            k = fixtures(r)
+            if (t == "bathroom" and k & WET) or (t == "wc" and "toilet" in k and not k & WET):
+                inferred.append(r)
+    used = typed + inferred
+    if t in GENERIC_MAY_BE and not used:
+        why = generic_reason(rooms, {t}, name_key)
+        if why:
+            return {"value": None, "why": why, "final": True}
+    labs = sorted({str(r.get(name_key)) for r in typed})
+    note = f"rooms labelled as {name}" + (f" ({', '.join(labs)})" if labs else "")
+    est = []
+    if inferred:
+        what = f"{len(inferred)} numbered room(s) with no name, typed as {name} from the fixtures drawn inside"
+        note = f"{note} plus {what}" if typed else what
+        est.append(f"{len(inferred)} room(s) have no name; counted as {name} from their fixtures "
+                   + ("(bathtub or shower)" if t == "bathroom" else "(a toilet and no bathtub or shower)"))
+    generic = [r for r in rooms if room_types(r.get(name_key)) == {"room"}]
+    if t in GENERIC_MAY_BE and generic:
+        glabs = sorted({str(r.get(name_key)) for r in generic})
+        est.append(f"{len(generic)} room(s) labelled only {', '.join(repr(x) for x in glabs)} (generic room) are not "
+                   f"counted; some of them may be {name}s")
+        note += f"; {len(generic)} generic room(s) not counted"
+    if t == "bathroom" and fixtures is not None:
+        wc_like = [r for r in typed if "toilet" in fixtures(r) and not fixtures(r) & WET]
+        if wc_like:
+            est.append(f"{len(wc_like)} room(s) labelled as bathroom hold a toilet but no bathtub or shower "
+                       f"({', '.join(str(r.get('number') or r.get(name_key)) for r in wc_like[:6])}); counted as labelled, "
+                       f"though they may be separate WCs")
+    if t == "wc" and fixtures is not None:
+        wc_like = [r for r in rooms if "bathroom" in room_types(r.get(name_key))
+                   and "toilet" in fixtures(r) and not fixtures(r) & WET]
+        if wc_like:
+            est.append(f"{len(wc_like)} room(s) labelled as bathroom hold a toilet but no bathtub or shower; "
+                       f"they may be separate WCs and are not counted")
+    if not used and not est:
+        note = f"no room labelled as {name} among {len({str(r.get(name_key)) for r in rooms if r.get(name_key)})} room names"
+    return {"value": len(used), "rooms": used, "note": note, "estimate": "; ".join(est)}
 
 
 def select(rooms: list[dict], tk: dict, name_key: str = "name") -> tuple[list[dict], list[dict]]:

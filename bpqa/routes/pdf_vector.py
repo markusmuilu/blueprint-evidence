@@ -35,7 +35,7 @@ from .. import takeoff
 from ..answer import Answer, abstain, estimate
 from ..evidence import AMBER, BLUE, PALETTE, ImageCanvas, evidence_path, finish, record_steps
 from ..pdfvec import PT_M, load_page
-from .dxf_swiss import AREA_RE, NUM_RE, OUTDOOR, SHAFT_VOID, UNIT_RE, _window_groups
+from .dxf_swiss import AREA_RE, NUM_RE, OUTDOOR, SHAFT_VOID, UNIT_RE, UNNAMED_MIN_WIDTH_M, _window_groups, short_side
 from . import pdf_generic
 from .scope_guard import single_room_problem
 
@@ -399,11 +399,15 @@ class PdfFloor:
         return fold_name(r["name"] or "") in {fold_name(o) for o in SHAFT_VOID}
 
     def counts_as_indoor(self, r) -> bool:
+        """Same rule as dxf_swiss.SwissFloor.counts_as_indoor (unnamed numbered rooms: a fixture inside,
+        or wider than UNNAMED_MIN_WIDTH_M when the scale is known)."""
         if not r["number"] or self.is_outdoor(r):
             return False
         if r["name"]:
             return True
-        return any(r["poly"].contains(Point(c)) for c in self.fixture_centroids)
+        w = short_side(r["outline"]) * self.scale.m_per_pt if self.scale.known else None
+        return ((w is not None and w > UNNAMED_MIN_WIDTH_M)
+                or any(r["poly"].contains(Point(c)) for c in self.fixture_centroids))
 
 
 def _bb(pts):
@@ -546,7 +550,7 @@ def answer(ctx, q) -> Answer:
             note = f"indoor rooms inside apartment {q.apartment} outline"
         elif q.variant == "net_indoor_total":
             rooms_used = [r for r in fl.rooms if fl.counts_as_indoor(r) and not fl.is_shaft(r)]
-            note = "numbered named indoor rooms (outdoor, shafts and voids excluded)"
+            note = "numbered indoor rooms (named, or unnamed with a fixture inside or wider than 1 m; outdoor, shafts and voids excluded)"
         elif q.label and q.obj == "room":
             rooms_used = _match_room_label(fl, q.label)
             if not rooms_used:

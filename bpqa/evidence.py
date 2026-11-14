@@ -292,13 +292,19 @@ def write_marks(out: Path, marks: list, frame: dict | None, k: float, head_h: in
         pass
 
 
-def add_checks(path: str, checks, abstained: bool = False, value=None, estimate: bool = False) -> str:
-    """Redraw an evidence image's header with the checks that fired (and the abstention or estimate, if any)."""
+def add_checks(path: str, checks, abstained: bool = False, value=None, estimate: bool = False,
+               changed: str = "") -> str:
+    """Redraw an evidence image's header with the checks that fired (and the abstention or estimate, if any).
+    changed: set when a check replaced the route's count; the header then says so before the route's note,
+    which describes what the route itself read."""
     if path not in _STASH:
         return path
     img, question, answer_line, note = _STASH[path]
     if estimate:
         answer_line = f"Answer: {value}   (ESTIMATE: a consistency check failed, see below)"
+        if changed:
+            answer_line = f"Answer: {value}   (ESTIMATE: {changed}, see below)"
+            note = f"The boxes show what the route read on its own. {note}"
     elif abstained:
         answer_line = f"ABSTAINED: would answer {value}, a consistency check failed"
         note = (note + "; " if note else "") + "the boxes show what the route read; the failed check is below"

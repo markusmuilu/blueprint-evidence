@@ -38,6 +38,17 @@ OUTDOOR = {"balkon", "balcon", "balcone", "loggia", "terrasse", "terrazza", "sit
            "veranda", "aussenraum"}
 SHAFT_VOID = {"schacht", "luftraum", "gaine", "vide", "cavedio", "vuoto", "shaft", "void",
               }
+# A room printed with a number but no name counts as indoor when it holds a sanitary fixture or is wider
+# than this (the short side of its minimum rotated rectangle): a shaft is narrow, a room one walks into is
+# not. Chosen on the full dataset's dev split (net indoor totals 92.3% -> 94.9%, apartment totals 94.3% ->
+# 96.2%; 0.8 to 1.2 m is a plateau; see CHANGELOG 2026-11-14 route-misses).
+UNNAMED_MIN_WIDTH_M = 1.0
+
+
+def short_side(poly) -> float:
+    """Short side of the polygon's minimum rotated rectangle (its width), in the polygon's units."""
+    xs = list(poly.minimum_rotated_rectangle.exterior.coords)
+    return min(((xs[i][0] - xs[i + 1][0]) ** 2 + (xs[i][1] - xs[i + 1][1]) ** 2) ** 0.5 for i in range(4))
 
 
 def _text_box(e, s, xy):
@@ -228,13 +239,15 @@ class SwissFloor:
         return (r["name"] or "").lower() in SHAFT_VOID
 
     def counts_as_indoor(self, r) -> bool:
-        """Numbered indoor room. Rooms printed with a number but no name are ambiguous
-        (wet rooms, shafts or balconies); keep them only if they hold a sanitary fixture."""
+        """Numbered indoor room. Rooms printed with a number but no name are ambiguous (wet rooms,
+        small storage, shafts); keep them if they hold a sanitary fixture or are wider than
+        UNNAMED_MIN_WIDTH_M (narrower unnamed rooms without a fixture are shafts)."""
         if not r["number"] or self.is_outdoor(r):
             return False
         if r["name"]:
             return True
-        return any(r["poly"].contains(Point(c)) for c in self.fixture_centroids)
+        return (short_side(r["poly"]) > UNNAMED_MIN_WIDTH_M
+                or any(r["poly"].contains(Point(c)) for c in self.fixture_centroids))
 
 
 def swiss_has_toilet(fl):
@@ -252,6 +265,16 @@ def swiss_has_toilet(fl):
             return True
         return False if any(r["poly"].contains(c) for c in others) else None
     return test
+
+
+def swiss_room_fixtures(fl, r) -> set:
+    """Fixture kinds drawn inside a room outline: toilet, washbasin, bathtub, shower."""
+    out = set()
+    for kind, boxes in (("toilet", fl.toilets), ("washbasin", fl.washbasins), ("bathtub", fl.bathtubs),
+                        ("shower", fl.showers)):
+        if any(r["poly"].contains(Point((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)) for b in boxes):
+            out.add(kind)
+    return out
 
 
 def swiss_wall_rooms(fl, rooms_used):
@@ -380,6 +403,7 @@ def answer(ctx, q) -> Answer:
         return dxf_generic.answer(ctx, q, dxf)
     fl = load(str(dxf))
     items, value, rooms_used, boxes, note = [], None, [], [], ""
+    tier_reason = ""  # set when a count rests on an interpretation (room types inferred, generic rooms left out)
     tku = {}          # the takeoff interpretation the answer is built from (toilet fallback, bpqa/takeoff.py)
 
     if q.measure == "count":
@@ -391,6 +415,9 @@ def answer(ctx, q) -> Answer:
             note = {"door": "door leaves on layer DOOR", "window": "grouped WINDOW polylines",
                     "toilet": "FIXTURE ellipses without drain", "washbasin": "FIXTURE ellipses with drain circle",
                     "bathtub": "FIXTURE bathtub outlines", "shower": "FIXTURE shower trays"}[q.obj]
+            if q.obj == "toilet" and q.extra.get("toilet_ambiguous"):
+                note += (" ('toilets' read as WC seats, the Swiss plans' convention for 'toilets (WC)'; "
+                         "rooms are not counted)")
         elif q.obj == "apartment":
             value = len(fl.units)
             items = [u["label"] for u in fl.units]
@@ -399,6 +426,14 @@ def answer(ctx, q) -> Answer:
             rooms_used = [r for r in fl.rooms if r["name"] == q.label]
             value = len(rooms_used)
             note = f"room outlines labelled '{q.label}'"
+        elif q.obj in takeoff.COUNT_TYPES:
+            rt = takeoff.count_room_type(fl.rooms, q.obj, fixtures=lambda r: swiss_room_fixtures(fl, r))
+            if rt["value"] is None:
+                a = abstain(ROUTE, rt["why"])
+                a.final = rt.get("final", False)
+                return a
+            rooms_used, value, note = rt["rooms"], rt["value"], rt["note"]
+            tier_reason = rt.get("estimate", "")
         else:
             return abstain(ROUTE, f"no DXF rule for count of {q.obj}")
     elif q.measure == "area":
@@ -414,7 +449,7 @@ def answer(ctx, q) -> Answer:
             note = f"indoor rooms inside apartment {q.apartment} outline"
         elif q.variant == "net_indoor_total":
             rooms_used = [r for r in fl.rooms if fl.counts_as_indoor(r) and not fl.is_shaft(r)]
-            note = "numbered named indoor rooms (outdoor, shafts and voids excluded)"
+            note = "numbered indoor rooms (named, or unnamed with a fixture inside or wider than 1 m; outdoor, shafts and voids excluded)"
         elif q.label:
             rooms_used = [r for r in fl.rooms if r["name"] == q.label]
             note = f"rooms labelled '{q.label}'"
@@ -424,6 +459,11 @@ def answer(ctx, q) -> Answer:
             tku = tk
             if not rooms_used:
                 named = sorted({r["name"] for r in fl.rooms if r["name"]})
+                gen = takeoff.generic_reason(fl.rooms, tk["types"])
+                if gen:
+                    a = abstain(ROUTE, gen + f" (room names: {', '.join(named[:15])})")
+                    a.final = True
+                    return a
                 why = (tk.get("toilet_rooms") or {}).get("why")
                 return abstain(ROUTE, (why + f" (room names: {', '.join(named[:15])})") if why else
                                f"no room of type {', '.join(tk['types'])} among the {len(named)} room names "
@@ -454,6 +494,8 @@ def answer(ctx, q) -> Answer:
     unit = "count" if q.measure == "count" else "m2"
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=conf, items=items,
                  explanation=f"{value} = {note} in {dxf.name}")
+    if tier_reason:
+        estimate(ans, tier_reason)
     if q.variant == "type_sum":
         rows = [{"label": r["name"] or "unlabelled room", "number": r["number"], "area": fl.room_area(r), "source": "ROOM_OUTLINE polygon"}
                 for r in rooms_used]

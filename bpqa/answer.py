@@ -21,6 +21,10 @@ class Answer:
     tier: str | None = None
     tier_reason: str = ""
     uncertain: list = field(default_factory=list)
+    # an abstention after the route read what the drawing carries and found that it does not hold the
+    # answer (e.g. bedrooms on a plan whose rooms are all labelled generically): the router stops here
+    # instead of handing the question to a model that would have to guess
+    final: bool = False
 
     @property
     def answered(self) -> bool:
