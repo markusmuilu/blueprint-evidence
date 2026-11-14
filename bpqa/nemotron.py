@@ -22,7 +22,9 @@ REPO = Path(__file__).resolve().parent.parent
 BASE_URL = "https://integrate.api.nvidia.com/v1"
 MODEL = "nvidia/nemotron-3.5-super-vl-120b-a12b"
 CACHE_DIR = REPO / "out" / "nemo_cache"
-MIN_INTERVAL = float(os.environ.get("NEMO_MIN_INTERVAL", "1.6"))   # about 37 requests per minute
+MIN_INTERVAL = float(os.environ.get("NEMO_MIN_INTERVAL", "1.6"))
+# Wall-clock limit per chat() call including retries; 0 = none (batch eval). The live app sets it, so a slow
+# endpoint gives an honest "cannot prove" instead of a 100+ s wait (QA 14 Nov: 12 answers over 30 s).   # about 37 requests per minute
 MAX_SIDE = int(os.environ.get("NEMO_MAX_SIDE", "1600"))
 MAX_TOKENS = 4096
 
@@ -64,6 +66,11 @@ def _cache_key(model: str, prompt: str, img_hash: str, max_tokens: int, system: 
     return hashlib.sha256(json.dumps(parts).encode()).hexdigest()
 
 
+def _nap(seconds: float, end: float | None) -> float:
+    """A retry pause, cut short so it never runs past the call's deadline."""
+    return seconds if end is None else max(0.0, min(seconds, end - time.time()))
+
+
 def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: int = MAX_TOKENS,
          model: str = MODEL, cache: bool = True, think: bool = True) -> dict:
     """One request. Returns {content, prompt_tokens, completion_tokens, latency_s, cached, error}.
@@ -90,7 +97,12 @@ def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: in
     if not think:                                     # no reasoning phase: short, cheap, fine for parsing tasks
         body["chat_template_kwargs"] = {"enable_thinking": False}
     err = None
+    limit = float(os.environ.get("NEMO_DEADLINE_S", "0") or 0)
+    end = time.time() + limit if limit > 0 else None
     for attempt in range(6):
+        if end is not None and end - time.time() < 2:
+            err = f"time limit {limit:g} s reached"
+            break
         with _lock:                                  # throttle: one request start per MIN_INTERVAL
             wait = _last[0] + MIN_INTERVAL - time.time()
             if wait > 0:
@@ -98,11 +110,12 @@ def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: in
             _last[0] = time.time()
         t0 = time.time()
         try:
-            resp = requests.post(f"{BASE_URL}/chat/completions", json=body, timeout=300,
+            resp = requests.post(f"{BASE_URL}/chat/completions", json=body,
+                                 timeout=300 if end is None else max(2.0, end - time.time()),
                                  headers={"Authorization": f"Bearer {key}"})
         except requests.RequestException as ex:
             err = f"{type(ex).__name__}"
-            time.sleep(min(60, 4 * 2 ** attempt))
+            time.sleep(_nap(min(60, 4 * 2 ** attempt), end))
             continue
         dt = time.time() - t0
         if resp.status_code == 200:
@@ -122,7 +135,7 @@ def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: in
         err = f"HTTP {resp.status_code}: {resp.text[:200]}"
         if resp.status_code in (429, 500, 502, 503, 504):
             ra = resp.headers.get("Retry-After")
-            time.sleep(float(ra) if ra and ra.replace('.', '').isdigit() else min(90, 5 * 2 ** attempt))
+            time.sleep(_nap(float(ra) if ra and ra.replace('.', '').isdigit() else min(90, 5 * 2 ** attempt), end))
             continue
         break                                         # 4xx other than 429: do not retry
     return {"content": None, "error": err, "cached": False}

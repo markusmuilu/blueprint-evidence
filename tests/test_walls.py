@@ -18,7 +18,11 @@ def main():
     i = W.parse_inputs("How many m2 of tiles should I order for the bathrooms with a ceiling height of 2.6 m and 15% waste?")
     check(i.get("ceiling_m") == 2.6 and i.get("waste_pct") == 15 and i["order"], f"inputs {i}", bad)
     i = W.parse_inputs("Wall tiles to 1.2 m in the WC, no waste")
-    check(i.get("tile_m") == 1.2 and i.get("waste_pct") == 0 and not i["order"], f"inputs {i}", bad)
+    check(i.get("tile_m") == 1.2 and i.get("waste_pct") == 0 and i["order"], f"inputs {i}", bad)   # material asked: order (0% waste)
+    for q in ("tiles to 1.2 m height for the bathroom", "flooring for the bedrooms with 10% waste"):
+        check(W.parse_inputs(q)["order"], f"order intent {q}", bad)       # QA 14 Nov: waste was left out of the value
+    for q in ("What is the floor area of the bathroom?", "How much tiling area does the bathroom have?"):
+        check(not W.parse_inputs(q)["order"], f"net intent {q}", bad)
     i = W.parse_inputs("tiling height 210 cm for the bathroom walls")
     check(abs(i.get("tile_m", 0) - 2.1) < 1e-9, f"inputs {i}", bad)
 

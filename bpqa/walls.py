@@ -67,6 +67,13 @@ def parse_inputs(question: str) -> dict:
             out["waste_pct"] = _f(m.group(1))
     out["order"] = bool(re.search(r"\b(order|buy|purchase|need|needed|get|tilata|tilaan|ostaa|tarvit|bestellen|kaufen|"
                                   r"brauche|commander|acheter|ordinare|comprare)\w*", f))
+    # "tiles to 1.2 m for the bathroom" or "flooring ... with 10% waste" asks for material to get, not a net area
+    # (QA 14 Nov: the waste was listed but left out of the value). A question about the area itself stays net.
+    if not out["order"]:
+        material = re.search(r"\b(tiles?|tiling|flooring|parquet|laminate|vinyl|laatt\w*|laatoitu\w*|parket\w*|lattiamateriaal\w*|"
+                             r"fliesen|plattor|kakel)\b", f)
+        about_area = re.search(r"\b(area|net|how big|how large|pinta-?ala|flache|yta)\b", f)
+        out["order"] = bool(out.get("waste_pct")) or bool(material and not about_area)
     return out
 
 
