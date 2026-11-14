@@ -771,4 +771,14 @@ def status():
 
 app.include_router(ifc3d.router)      # 3D view of IFC models: /api/ifc3d, /api/ifc3d/geom, /api/ifc3d/element
 
-app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
+class _Revalidated(StaticFiles):
+    """Static files with Cache-Control: no-cache. Without it browsers cache app.js by heuristic and, after a deploy,
+    can run the old script against the new server; with it they revalidate (a 304 via the ETag, no download)."""
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers.setdefault("Cache-Control", "no-cache")
+        return resp
+
+
+app.mount("/", _Revalidated(directory=STATIC, html=True), name="static")

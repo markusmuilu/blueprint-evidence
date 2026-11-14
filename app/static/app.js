@@ -2523,7 +2523,10 @@ async function loadRun(id) {
   if (d.header) $("#runHeader").title = d.header;
   $("#runHeader").title = `${d.where || "out"}/${d.id}/summary.json`;
   const all = d.rows.find((r) => r.source === "ALL" && r.type === "ALL");
-  const where = d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
+  /* a run that did not record its dataset: "On the test split (dataset not recorded)", not "On the dataset not recorded" */
+  const unknown = !d.dataset_name || /not recorded/i.test(d.dataset_name);
+  const where = unknown ? (d.split ? `the <strong>${esc(d.split)}</strong> split (dataset not recorded)` : "an unrecorded dataset")
+    : d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
   const flags = d.flags && d.flags.length ? ` (${esc(d.flags.join("; "))})` : "";
   $("#runHeadline").innerHTML = all
     ? `On ${where}${flags}, <strong>${pct(all.accuracy)}</strong> of ${num(all.n)} questions were answered correctly. The system answered <strong>${pct(all.coverage)}</strong> of them and was right on <strong>${pct(all.precision)}</strong> of those, at <strong>${fmtUsd(all.cost_per_q || 0)}</strong> per question.`
