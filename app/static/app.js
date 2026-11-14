@@ -469,14 +469,14 @@ function fmtValue(v) {
 }
 function fmtUnit(u) { return u === "count" ? "" : u === "m2" ? "m²" : u === "m3" ? "m³" : u || ""; }
 
-function itemLabel(it, obj) {
+function itemLabel(it, obj, route) {
   if (typeof it !== "object" || it === null) return [String(it), ""];
   let label = (it.number && it.name ? `${it.number} ${it.name}` : "") || (it.room ? `${it.room}${it.number ? " " + it.number : ""}` : "")
     || it.label || it.class || it.name || it.match || it.text || (it.panel != null ? `panel ${it.panel}` : "") || it.guid || "";
   if (!label && Array.isArray(it.bbox_pt)) label = `${(obj || "item").replace(/_/g, " ")} #${it.n ?? ""}`;
   if (!label && Array.isArray(it.bbox)) {
     const [x0, y0, x1, y1] = it.bbox;
-    label = `${(obj || "item").replace(/_/g, " ")} at x ${((x0 + x1) / 2).toFixed(1)}, y ${((y0 + y1) / 2).toFixed(1)} m`;
+    label = `${(obj || "item").replace(/_/g, " ")} at x ${((x0 + x1) / 2).toFixed(1)}, y ${((y0 + y1) / 2).toFixed(1)}${route === "dxf-geometry" ? " m" : " (drawing units)"}`;
   }
   let extra = "";
   if (it.score != null) extra = "score " + Number(it.score).toFixed(2);
@@ -556,7 +556,7 @@ function renderAnswer(a) {
       <div class="sec-head"><h3 class="h-panel" id="hItems">Items <span class="cite" style="margin-left:6px">${itemsCite}</span></h3><span class="meta mono">${items.length}${a.items.length >= 200 ? "+" : ""}</span></div>
       <ul class="items" id="itemList">
         ${items.map((it, i) => {
-          const [l, x] = itemLabel(it, a.query && a.query.obj);
+          const [l, x] = itemLabel(it, a.query && a.query.obj, a.route);
           const n = (it && it.n) || i + 1;
           const can = !!itemRect(it, a);
           const tag = can ? "button" : "div";

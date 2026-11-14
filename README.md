@@ -31,18 +31,18 @@ drawing  --> router: cheapest route that can prove the answer
                3. pdf-text      text layer and schedules (door schedule rows)
                3b. pdf-vector   the PDF's own linework, when no DXF/IFC twin exists (or --pdf-only):
                                 room shapes, scale, doors, windows, fixtures; scanned PDFs abstain
-               4. raster        scans (CubiCasa): panel segmentation, room labels read by local OCR,
-                                a trained detector for fixtures, doors and windows;
+                   pdf-generic  where pdf-vector does not recognise the convention: door swings and printed
+                                room labels; always tier "estimate"
+               4. raster        scans: panel segmentation, room labels read by local OCR (Finnish, Swedish,
+                                English, German), a trained detector for fixtures, doors and windows;
                                 every count in a tier: "proven" or "estimate" (with the reason)
+               5. nemotron      last resort only: a vision-language model reads the image and must return the
+                                value plus boxes of what it relied on; validated, drawn, tier "estimate"
           --> checking layer (raster answers): consistency checks across routes; a conflict makes an estimate
           --> answer JSON {value, unit, route, tier, tier_reason, uncertain, confidence, evidence, explanation,
                            items, checks}
-                                abstains where the count is not provable
-               5. nemotron      last resort only: a vision-language model reads the image and must return the
-                                value plus boxes of what it relied on; validated, drawn, tier "estimate"
-          --> checking layer (raster answers): consistency checks across routes; abstain on conflict
-          --> answer JSON {value, unit, route, confidence, tier, evidence, explanation, items, checks}
-          --> evidence PNG: counted items boxed and numbered, measured rooms filled with their area
+          --> evidence PNG: counted items boxed and numbered (blueprint blue when proven, amber when they need
+              a check), measured rooms filled with their area
 ```
 
 A route either proves an answer or abstains with a reason, and the router then tries the next one. The
@@ -77,12 +77,14 @@ Raster (CubiCasa scans):
 | question | rule |
 |---|---|
 | storeys | multi-storey plans paste each floor as its own scan onto a white canvas; count the large non-white panels |
-| bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE) and a few Swedish ones; apartment summaries like "3H+K+S" are skipped |
-| proven or estimate | proven: kitchen, bathroom, sauna when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels. Every other count is an estimate |
+| bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE), a few Swedish ones, and English and German room words (BEDROOM, KITCHEN, BATHROOM, TOILET, BALCONY, SCHLAFZIMMER, KUCHE, BADEZIMMER, BALKON ...; "Bed room" is joined to one word); apartment summaries like "3H+K+S" are skipped |
+| OCR errors | an English or German word of 6+ letters also matches with one letter wrong, missing or extra ("bedrocm3", "bathroon"); such a read is marked fuzzy. The short Finnish abbreviations never match fuzzily |
+| proven or estimate | proven: kitchen, bathroom, sauna when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels. A count that needs a fuzzy read, and a zero on a plan where any label was read only fuzzily, are estimates (the OCR misreads this plan, so a missing label may be misread beyond recognition). Every other count is an estimate |
+| rooms labelled 'X' | the readings of that label on the scan (spaces and punctuation ignored, a room number allowed); always an estimate, since no Stoa scan question asks it and there is nothing to tune it on |
 | toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold, over the eight rotations and mirrors of the image; an estimate when boxes score close to the threshold, the views disagree, or the object is one the detector is wrong on more often than right (see "Detector") |
 
-Every counted label is boxed and numbered on the scan; the other room labels that were read are boxed in
-grey, so a zero answer can be checked too. The OCR is the slow part (about 5-15 s per image for eight
+Every counted label is boxed and numbered on the scan (blue when the count is proven, amber when it is an
+estimate); the other room labels that were read are boxed in grey, so a zero answer can be checked too. The OCR is the slow part (about 5-15 s per image for eight
 passes); `tools/ocr_cache.py` fills the cache in `out/ocr/` up front.
 
 ### Checking layer
@@ -370,10 +372,15 @@ Then open http://127.0.0.1:8000. Options: `--port`, `--host`, `--data <dataset r
 `STOA_DATA`, then `../data/stoa-full/junction-dataset`, then the preview), `--results <folder>` (extra
 eval outputs), `--gpu` (by default the detector runs on the CPU).
 
-- Status tiers: "proven" for structured routes (DXF, IFC, PDF text or linework) at confidence 0.8 or
-  more; "estimate, check highlighted items" for answers read from pixels; "cannot prove" with the
-  router's reason when every route abstains. An explicit tier from the router, if a later version
-  returns one, takes precedence.
+- Status tiers: the answer's own `tier` and `tier_reason` come first. Generic DXF (`dxf-generic`) and PDF
+  (`pdf-generic`) answers below confidence 0.8 are estimates, and `nemotron-estimate` answers are always
+  estimates. Without a tier field: "proven" for structured routes (DXF, IFC, PDF text or linework) at
+  confidence 0.8 or more, "estimate, check highlighted items" otherwise; "cannot prove" with the router's
+  reason when every route abstains.
+- Results view: one line per named test set (Stoa full set test split, Stoa preview set test split, the
+  150-question Nemotron baseline sample, the unseen public drawings), each with the file it was read from;
+  the eval-run selector names the dataset, split and options of every run; the naive AI baseline card is
+  filled from `out/baseline_nemotron.json`, with our side re-scored from the newest preview test run.
 - Counted items on scans are listed with the numbers drawn on the overlay; selecting one marks it in
   the viewer. If the question is a dataset question, the dataset answer is shown beside the result.
 - Uploads (PDF, DXF, IFC, PNG, JPG; a PDF with its DXF twin can go in one upload) are stored in the OS
@@ -383,6 +390,7 @@ eval outputs), `--gpu` (by default the detector runs on the CPU).
   (cached detections in `out/det/` still answer); the rail's status button says what is missing.
 - API: `POST /api/ask {path, question, pdf_only}`, `POST /api/upload`, `GET /api/drawings`,
   `GET /api/drawing`, `GET /api/preview`, `GET /api/evidence/<id>.png`, `GET /api/results[/<run>]`,
+  `GET /api/overview`, `GET /api/baseline`,
   `GET /api/status`; docs at `/api/docs`. The design system is in `DESIGN.md`.
 
 Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG) and
@@ -529,6 +537,9 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
   bowl, basin or tub) and a small MLP on HOG features is trained from dev image counts only (multiple-
   instance counting). Cross-validated on dev it gets the exact toilet count on 31% of plans, sinks 19%,
   showers/baths 27%; small rooms, text and hob symbols outrank the toilet bowls. See `CHANGELOG.md`.
+- The English and German room words have no dev data behind them (Stoa's scans are Finnish); they were checked
+  on the unseen drawings only, and on Stoa's preview dev and test they change no answer. The proven / estimate
+  rules for them are the ones tuned on Finnish labels.
 - Room counts follow the labels printed on the plan. An unlabelled open kitchen, a sauna marked only by
   its stove, or a flat partly cut off by the scan edge is not recoverable this way, which is why those
   cases abstain instead of answering.
