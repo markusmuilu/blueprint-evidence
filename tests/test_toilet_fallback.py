@@ -69,7 +69,10 @@ def main():
     rows = [{"label": r["name"] or "unlabelled room", "number": r["number"], "area": r["poly"].area, "source": "test"}
             for r in used]
     total, items, expl = summary(rows, tk2)
-    check("total is Bad + unlabelled room", abs(total - 9.0) < 1e-9, total)
+    net = next((it["totals"]["net_m2"] for it in items if "totals" in it), total)
+    check("net total is Bad + unlabelled room", abs(net - 9.0) < 1e-9, net)
+    if tk2.get("waste_pct"):               # an "order" question: the value is the order quantity incl. waste
+        check("order total adds the waste", abs(total - round(9.0 * (1 + tk2["waste_pct"] / 100), 2)) < 1e-9, total)
     check("explanation opens with the interpretation",
           expl.startswith("No separate WC room on this floor; using the rooms that contain a toilet: Bad (5.00 m2), "
                           "unlabelled room 2.04 (4.00 m2)."), expl[:200])
