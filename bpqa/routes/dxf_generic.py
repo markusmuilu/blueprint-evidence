@@ -661,6 +661,8 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
             cv.line(p, color=(90, 90, 90) if "wall" in c else (180, 180, 180), width=2 if "wall" in c else 1)
         for _, c, r in fl.circles:
             cv.circle(c, r, color=(190, 190, 190))
+        for _, s, xy in fl.label_texts():      # room labels in grey, so a label count can be checked
+            cv.text(xy, s, size=10, color=(120, 120, 120), anchor="ls", bg=False)
         for i, r in enumerate(rooms_used):
             col = PALETTE[i % len(PALETTE)]
             cv.poly(list(r["poly"].exterior.coords), fill=col + (70,), outline=col, width=3)
@@ -671,7 +673,7 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         for i, b in enumerate(boxes or []):
             cv.box(b, n=i + 1, pad=pad)
         for i, (s, xy) in enumerate(label_pts):
-            cv.text(xy, f"{i + 1}: {s}", size=14, color=PALETTE[0])
+            cv.text(xy, f"{i + 1}: {s}", size=14, color=PALETTE[0], anchor="ls")
         out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
         ans.evidence = finish(cv.img, out, ctx.q.question, f"Answer: {value} {unit}   route: {ROUTE} (cost $0)", note=note)
     return ans
