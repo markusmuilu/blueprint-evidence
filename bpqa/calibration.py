@@ -87,8 +87,10 @@ def reason(route: str, obj: str | None, value, measure: str | None = "count", ce
         return f"no dev measurement of how often {what} {name} on scans are right; {hint}"
     if _supports(c, value):
         return None
-    return (f"{what} {name} on scans are about {c['precision']:.0%} exact on dev ({c['correct']} of {c['n']} drawings), "
-            f"below the {MIN_PRECISION:.0%} a proven answer needs; {hint}")
+    # wording: this is the precision of the counts the route itself was sure about, not the overall accuracy
+    # (QA 14 Nov: "about 78% exact" read as the window accuracy, which is lower)
+    return (f"even when sure, {what} {name} on scans were exact in only {c['precision']:.0%} of dev drawings "
+            f"({c['correct']} of {c['n']}), below the {MIN_PRECISION:.0%} a proven answer needs; {hint}")
 
 
 def precision(route: str, obj: str | None, measure: str | None = "count") -> float | None:
