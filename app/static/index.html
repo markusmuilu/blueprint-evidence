@@ -61,8 +61,26 @@
     <aside class="picker" id="picker" aria-label="Drawings">
       <div class="picker-head">
         <h2 class="h-panel">Drawings</h2>
-        <span class="meta mono" id="drawCount"></span>
+        <span class="picker-tools">
+          <!-- BEGIN ask-several -->
+          <button class="btn btn-quiet multi-toggle" type="button" id="multiToggle" aria-pressed="false" aria-controls="multiBar" title="Select several drawings and ask one question across all of them. Ctrl or Shift and click also selects; double-click opens one without changing the selection.">Ask several</button>
+          <!-- END ask-several -->
+          <span class="meta mono" id="drawCount"></span>
+        </span>
       </div>
+
+      <!-- BEGIN ask-several -->
+      <div class="multi-bar" id="multiBar" hidden>
+        <div class="multi-line">
+          <span id="multiCount" aria-live="polite">None selected</span>
+          <span class="multi-acts">
+            <button class="btn btn-quiet" type="button" id="multiShown">Select shown</button>
+            <button class="btn btn-quiet" type="button" id="multiClear">Clear</button>
+          </span>
+        </div>
+        <ul class="multi-list" id="multiList" aria-label="Selected drawings"></ul>
+      </div>
+      <!-- END ask-several -->
 
       <label class="drop" id="drop">
         <input type="file" id="fileInput" multiple accept=".pdf,.dxf,.ifc,.png,.jpg,.jpeg,.tif,.tiff">
@@ -98,6 +116,9 @@
           </div>
           <div class="ask-opts">
             <label class="check"><input type="checkbox" id="pdfOnly"> <span>Ignore CAD and BIM twins (answer from the PDF alone)</span></label>
+            <!-- BEGIN ask-several -->
+            <p class="multi-note" id="multiNote" hidden></p>
+            <!-- END ask-several -->
           </div>
         </form>
 
@@ -167,6 +188,10 @@
     </main>
 
     <aside class="detail" id="detail" aria-label="Answer" aria-live="polite">
+      <!-- BEGIN ask-several -->
+      <p class="batch-back" id="batchBack" hidden><button class="btn btn-quiet" type="button" id="batchBackBtn">Back to the table</button></p>
+      <div class="batch" id="detailBatch" hidden aria-live="off"></div>
+      <!-- END ask-several -->
       <div class="detail-empty" id="detailEmpty">
         <h2 class="h-panel">Answer</h2>
         <p class="meta">No question asked yet.</p>
