@@ -631,6 +631,9 @@ def answer(ctx, q) -> Answer:
         storey = M.find_storey(q.level)
         if storey is None:
             return abstain(ROUTE, f"storey '{q.level}' not in model")
+    if q.variant == "slab_report":
+        from .. import slabs
+        return slabs.answer(ctx, q, M, path, storey)
     sheet_note = ""
     counted = q.obj in CLASSES or q.obj in ROOM_COUNTS or q.obj in SINK_OBJS
     if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or counted and sheet_scope_applies(ctx, q)):

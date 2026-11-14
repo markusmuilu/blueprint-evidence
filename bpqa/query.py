@@ -302,7 +302,11 @@ class RuleParser(QueryParser):
                     # unlike a quoted room name, which keeps the abstaining guard (routes/scope_guard.py)
                     tk["single_type"] = True
                 q.extra["takeoff"] = tk
-        return attach_qualifier(question, q)
+        from .slabs import apply as slab_apply
+        q = attach_qualifier(question, q)
+        if q.obj in (None, "slab"):                      # slab area by type / thickness (bpqa/slabs.py)
+            q = slab_apply(question, q)
+        return q
 
 
 def single_type_asked(f: str, tk: dict) -> bool:
