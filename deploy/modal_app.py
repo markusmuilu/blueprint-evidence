@@ -68,6 +68,8 @@ image = (
 )
 if (HERE / "demo_results").is_dir():      # eval outputs for the Results view (optional)
     image = image.add_local_dir(str(HERE / "demo_results"), f"{REMOTE}/out")
+if (REPO / "results").is_dir():           # per-question CSVs of the full test split (results/, committed): Results download
+    image = image.add_local_dir(str(REPO / "results"), f"{REMOTE}/results")
 
 
 def nvidia_secret() -> list:

@@ -393,6 +393,42 @@ $("#fileInput").addEventListener("change", (e) => { if (e.target.files.length) u
 /* Files that share a stem (plan.pdf + plan.dxf) are twins of one drawing and go in one request; every other
    file is its own drawing. One request per drawing keeps each under the 200 MB request limit. */
 const UPLOAD_TYPES = "PDF, DXF, IFC, PNG, JPEG, TIFF or SVG";
+/* the uploads list is dragged taller or shorter by the grip under it (final polish, 14 Nov), or with the arrow keys
+   on the focused grip; remembered here, double-click resets to the CSS cap */
+const UP_H_KEY = "bpe-uploads-h";
+function upGrip(ul, grip) {
+  const lo = 60, hi = () => Math.max(lo, Math.round(window.innerHeight * 0.6));
+  const clamp = (h) => Math.round(Math.min(Math.max(h, lo), hi()));
+  const set = (h, save) => {
+    if (h == null) { ul.style.maxHeight = ""; ul.style.height = ""; }
+    else { h = clamp(h); ul.style.maxHeight = h + "px"; ul.style.height = Math.min(h, ul.scrollHeight) + "px"; }
+    if (save) { try { h == null ? localStorage.removeItem(UP_H_KEY) : localStorage.setItem(UP_H_KEY, String(h)); } catch (_) { /* storage blocked */ } }
+  };
+  let saved = null;
+  try { const n = parseFloat(localStorage.getItem(UP_H_KEY)); if (Number.isFinite(n)) saved = n; } catch (_) { /* storage blocked */ }
+  if (saved != null) requestAnimationFrame(() => set(saved, false));     // after the rows are in, so the height fits them
+  grip.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const y0 = e.clientY, h0 = ul.getBoundingClientRect().height;
+    grip.setPointerCapture(e.pointerId);
+    grip.classList.add("on");
+    const move = (ev) => set(h0 + ev.clientY - y0, false);
+    const up = () => {
+      grip.classList.remove("on");
+      grip.removeEventListener("pointermove", move);
+      set(ul.getBoundingClientRect().height, true);
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up, { once: true });
+    grip.addEventListener("pointercancel", up, { once: true });
+  });
+  grip.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    set(ul.getBoundingClientRect().height + (e.key === "ArrowDown" ? 24 : -24), true);
+  });
+  grip.addEventListener("dblclick", () => set(null, true));
+}
 const UPLOADS_KEY = "bpe-uploads", UPLOAD_KEEP_MS = 24 * 60 * 60 * 1000 - 60 * 1000;   // the server deletes an upload after 24 hours
 const stemOf = (n) => { const i = n.lastIndexOf("."); return (i > 0 ? n.slice(0, i) : n).toLowerCase(); };
 const uploadStore = {
@@ -411,8 +447,9 @@ function renderUploads() {
   if (!items.length) { box.innerHTML = ""; return; }
   /* compact (BM, 14 Nov): a fold with a capped, scrolling list, so at 1280x800 the search results below stay visible */
   const open = box.querySelector("details")?.open ?? true;
-  box.innerHTML = `<details class="uploads-fold"${open ? " open" : ""}><summary class="h-group"><span class="up-t">Your uploads (${items.length})</span><span class="meta">kept 24 h</span></summary><ul></ul></details>`;
+  box.innerHTML = `<details class="uploads-fold"${open ? " open" : ""}><summary class="h-group"><span class="up-t">Your uploads (${items.length})</span><span class="meta">kept 24 h</span></summary><ul></ul><div class="up-grip" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="Resize the uploads list" title="Drag to make the list taller or shorter; double-click to reset"></div></details>`;
   const ul = box.querySelector("ul");
+  upGrip(ul, box.querySelector(".up-grip"));
   for (const d of items) {
     const li = document.createElement("li");
     const b = document.createElement("button");
@@ -948,7 +985,7 @@ function checkItems(a) {
   const its = answerItems(a);
   let rows = its.map((it, i) => {
     const m = markFor(it, a, i);
-    let [label, extra] = itemLabel(it, a.query && a.query.obj, a.route);
+    let [label, extra] = itemLabel(it, a.query && a.query.obj, a.route, approxDp(a));
     if (a.unit && a.unit !== "count" && it && typeof it === "object") {
       label = [it.number, it.name || it.label || it.room].filter(Boolean).join(" ") || `room ${i + 1}`;
     }
@@ -1407,7 +1444,7 @@ function correctedValue(a) {
   if (a.value == null || typeof a.value !== "number") return a.value;
   if (isCount(a)) return a.value - c.removed.size + c.added.length;
   // a removed room takes out its own floor and wall area plus the waste on them (QA 14 Nov: a tiling total did
-  // not change after "Not this one" because the value includes walls and waste, not just the floor area)
+  // not change after "Wrong item" (was "Not this one") because the value includes walls and waste, not just the floor area)
   const tot = (a.items || []).find((it) => it && it.totals)?.totals || null;
   const w = tot && tot.waste_pct && tot.waste_in_value !== false ? tot.waste_pct / 100 : 0;
   const floorCounts = !tot || tot.floor_m2 == null || tot.floor_m2 > 0;
@@ -1464,10 +1501,10 @@ function renderStrip() {
         <span class="tn mono">${esc(r.n)}</span>
         ${r.tone === "amber" ? `<span class="tq" aria-label="to check">${icon("estimate")}</span>` : ""}
       </button>
-      <span class="tl">${measure && r.area != null ? `<span class="mono">${Number(r.area).toFixed(2)} m²</span> ` : ""}<span class="tname">${esc(name)}</span></span>
+      <span class="tl">${measure && r.area != null ? `<span class="mono">${Number(r.area).toFixed(approxDp(a))} m²</span> ` : ""}<span class="tname">${esc(name)}</span></span>
       ${own ? (r.add != null
         ? `<button type="button" class="tx" data-add="${r.add}" aria-label="Remove added item ${esc(r.n)}">Undo</button>`
-        : `<button type="button" class="tx" data-n="${esc(r.n)}" aria-pressed="${removed}" aria-label="${removed ? "Keep" : "Not this one:"} item ${esc(r.n)}">${removed ? "Keep" : "Not this one"}</button>`) : ""}`;
+        : `<button type="button" class="tx" data-n="${esc(r.n)}" aria-pressed="${removed}" title="${removed ? `Put it back in the ${measure ? "total" : "count"}` : `Remove it from the ${measure ? "total" : "count"}`}" aria-label="${removed ? "Keep" : "Wrong item:"} item ${esc(r.n)}">${removed ? "Keep" : "Wrong item"}</button>`) : ""}`;
     list.appendChild(li);
     drawThumb(li.querySelector("canvas"), img, r.rect, removed, r.mark && r.mark.kind === "poly" ? { pts: r.mark.pts, off, tone: r.tone } : null);
     const t = li.querySelector(".thumb");
@@ -1528,7 +1565,7 @@ function corrLine(a) {
   const bits = [];
   if (c.removed.size) bits.push(`${c.removed.size} removed`);
   if (c.added.length) bits.push(`${c.added.length} added`);
-  return `${fmtValue(a.value)} → ${fmtValue(correctedValue(a))} (${bits.join(", ")})`;
+  return `${fmtAns(a, a.value)} → ${fmtAns(a, correctedValue(a))} (${bits.join(", ")})`;
 }
 function setAddMode(on) {
   state.addMode = on;
@@ -1547,12 +1584,12 @@ function onCorrection() {
   drawPins(state.shown);
   renderStrip();
   const v = $("#ansValue");
-  if (v) v.textContent = fmtValue(correctedValue(a));
+  if (v) v.textContent = fmtAns(a, correctedValue(a));
   const note = $("#corrNote");
   if (note) {
     note.hidden = !corrected();
     const c = state.corr;
-    note.innerHTML = corrected() ? `Corrected by you from <span class="mono">${esc(fmtValue(a.value))}</span>: ${c.removed.size} removed, ${c.added.length} added. Save correction records it.` : "";
+    note.innerHTML = corrected() ? `Corrected by you from <span class="mono">${esc(fmtAns(a, a.value))}</span>: ${c.removed.size} removed, ${c.added.length} added. Save correction records it.` : "";
   }
 }
 async function saveCorrection() {
@@ -1659,24 +1696,56 @@ function fmtValue(v) {
   if (typeof v === "number") return Number.isInteger(v) ? v.toLocaleString("en-US") : v.toLocaleString("en-US", { maximumFractionDigits: 2 });
   return String(v);
 }
+/* An approximation shows one rounding everywhere: one decimal (14.7 m2) in the header, the sentence, the items, the
+   strip and the drawing label (bpqa draws "measured 14.7 m2"). Exact answers keep two decimals. Final polish, 14 Nov. */
+const approxDp = (a) => (a && a.approx ? 1 : 2);
+function fmtAns(a, v) {
+  if (a && a.approx && typeof v === "number") return v.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  return fmtValue(v);
+}
+/* the answer sentence of an approximation opens "About 15 m2 (approximation)"; say the header's number there */
+function approxSentence(a) {
+  const t = m2(a.approx.text || a.approx.sentence || "");
+  return typeof a.value === "number" ? t.replace(/^About [\d.,]+ (m²|m)(?![\w²³])/, (_, u) => `About ${fmtAns(a, a.value)} ${u}`) : t;
+}
 function fmtUnit(u) { return u === "count" ? "" : u === "m2" ? "m²" : u === "m3" ? "m³" : u || ""; }
 
-function itemLabel(it, obj, route) {
+function itemLabel(it, obj, route, dp = 2) {
   if (typeof it !== "object" || it === null) return [String(it), ""];
+  const word = (v) => (typeof v === "string" || typeof v === "number" ? String(v).replace(/_/g, " ").trim() : "");
+  const objWord = word(obj) || "item";
   let label = (it.number && it.name ? `${it.number} ${it.name}` : "") || (it.room ? `${it.room}${it.number ? " " + it.number : ""}` : "")
-    || it.label || it.class || it.name || it.match || it.text || (it.panel != null ? `panel ${it.panel}` : "") || it.guid || "";
+    || word(it.label) || word(it.class) || word(it.name) || word(it.match) || word(it.text) || (it.panel != null ? `panel ${it.panel}` : "") || word(it.guid);
+  /* never raw JSON as a name (QA 14 Nov: '{"n":1,"reading":"drawn room",...}' and '{"groups":[...' showed as items) */
+  if (!label && it.reading && word(it.type)) label = `${word(it.type)} (${word(it.reading)})`;
+  if (!label && Array.isArray(it.groups)) {
+    const k = it.groups.length;
+    const n = it.slabs ?? it.total;
+    label = `${objWord} summary, ${k} group${k === 1 ? "" : "s"}${typeof n === "number" ? `, ${n} in all` : ""}`;
+  }
   if (!label && Array.isArray(it.bbox_pt)) label = `${(obj || "item").replace(/_/g, " ")} #${it.n ?? ""}`;
   if (!label && Array.isArray(it.bbox)) {
     const [x0, y0, x1, y1] = it.bbox;
     label = `${(obj || "item").replace(/_/g, " ")} at x ${((x0 + x1) / 2).toFixed(1)}, y ${((y0 + y1) / 2).toFixed(1)}${route === "dxf-geometry" ? " m" : " (drawing units)"}`;
   }
+  if (!label) label = word(it.type) || word(it.reading);
   let extra = "";
   if (it.score != null) extra = "score " + Number(it.score).toFixed(2);
   else if (it.ocr_conf != null) extra = "ocr " + Number(it.ocr_conf).toFixed(2);
-  else if (it.value != null) extra = typeof it.value === "number" ? it.value.toFixed(2) : String(it.value);
-  else if (it.area != null) extra = Number(it.area).toFixed(2) + " m²";
-  else if (it.area_m2 != null) extra = Number(it.area_m2).toFixed(2) + " m²";
-  return [label || JSON.stringify(it).slice(0, 60), extra];
+  else if (it.value != null) extra = typeof it.value === "number" ? it.value.toFixed(dp) : String(it.value);
+  else if (it.area != null) extra = Number(it.area).toFixed(dp) + " m²";
+  else if (it.area_m2 != null) extra = Number(it.area_m2).toFixed(dp) + " m²";
+  else if (it.total_m2 != null) extra = Number(it.total_m2).toFixed(dp) + " m²";
+  return [label || `${objWord}${it.n != null ? " #" + it.n : ""}`, extra];
+}
+
+/* The wait for the background reading of a fresh upload, said next to the response time. A cached answer keeps
+   the first run's time and wait (the record is stored as it was), so it says "first run" rather than implying
+   this request waited. */
+function waitedText(a) {
+  const w = Number(a.waited_for_background_s);
+  if (!(w >= 1)) return "";
+  return `<span class="meta">${a.cached ? " (first run," : ","} after ${Math.round(w)} s reading the drawing${a.cached ? ")" : ""}</span>`;
 }
 
 function renderAnswer(a) {
@@ -1687,7 +1756,7 @@ function renderAnswer(a) {
   if (!a) { body.innerHTML = ""; return; }
   const st = STATUS[a.status] || STATUS.cannot;
   const hasVal = a.value != null && a.status !== "cannot";
-  const valText = fmtValue(a.value);
+  const valText = fmtAns(a, a.value);
   const isText = hasVal && typeof a.value === "string" && valText.length > 12;
 
   const items = answerItems(a);
@@ -1715,14 +1784,15 @@ function renderAnswer(a) {
         ${hasVal ? `${a.approx ? `<span class="about">About</span>` : ""}<span class="v${isText ? " text" : ""}" id="ansValue">${esc(valText)}</span><span class="u">${esc(fmtUnit(a.unit))}</span>`
                  : `<span class="v none">No answer</span>`}
       </div>
-      ${hasVal && a.approx ? `<div class="approx-note"><p class="approx-text"><span class="approx-tag">${icon("estimate")}Approximation</span><span id="approxText">${esc(m2(a.approx.text || a.approx.sentence || ""))}</span></p>${scaleCtlHtml(a)}</div>` : ""}
+      ${hasVal && a.approx ? `<div class="approx-note"><p class="approx-text"><span class="approx-tag">${icon("estimate")}Approximation</span><span id="approxText">${esc(approxSentence(a))}</span></p>${scaleCtlHtml(a)}</div>` : ""}
+      ${a.cached ? `<p class="cache-why"><span class="cache-tag">Cached</span>This question was answered before, so the answer is instant. Ask a new question or open a new drawing to see it worked out from scratch.</p>` : ""}
       <p class="note corr-note" id="corrNote" hidden></p>
       <dl class="kv facts">
         <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span>${a.cached ? `<span class="cache-tag" title="Served from the answer cache: this question was asked before on this drawing. Time and cost are from the first run; Run again recomputes them.">Cached</span>` : ""}</dd>
         ${a.status === "cannot" ? `<dd class="wide cannot-reason"><p class="plain-reason">${esc(plainReason(a))}</p><details class="reason-more"><summary>Details</summary><p>${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</p></details></dd>` : ""}
         ${gold}
         <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
-        <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}${a.waited_for_background_s >= 1 ? `<span class="meta">, after ${Math.round(a.waited_for_background_s)} s reading the drawing</span>` : ""}</dd>
+        <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}${waitedText(a)}</dd>
       </dl>
       ${usedLine(a)}
       <div class="fine-pop" id="finePrint" role="region" aria-label="Time and cost details" hidden>
@@ -1749,7 +1819,7 @@ function renderAnswer(a) {
       <div class="sec-head"><h3 class="h-panel" id="hItems">Items <span class="cite" style="margin-left:6px" aria-label="step ${itemsCite}">${itemsCite}</span></h3><span class="meta mono">${items.length}${a.items.length >= 200 ? "+" : ""}</span></div>
       <ul class="items" id="itemList">
         ${items.map((it, i) => {
-          const [l, x] = itemLabel(it, a.query && a.query.obj, a.route);
+          const [l, x] = itemLabel(it, a.query && a.query.obj, a.route, approxDp(a));
           const n = (it && it.n) || i + 1;
           const can = !!itemRect(it, a, i) || (state.has3d && !!(it && it.guid));
           const tag = can ? "button" : "div";
@@ -2244,15 +2314,15 @@ function notInMedian(base, vals) {
 /* only the numbers change while the person drags: the panel is not rebuilt, so the slider keeps the pointer */
 function paintScaled(p, base) {
   const v = $("#ansValue");
-  if (v) v.textContent = fmtValue(p.value);
+  if (v) v.textContent = fmtAns(p, p.value);
   const items = answerItems(p);
   document.querySelectorAll("#itemList li").forEach((li, i) => {
     const x = li.querySelector(".x");
-    if (x && items[i]) x.textContent = itemLabel(items[i], p.query && p.query.obj, p.route)[1];
+    if (x && items[i]) x.textContent = itemLabel(items[i], p.query && p.query.obj, p.route, approxDp(p))[1];
   });
   const t = $("#approxText");
-  if (t) t.textContent = p === base ? m2(base.approx.text || base.approx.sentence || "")
-    : `About ${fmtValue(p.value)} ${fmtUnit(p.unit)} with the size below. The sentence, the drawing and the Steps card update when the new measurement arrives.`;
+  if (t) t.textContent = p === base ? approxSentence(base)
+    : `About ${fmtAns(p, p.value)} ${fmtUnit(p.unit)} with the size below. The sentence, the drawing and the Steps card update when the new measurement arrives.`;
   if (window.OrderSheet && $("#orderSec")) {
     const hooks = { show3d: null, changed: () => OrderSheet.mountPanel(state.answer, $("#orderSec"), hooks) };
     OrderSheet.mountPanel(p, $("#orderSec"), hooks);
@@ -2504,7 +2574,7 @@ function leaveBatchView() {
   $("#detailBatch").hidden = true;
   const r = batch.results;
   $("#batchBack").hidden = !r;
-  if (r) $("#batchBackBtn").textContent = `Back to the table for ${nDrawings(r.rows.length)}`;
+  if (r) $("#batchBackTxt").textContent = `Back to the table for ${nDrawings(r.rows.length)}`;
 }
 $("#batchBackBtn").addEventListener("click", () => { if (batch.results) { showBatchView(); renderBatch(); } });
 
@@ -2562,7 +2632,7 @@ function renderBatch() {
     if (r.st === "fail") return `<tr class="has-reason"><td>${link}</td><td class="num">-</td><td></td><td class="fail">Failed</td></tr><tr class="reason"><td colspan="4">${esc(reasonText(r))}</td></tr>`;
     const a = r.a, [label, cls] = ROW_STATUS[a.status] || ROW_STATUS.cannot;
     const hasVal = a.value != null && a.status !== "cannot";
-    const val = hasVal ? `${a.approx ? '<span class="about">about </span>' : ""}${esc(fmtValue(a.value))}` : "-";
+    const val = hasVal ? `${a.approx ? '<span class="about">about </span>' : ""}${esc(fmtAns(a, a.value))}` : "-";
     const unit = hasVal ? esc(a.unit === "count" ? "count" : fmtUnit(a.unit)) : "";
     const main = `<tr${a.status === "cannot" ? ' class="has-reason"' : ""}><td>${link}</td><td class="num">${val}</td><td class="unit">${unit}</td><td class="status ${cls}">${label}</td></tr>`;
     return main + (a.status === "cannot" ? `<tr class="reason"><td colspan="4">${esc(reasonText(r))}</td></tr>` : "");
@@ -2649,6 +2719,8 @@ async function loadRuns() {
     loadBaseline();
     loadCosts();
     loadWitnessSummary();
+    renderResLinks();
+    renderBakeoff();
   } catch (e) {
     $("#runHeadline").textContent = "Could not read results: " + e.message;
   }
@@ -2680,6 +2752,75 @@ async function loadRun(id) {
   if (srcs.includes(prev)) os.value = prev; else if (srcs.includes("cubicasa5k")) os.value = "cubicasa5k";
   os.onchange = () => renderObjTable(d);
   renderObjTable(d);
+}
+
+/* Results only: the two IFC sources said plainly (Markus, 14 Nov); the library keeps the short names */
+const RESULT_SOURCE_NAMES = {
+  ifc_models: "IFC models (building models)",
+  ifc_bench: "IFC-Bench (free-text questions about models, mostly declined)",
+};
+const resSrc = (s) => RESULT_SOURCE_NAMES[s] || SOURCE_NAMES[s] || s;
+
+/* The source code link: one place to set it. "#" until Markus decides on publishing. The per-question results
+   README (results/README.md in the repo) is linked from the same URL, assuming a GitHub-style /tree/main/ path. */
+const SOURCE_CODE_URL = "#";
+const CSV_ORDER = ["cubicasa5k", "swiss_dwellings", "ifc_models", "ifc_bench", "opening_design"];
+async function renderResLinks() {
+  const a = $("#srcLink");
+  const open = SOURCE_CODE_URL !== "#";
+  a.href = SOURCE_CODE_URL;
+  a.textContent = open ? "Source code" : "Source code (link added on submission)";
+  if (!open) a.onclick = (e) => e.preventDefault();
+  else { a.target = "_blank"; a.rel = "noopener"; }
+  const rd = $("#resReadme");
+  rd.hidden = !open;
+  if (open) { rd.href = SOURCE_CODE_URL.replace(/\/$/, "") + "/tree/main/results"; rd.target = "_blank"; rd.rel = "noopener"; }
+  try {
+    const { files } = await api("/api/test_answers");
+    if (!files || !files.length) return;
+    files.sort((x, y) => (CSV_ORDER.indexOf(x.source) + 1 || 99) - (CSV_ORDER.indexOf(y.source) + 1 || 99));
+    const box = $("#csvLinks");
+    box.innerHTML = `<span>Every test question with our answer (CSV):</span>` + files.map((f) =>
+      `<a href="/api/test_answers/${encodeURIComponent(f.source)}.csv" download title="${esc(resSrc(f.source))}, ${(f.bytes / 1e6).toFixed(1)} MB">${esc((SOURCE_NAMES[f.source] || f.source).replace(/\s*\(.*\)$/, ""))}</a>`).join("");
+    box.hidden = false;
+  } catch (_) { /* no files in this build: the links stay hidden */ }
+}
+
+/* The model bake-off (docs/model_bakeoff.md, 14 Nov): every hosted model as a row, each category as right/n on the
+   questions it was run on, with ours on those same questions under it. Slow models finished few questions, so the
+   n differ; the doc pairs every answer question by question. Naive column: the 150-question baseline sample. */
+const BAKE_CATS = [["naive", "Naive sample"], ["doors", "Scan doors"], ["windows", "Scan windows"], ["rooms", "Scan room types"],
+  ["other", "Scan other counts"], ["swiss", "Swiss counts"], ["areas", "Areas (Swiss, IFC)"], ["text", "PDF text only"]];
+// [right, n, ours % on the same questions]; naive: [accuracy %, n, ours %]
+const BAKEOFF = [
+  { model: "nemotron-3.5-super-vl", naive: "base", doors: [2, 22, 73], windows: [5, 22, 55], rooms: [30, 44, 91], other: [13, 16, 94], swiss: [20, 40, 100], areas: [6, 60, 100] },
+  { model: "mistral-large-4", naive: [100, 2, 100], doors: [3, 8, 88], windows: [6, 13, 62], rooms: [8, 11, 91], swiss: [1, 1, 100], text: [9, 12, 100] },
+  { model: "llama-3.2-90b-vision", naive: [30, 20, 100], doors: [1, 12, 83], windows: [2, 12, 58], rooms: [5, 15, 93], swiss: [4, 7, 100], areas: [1, 8, 100] },
+  { model: "ising-calibration-1.5", naive: [26, 149, 96], doors: [0, 40, 68], windows: [1, 43, 53], rooms: [32, 55, 93], other: [10, 16, 94], swiss: [13, 40, 100], areas: [1, 60, 100] },
+  { model: "nemotron-3.5-bolt", naive: [26, 150, 95], doors: [0, 41, 66], windows: [2, 43, 53], rooms: [31, 55, 93], other: [11, 16, 94], swiss: [11, 40, 100], areas: [3, 60, 100] },
+  { model: "nemotron-3-nano-omni (stopped early)", naive: [0, 1, 100], doors: [0, 14, 93], windows: [0, 12, 58], rooms: [7, 14, 93] },
+  { model: "nemotron-3-ultra (text only)", text: [16, 60, 100] },
+  { model: "nemotron-3-super (text only)", text: [0, 30, 100] },
+];
+const BAKE_OURS = { doors: [27, 41], windows: [23, 43], rooms: [51, 55], other: [15, 16], swiss: [54, 54], areas: [91, 91], text: [60, 60] };
+function renderBakeoff() {
+  const b = tileData.base;
+  const cell = (k, v) => {
+    if (!v) return `<td class="num dim">-</td>`;
+    if (v === "base") {
+      if (!b) return `<td class="num dim">-</td>`;
+      return `<td class="num"><span class="bk-m">${pct(b.nemo_accuracy)} <span class="dim">of ${num(b.n)}</span></span><span class="bk-o">ours ${pct(b.ours_accuracy)}</span></td>`;
+    }
+    if (k === "naive") return `<td class="num"><span class="bk-m">${v[0]}% <span class="dim">of ${v[1]}</span></span><span class="bk-o">ours ${v[2]}%</span></td>`;
+    return `<td class="num"><span class="bk-m">${v[0]}/${v[1]}</span><span class="bk-o">ours ${v[2]}%</span></td>`;
+  };
+  const ours = `<tr class="group"><td>Ours, all questions of the set</td><td class="num">${b ? `${pct(b.ours_accuracy)} <span class="dim">of ${num(b.n)}</span>` : "-"}</td>`
+    + BAKE_CATS.slice(1).map(([k]) => `<td class="num">${BAKE_OURS[k][0]}/${BAKE_OURS[k][1]}</td>`).join("") + `</tr>`;
+  $("#bakeTable").innerHTML = `<thead><tr><th>Model</th>${BAKE_CATS.map(([, t]) => `<th class="num">${esc(t)}</th>`).join("")}</tr></thead><tbody>${ours}`
+    + BAKEOFF.map((r) => `<tr><td>${esc(r.model)}</td>${BAKE_CATS.map(([k]) => cell(k, r[k])).join("")}</tr>`).join("") + `</tbody>`;
+  $("#bakeNote").textContent = "Right / questions the model was run on, and ours on those same questions under it. Hosted models on NVIDIA Build (free tier), "
+    + "same prompt and scoring as the naive baseline. Slow models finished only a few questions, so n is small and differs per model: "
+    + "read the gaps as direction, not precision. Every model and category: docs/model_bakeoff.md.";
 }
 
 async function loadOverview() {
@@ -2733,8 +2874,8 @@ function renderTiles() {
 async function loadBaseline() {
   let b;
   try { b = await api("/api/baseline"); } catch (e) { renderTiles(); return; }      // keeps the "not measured" text
-  tileData.base = b; renderTiles();
-  const rows = b.by_source.map((s) => `<tr><td>${esc(SOURCE_NAMES[s.source] || s.source)}, ${esc(s.type)}</td><td class="num">${s.n}</td>
+  tileData.base = b; renderTiles(); renderBakeoff();
+  const rows = b.by_source.map((s) => `<tr><td>${esc(resSrc(s.source))}, ${esc(s.type)}</td><td class="num">${s.n}</td>
     <td class="num">${s.nemo_correct}</td><td class="num">${s.ours_correct}</td></tr>`).join("");
   const price = b.price_assumption ? `an assumed ${b.price_assumption[0]} / ${b.price_assumption[1]} USD per million input / output tokens` : "an assumed list price";
   $("#baselineBody").innerHTML = `
@@ -2759,7 +2900,7 @@ function renderSrcTable(d) {
     const rs = bySrc[s];
     const total = rs.find((r) => r.type === "ALL");
     const parts = rs.filter((r) => r.type !== "ALL");
-    if (total) rows.push(line(total, "group", `<span class="src-nm">${esc(SOURCE_NAMES[s] || s)}</span>`));
+    if (total) rows.push(line(total, "group", `<span class="src-nm">${esc(resSrc(s))}</span>`));
     if (parts.length > 1 || !total) for (const r of parts) rows.push(line(r, "", ""));
   }
   if (bySrc.ALL) rows.push(line(bySrc.ALL[0], "total", "All sources"));
@@ -2780,7 +2921,7 @@ function renderChart(d) {
     const y = top + i * rowH;
     const v = measure === "precision" ? (r.answered ? r.precision : null) : r[measure];
     const w = v == null ? 0 : Math.max(v * xw, v > 0 ? 2 : 0);
-    const name = r.source === "ALL" ? "All sources" : SOURCE_NAMES[r.source] || r.source;
+    const name = r.source === "ALL" ? "All sources" : resSrc(r.source);
     const short = name.replace(/\s*\(.*\)\s*$/, "");       // "IFC-Bench (free-text ...)" ran over the next row at 1280 px
     s += `<g data-i="${i}">`;
     s += `<text class="lbl" x="${left - 10}" y="${y + rowH / 2 + 4}" text-anchor="end"${r.source === "ALL" ? ' style="font-weight:600;fill:var(--fg)"' : ""}><title>${esc(name)}</title>${esc(short)}</text>`;
@@ -2799,7 +2940,7 @@ function renderChart(d) {
     g.addEventListener("mousemove", (e) => {
       const box = el.closest(".panel").getBoundingClientRect();
       tip.hidden = false;
-      tip.textContent = `${r.source === "ALL" ? "All sources" : SOURCE_NAMES[r.source] || r.source}\nn ${num(r.n)}   answered ${num(r.answered)}   correct ${num(r.correct)}\naccuracy ${pct(r.accuracy)}   coverage ${pct(r.coverage)}   precision ${r.answered ? pct(r.precision) : "-"}`;
+      tip.textContent = `${r.source === "ALL" ? "All sources" : resSrc(r.source)}\nn ${num(r.n)}   answered ${num(r.answered)}   correct ${num(r.correct)}\naccuracy ${pct(r.accuracy)}   coverage ${pct(r.coverage)}   precision ${r.answered ? pct(r.precision) : "-"}`;
       tip.style.left = Math.min(e.clientX - box.left + 12, box.width - 290) + "px";
       tip.style.top = e.clientY - box.top + 14 + "px";
       g.classList.add("on");

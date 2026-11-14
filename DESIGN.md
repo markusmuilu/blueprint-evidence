@@ -184,7 +184,7 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
 - Text answers render at body size, clamped to six lines. Numeric answers are 26px (see Typography).
 - Verification strip (under the viewer): one 104 x 78 crop per counted item or measured room, square
   corners, 2px border in accent for proven and amber (with the estimate icon) for items to check,
-  numbered like the overlay. "Not this one" is a text command under the crop (amber once pressed);
+  numbered like the overlay. "Wrong item" is a text command under the crop (amber once pressed);
   a removed crop is dashed and dimmed. Live count in mono, Save correction (secondary), Export (quiet).
 - Viewer toolbar (v2.2): layer tag, zoom out, level, zoom in, fit | rotate left, rotate right, mirror
   horizontally, original orientation | header strip, open image. Plain 30px icon buttons, no labels;
@@ -287,7 +287,7 @@ AI tells found in the first build (file and line at commit 75a61f9):
     `app.css:278-287`, `index.html:110-113`, `154-157`.
 12. Too many colours in one panel: green, amber, red and blue all used for status: `app.css:25-30`.
 13. Answer facts as a four-column label-over-value strip (a small hero-metric row): `app.css:371-373`.
-14. A second bordered box under every crop in the strip ("Not this one"): `app.css:341-346`.
+14. A second bordered box under every crop in the strip ("Wrong item"): `app.css:341-346`.
 15. Filled inputs band in the order sheet and a circled X as the close icon: `app.css:597`,
     `ordersheet.js:231`; pill status tag on the printed sheet: `ordersheet.js:357`.
 16. Long text answers set at display weight and size: `app.css:359`; a long witness value overflowed
@@ -355,7 +355,7 @@ and area text at its DXF position, so the label box points at visible text. Deri
 counts, scan room label counts, IFC elements.
 
 Checked in Chromium at 1440 x 900, 1280 x 800 and 390 x 844: layers align at 0, 90 and 90 + mirror on a scan
-and on a DXF plan, and with the header strip on or off; "Not this one", "Add missed item", the 3D switch and
+and on a DXF plan, and with the header strip on or off; "Wrong item", "Add missed item", the 3D switch and
 resizable panels still work; no horizontal page scroll.
 
 ## First-visit guide (v2.4)

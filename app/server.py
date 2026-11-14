@@ -654,7 +654,7 @@ class CorrectionBody(BaseModel):
     answer_value: float | int | str | None = None
     corrected_value: float | int | str | None = None
     unit: str = ""
-    removed: list = []        # item numbers struck out ("not this one")
+    removed: list = []        # item numbers struck out ("Wrong item")
     added: list = []          # [{x, y}] points clicked on the evidence image, body pixels
     evidence_id: str | None = None
     scale_assumption: str = ""     # scale-assumption: e.g. "door 0.90 m (default 0.84 m)"; empty when none
@@ -754,6 +754,27 @@ def results_baseline():
     if b is None:
         raise HTTPException(404, "out/baseline_nemotron.json not found")
     return b
+
+
+# results/*.csv of the repo (tools/export_test_csv.py), shipped by deploy/modal_app.py; out/results as a fallback
+RESULTS_CSV_DIR = REPO / "results" if (REPO / "results").is_dir() else REPO / "out" / "results"
+
+
+@app.get("/api/test_answers")
+def test_answers_info():
+    """The per-question CSVs of the full test split, one per source (tools/export_test_csv.py)."""
+    files = sorted(RESULTS_CSV_DIR.glob("*.csv")) if RESULTS_CSV_DIR.is_dir() else []
+    return {"files": [{"source": f.stem, "bytes": f.stat().st_size} for f in files]}
+
+
+@app.get("/api/test_answers/{source}.csv")
+def test_answers_csv(source: str):
+    if not re.fullmatch(r"[a-z0-9_]{1,40}", source):
+        raise HTTPException(400, "bad source")
+    f = RESULTS_CSV_DIR / f"{source}.csv"
+    if not f.is_file():
+        raise HTTPException(404, "no such results file")
+    return FileResponse(f, media_type="text/csv", filename=f.name)
 
 
 @app.get("/api/results/{run_id}")

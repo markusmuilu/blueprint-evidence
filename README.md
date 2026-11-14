@@ -723,7 +723,7 @@ Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG), `python t
 
 Every counted answer gets a verification strip under the drawing: one cropped thumbnail per counted
 item, numbered like the overlay, blue when the route proved it and amber when it needs a check. Select a
-thumbnail and the viewer zooms to that item with the reticle on it. "Not this one" strikes an item out
+thumbnail and the viewer zooms to that item with the reticle on it. "Wrong item" strikes an item out
 and "Add missed item" lets you click the drawing where one was missed; the count in the answer panel
 changes as you go, "Save correction" appends the correction to `out/app/corrections.jsonl` and
 "Export" downloads all of them as CSV (`GET /api/corrections.csv`). Area answers list each room with

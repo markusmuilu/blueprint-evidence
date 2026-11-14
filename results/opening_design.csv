@@ -1,0 +1,21 @@
+drawing,question_id,question_type,our_answer,unit,status,correct
+A700 - SCHEDULES.pdf,89440,door count,71,count,proven,yes
+A700 - SCHEDULES.pdf,89441,door count,256,count,proven,yes
+A700 - SCHEDULES.pdf,89442,door count,48,count,proven,no
+A700 - SCHEDULES.pdf,89443,door count,5,count,proven,no
+A700 - SCHEDULES.pdf,89444,door count,25,count,proven,no
+A700 - SCHEDULES.pdf,89445,door count,52,count,proven,yes
+A700 - SCHEDULES.pdf,89446,door count,,,cannot,no
+A700 - SCHEDULES.pdf,89447,door count,418,count,proven,yes
+A700 - SCHEDULES.pdf,89448,door count,65,count,proven,yes
+A700 - SCHEDULES.pdf,89449,text lookup (door),Fire Rating: 20 MIN.; Door Type: A1,,proven,yes
+A700 - SCHEDULES.pdf,89450,text lookup (door),Door Type: A1; Door Material: WD; Frame Type: A; Frame Material: HM,,proven,no
+A700 - SCHEDULES.pdf,89451,count,15,count,proven,yes
+A700 - SCHEDULES.pdf,89452,window count,235,count,proven,yes
+A700 - SCHEDULES.pdf,89453,window count,118,count,proven,yes
+A700 - SCHEDULES.pdf,89454,window count,84,count,proven,yes
+A700 - SCHEDULES.pdf,89455,window count,16,count,proven,yes
+A700 - SCHEDULES.pdf,89456,window count,9,count,proven,yes
+A700 - SCHEDULES.pdf,89457,window count,126,count,proven,yes
+A700 - SCHEDULES.pdf,89458,window count,235,count,proven,no
+A700 - SCHEDULES.pdf,89459,text lookup (window),"Width: 35 1/2""; Height: 77 1/2""",,proven,yes

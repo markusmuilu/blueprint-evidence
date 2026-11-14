@@ -194,7 +194,7 @@
 
     <aside class="detail" id="detail" aria-label="Answer" aria-live="polite">
       <!-- BEGIN ask-several -->
-      <p class="batch-back" id="batchBack" hidden><button class="btn btn-quiet" type="button" id="batchBackBtn">Back to the table</button></p>
+      <p class="batch-back" id="batchBack" hidden><button class="btn" type="button" id="batchBackBtn"><svg class="ico back-ico" aria-hidden="true"><use href="#i-chevron"/></svg><span id="batchBackTxt">Back to the table</span></button></p>
       <div class="batch" id="detailBatch" hidden aria-live="off"></div>
       <!-- END ask-several -->
       <div class="detail-empty" id="detailEmpty">
@@ -247,6 +247,7 @@
         <div>
           <h1 class="h-page">Results</h1>
           <p class="meta" id="runHeader"></p>
+          <p class="res-links"><a id="srcLink" href="#">Source code (link added on submission)</a><a id="resReadme" href="#" hidden>Per-question results (README)</a><span id="csvLinks" class="csv-links" hidden></span></p>
         </div>
         <div class="results-acts">
           <button class="btn back-draw" type="button" data-back-draw>Back to drawing</button>
@@ -277,6 +278,12 @@
           </div>
         </section>
       </div>
+
+      <section class="panel" aria-labelledby="hBake" id="bakePanel">
+        <div class="panel-head"><h2 class="h-panel" id="hBake">Against other hosted models</h2><span class="meta">small samples, direction not precision</span></div>
+        <div class="table-wrap"><table class="tbl" id="bakeTable"></table></div>
+        <p class="meta" id="bakeNote"></p>
+      </section>
 
       <section class="panel" aria-labelledby="hSrc">
         <div class="panel-head">
