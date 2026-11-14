@@ -1,0 +1,186 @@
+{
+ "generated": "2026-11-14",
+ "note": "Left: the recorded Nemotron 3.5 Super VL baseline, no live calls. Right: our router on the first question for that drawing, recomputed locally on a CPU machine; the time is the app's own measurement.",
+ "examples": [
+  {
+   "qid": 5924,
+   "kind": "Swiss area",
+   "path": "data/swiss_dwellings/site3421_bldg5295_floor23605.pdf",
+   "drawing": "site3421_bldg5295_floor23605.pdf",
+   "source": "swiss_dwellings",
+   "type": "area",
+   "question": "What is the net floor area of apartment B in m², summing all its rooms except balconies, loggias, terraces and other outdoor spaces?",
+   "gold": 65.51,
+   "unit": "m2",
+   "nemotron": {
+    "answer": 15.5,
+    "correct": false,
+    "latency_s": 127.5,
+    "finish": "stop",
+    "completion_tokens": 14657
+   },
+   "ours": {
+    "answer": 65.51,
+    "status": "proven",
+    "route": "dxf-geometry",
+    "correct": true,
+    "time_s": 0.09,
+    "usd_per_1000": 0.0013,
+    "evidence": "compare/5924.jpg",
+    "n_items": 5
+   }
+  },
+  {
+   "qid": 4943,
+   "kind": "IFC model area",
+   "path": "data/ifc_models/bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "drawing": "bsc-esplanades_1807-ep-ar-v18_plan-04-4-korrus.pdf",
+   "source": "ifc_models",
+   "type": "area",
+   "question": "Kui suur on ruumi „KORIDOR (405)“ netopõrandapind korrusel „4.korrus“ (m²)?",
+   "gold": 63.84,
+   "unit": "m2",
+   "nemotron": {
+    "answer": 28.2,
+    "correct": false,
+    "latency_s": 29.37,
+    "finish": "stop",
+    "completion_tokens": 2767
+   },
+   "ours": {
+    "answer": 63.84,
+    "status": "proven",
+    "route": "ifc",
+    "correct": true,
+    "time_s": 3.08,
+    "usd_per_1000": 0.0425,
+    "evidence": "compare/4943.jpg",
+    "n_items": 1
+   }
+  },
+  {
+   "qid": 1866,
+   "kind": "Scan count",
+   "path": "data/cubicasa5k/high_quality_architectural-1241.png",
+   "drawing": "high_quality_architectural-1241.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "gold": 7,
+   "unit": "count",
+   "nemotron": {
+    "answer": 5.0,
+    "correct": false,
+    "latency_s": 104.01,
+    "finish": "stop",
+    "completion_tokens": 12445
+   },
+   "ours": {
+    "answer": 7,
+    "status": "estimate",
+    "route": "raster-detector",
+    "correct": true,
+    "time_s": 8.16,
+    "usd_per_1000": 0.9145,
+    "evidence": "compare/1866.jpg",
+    "n_items": 7
+   }
+  },
+  {
+   "qid": 6404,
+   "kind": "Swiss count",
+   "path": "data/swiss_dwellings/site3238_bldg4922_floor22515.pdf",
+   "drawing": "site3238_bldg4922_floor22515.pdf",
+   "source": "swiss_dwellings",
+   "type": "count",
+   "question": "How many doors (interior doors and entrance doors together) are drawn on this floor plan?",
+   "gold": 12,
+   "unit": "count",
+   "nemotron": {
+    "answer": null,
+    "correct": false,
+    "latency_s": 128.45,
+    "finish": "length",
+    "completion_tokens": 16384
+   },
+   "ours": {
+    "answer": 12,
+    "status": "proven",
+    "route": "dxf-geometry",
+    "correct": true,
+    "time_s": 0.09,
+    "usd_per_1000": 0.0013,
+    "evidence": "compare/6404.jpg",
+    "n_items": 12
+   }
+  },
+  {
+   "qid": 1044,
+   "kind": "Scan count, Nemotron right too",
+   "path": "data/cubicasa5k/high_quality_architectural-10026.png",
+   "drawing": "high_quality_architectural-10026.png",
+   "source": "cubicasa5k",
+   "type": "count",
+   "question": "How many bedrooms (makuuhuone, usually marked MH) are on this floor plan?",
+   "gold": 2,
+   "unit": "count",
+   "nemotron": {
+    "answer": 2.0,
+    "correct": true,
+    "latency_s": 3.42,
+    "finish": "stop",
+    "completion_tokens": 301
+   },
+   "ours": {
+    "answer": 2,
+    "status": "estimate",
+    "route": "raster-rooms",
+    "correct": true,
+    "time_s": 3.9,
+    "usd_per_1000": 0.4217,
+    "evidence": "compare/1044.jpg",
+    "n_items": 4
+   }
+  }
+ ],
+ "totals": {
+  "questions": 150,
+  "nemotron_correct": 59,
+  "nemotron_accuracy": 0.3933,
+  "nemotron_ci95": [
+   0.3188,
+   0.4732
+  ],
+  "ours_correct": 141,
+  "ours_accuracy": 0.94,
+  "ours_ci95": [
+   0.8899,
+   0.9681
+  ],
+  "ours_source": "current router, re-scored on the same 150 questions from out/test/answers.jsonl",
+  "nemotron_source": "out/baseline_nemotron.json",
+  "bakeoff": {
+   "models": 6,
+   "best_model": "mistralai_mistral_large_4_1t_a52b",
+   "set": "weak110",
+   "n": 32,
+   "best_correct": 17,
+   "best_accuracy": 0.5312,
+   "ours_correct": 25,
+   "ours_accuracy": 0.7812,
+   "source": "out/model_bakeoff.json (docs/model_bakeoff.md)"
+  },
+  "cost": {
+   "nemotron_usd_per_1000": 101.04,
+   "nemotron_eur_per_1000": 91.42,
+   "ours_usd_per_1000": 0.0954,
+   "ours_eur_per_1000": 0.0863,
+   "usd_per_eur": 1.1052,
+   "price_in_out_usd_per_mtok": [
+    3.0,
+    15.0
+   ],
+   "note": "Nemotron: measured tokens per question at an assumed list price. Ours: measured CPU time per route at an assumed vCPU price, weighted by the routes the 150 questions took. Neither is a quote; NVIDIA Build itself was free."
+  }
+ }
+}

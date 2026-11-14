@@ -71,6 +71,8 @@ function showView(name) {
   $("#view-ask").hidden = name !== "ask";
   $("#pickerToggle").hidden = name !== "ask";
   $("#view-results").hidden = name !== "results";
+  $("#view-compare").hidden = name !== "compare";      // compare-tab
+  if (name === "compare") loadCompare();
   if (name === "results") loadRuns();
   if (name === "ask") requestAnimationFrame(() => viewer.fitIfNeeded());
 }
@@ -210,14 +212,14 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#status
 /* The library is grouped by what the system can do with each kind of file, not by dataset. */
 /* ---- library groups: collapsible categories (block start) ---- */
 const GROUPS = [
-  { id: "bim", ext: "ifc", tone: "proven", title: "Building models (IFC)",
-    note: "3D model; answers read from the model, proven" },
-  { id: "cad", ext: "dxf", tone: "proven", title: "CAD drawings (DXF)",
+  { id: "bim", src: "ifc_models", ext: "", tone: "proven", title: "Building models (IFC)",
+    note: "IFC models and their plan sheets; answers read from the model, proven" },
+  { id: "cad", notSrc: "ifc_models", ext: "dxf", tone: "proven", title: "CAD drawings (DXF)",
     note: "Vector lines and layers, proven",
     none: "None listed on their own: Swiss PDFs come with a DXF twin, and you can upload a DXF." },
-  { id: "pdf", ext: "pdf", tone: "proven", title: "PDF plans",
+  { id: "pdf", notSrc: "ifc_models", ext: "pdf", tone: "proven", title: "PDF plans",
     note: "Vector PDF with a text layer; scale read from the sheet" },
-  { id: "scan", ext: "png", tone: "estimate", title: "Scanned plans",
+  { id: "scan", notSrc: "ifc_models", ext: "png", tone: "estimate", title: "Scanned plans",
     note: "Pixels only; counts are estimates to check" },
 ];
 const GROUP_FIRST = 8, GROUP_MORE = 30;
@@ -260,7 +262,8 @@ function groupHead(g, r, open, bodyId) {
 
 let searchT, loadSeq = 0;
 function groupQuery(g, offset, limit) {
-  return api("/api/drawings?" + new URLSearchParams({ source: state.source, q: state.query, ext: g.ext, offset, limit }));
+  const p = { source: g.src || "", not_source: g.notSrc || "", q: state.query, ext: g.ext, offset, limit };   // the source chips are gone: a group is a type
+  return api("/api/drawings?" + new URLSearchParams(p));
 }
 
 async function loadDrawings() {
@@ -270,7 +273,6 @@ async function loadDrawings() {
   try {
     const res = await Promise.all(GROUPS.map((g) => groupQuery(g, 0, GROUP_FIRST)));
     if (seq !== loadSeq) return;
-    renderSources(res[0].sources);
     const total = res.reduce((a, r) => a + r.total, 0);
     $("#drawCount").textContent = num(total);
     list.innerHTML = "";
@@ -280,7 +282,7 @@ async function loadDrawings() {
     }
     GROUPS.forEach((g, i) => {
       const r = res[i];
-      const filtered = state.source || state.query;
+      const filtered = state.query;
       if (!r.total && (filtered || !g.none)) return;
       const sec = document.createElement("section");
       sec.className = "dgroup";
@@ -338,18 +340,6 @@ function drawItem(d) {
   paintPick(b);
   li.appendChild(b);
   return li;
-}
-
-function renderSources(sources) {
-  const el = $("#sources");
-  const all = sources.reduce((a, s) => a + s.drawings, 0);
-  const btn = (id, name, n) =>
-    `<button class="src" role="radio" aria-checked="${state.source === id}" data-src="${esc(id)}">${esc(name)} <span class="n">${num(n)}</span></button>`;
-  el.innerHTML = btn("", "All", all) + sources.map((s) => btn(s.id, s.name, s.drawings)).join("");
-  el.querySelectorAll(".src").forEach((b) => b.addEventListener("click", () => {
-    state.source = b.dataset.src;
-    loadDrawings();
-  }));
 }
 
 $("#search").addEventListener("input", (e) => {
@@ -2301,6 +2291,80 @@ window.addEventListener("hashchange", async () => {
 });
 
 
+
+/* ================================================================ compare tab (block start)
+   Prepared side-by-side examples and totals, read from compare.json (tools/build_compare.py). No live model calls.
+   Left: the recorded Nemotron baseline answer. Right: our answer from a local run, with its evidence image and a button
+   that opens the drawing and question in Ask (the full evidence is computed there, as for any question). */
+let compareData = null;
+const cmpNum = (v, unit) => v == null ? null : `${Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 })}${unit && unit !== "count" ? " " + unit.replace("m2", "m\u00b2") : ""}`;
+const cmpSec = (v) => v == null ? "-" : v < 1 ? `${Math.round(v * 1000)} ms` : v < 10 ? `${v.toFixed(1)} s` : `${Math.round(v)} s`;
+const CMP_STATUS = { proven: "Proven", estimate: "Estimate, check the highlighted items", cannot: "Cannot prove" };
+
+async function loadCompare() {
+  const box = $("#compareBody");
+  if (compareData) return;
+  try {
+    compareData = await api("compare.json");
+  } catch (e) {
+    box.innerHTML = `<p class="meta">The comparison data is missing (app/static/compare.json, made by tools/build_compare.py).</p>`;
+    return;
+  }
+  // which example drawings exist in this library: "Open in Ask" is offered only for those
+  const here = await Promise.all(compareData.examples.map((x) => api("/api/drawing?path=" + encodeURIComponent(x.path)).then(() => true, () => false)));
+  box.innerHTML = compareData.examples.map((x, i) => compareExample(x, i, here[i])).join("") + compareTotals(compareData.totals);
+  box.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => compareOpen(compareData.examples[+b.dataset.open])));
+}
+
+function compareExample(x, i, here) {
+  const n = x.nemotron, o = x.ours;
+  const nAns = n.answer == null ? "No answer" : cmpNum(n.answer, x.unit);
+  const nWhy = n.answer == null ? `It used its whole output budget (${num(n.completion_tokens)} tokens) without giving a number.` : n.correct ? "Right" : "Wrong";
+  const oAns = cmpNum(o.answer, x.unit);
+  return `<section class="cmp" aria-labelledby="cmp-h${i}">
+    <h2 class="cmp-q" id="cmp-h${i}"><span class="cmp-kind">${esc(x.kind)}</span> ${esc(x.question)}</h2>
+    <p class="meta cmp-dw"><span class="mono">${esc(x.path.split("/").pop())}</span>  ·  ${esc(SOURCE_NAMES[x.source] || x.source)}  ·  dataset answer ${esc(cmpNum(x.gold, x.unit))}</p>
+    <div class="cmp-cols">
+      <div class="cmp-col cmp-left">
+        <h3 class="h-group">Nemotron 3.5 Super VL alone</h3>
+        <p class="cmp-ans ${n.correct ? "ok" : "bad"}">${esc(nAns)}</p>
+        <p class="cmp-verdict ${n.correct ? "ok" : "bad"}">${esc(nWhy)}</p>
+        <dl class="kv"><dt>Time</dt><dd>${esc(cmpSec(n.latency_s))}, recorded</dd><dt>Evidence</dt><dd>none</dd></dl>
+      </div>
+      <div class="cmp-col cmp-right">
+        <h3 class="h-group">Blueprint Evidence</h3>
+        <p class="cmp-ans ${o.correct ? "ok" : "bad"}">${esc(oAns)}</p>
+        <p class="cmp-verdict ${o.correct ? "ok" : "bad"}">${o.correct ? "Right" : "Wrong"}  ·  ${esc(CMP_STATUS[o.status] || o.status)}</p>
+        <dl class="kv"><dt>Time</dt><dd>${esc(cmpSec(o.time_s))}, first question, not cached</dd><dt>Read from</dt><dd>${esc(o.route)}</dd></dl>
+        ${here ? `<button type="button" class="btn" data-open="${i}">Open in Ask</button>` : `<p class="meta">This drawing is not in this library.</p>`}
+      </div>
+      <div class="cmp-col cmp-evi">${o.evidence ? `<img class="cmp-thumb" src="${esc(o.evidence)}" alt="Evidence image for ${esc(x.kind)}: the drawing with the items our answer is built from" loading="lazy">` : ""}</div>
+    </div></section>`;
+}
+
+function compareTotals(t) {
+  const b = t.bakeoff, c = t.cost;
+  return `<section class="cmp cmp-totals" aria-labelledby="cmp-tot">
+    <h2 class="h-panel cmp-tot-h" id="cmp-tot">Totals</h2>
+    <table class="tbl"><tbody>
+      <tr><th scope="row">Accuracy</th><td>${num(t.questions)} test questions: Nemotron alone ${pct(t.nemotron_accuracy)}, Blueprint Evidence ${pct(t.ours_accuracy)}</td>
+        <td class="dim">${t.nemotron_correct} and ${t.ours_correct} of ${t.questions} correct. Preview test split, seeded sample; both scored the same way.</td></tr>
+      <tr><th scope="row">Other vision models</th><td>${b.models} hosted vision models tried; on our weakest scan questions the best got ${Math.round(b.best_accuracy * 100)}%, ours ${Math.round(b.ours_accuracy * 100)}%</td>
+        <td class="dim">${b.best_correct} of ${b.n} for the best one (mistral-large-4, which finished ${b.n} of the 110 weak-spot questions); ours on the same ${b.n}: ${b.ours_correct}. Scan doors, windows and room types; small sample, read it as direction. Details in docs/model_bakeoff.md.</td></tr>
+      <tr><th scope="row">Cost</th><td>€${Math.round(c.nemotron_usd_per_1000 / c.usd_per_eur)} against under ${fmtUsd(0.1 * c.usd_per_eur)} per 1,000 questions</td>
+        <td class="dim">Nemotron at its measured tokens and an assumed list price of $${c.price_in_out_usd_per_mtok[0]} and $${c.price_in_out_usd_per_mtok[1]} per million tokens in and out (NVIDIA Build itself was free); ours at measured CPU time on the same ${num(t.questions)} questions, ${fmtUsd(c.ours_usd_per_1000)} per 1,000. ${esc(FX_NOTE)}</td></tr>
+    </tbody></table></section>`;
+}
+
+async function compareOpen(x) {
+  showView("ask");
+  await selectDrawing(x.path);
+  if (!state.drawing || state.drawing.path !== x.path) return;
+  $("#question").value = x.question;
+  await ask();
+}
+/* ---- compare tab (block end) ---- */
+
 /* ================================================================ first-visit tour (onboarding block, v2.6)
    Replaces the static "How it works" card. On a first visit a small offer asks whether to take a tour; Start walks
    five steps, each an outline around the real element plus a bubble. "How it works" in the app bar replays it.
@@ -2323,6 +2387,7 @@ window.addEventListener("hashchange", async () => {
     { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language." },
     { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
     { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
+    { el: () => $('.rail-btn[data-view="compare"]'), side: ["right", "bottom"], text: "Compare shows prepared questions answered by a large vision model alone and by this app, with totals." },   // compare-tab
     /* tour step (verify strip) */
     { el: () => { const st = $("#strip"); return st && !st.hidden && st.offsetParent ? st : $("#viewer") || $("#viewerWrap"); }, side: ["top", "left"], text: "Every counted item is numbered on the drawing. Click one to see step by step how it was read." },
   ];
@@ -2424,7 +2489,7 @@ window.addEventListener("hashchange", async () => {
 
   function start() {
     if (idx >= 0 || !wide.matches) return;
-    const offer = $("#tourOffer"); if (offer) offer.remove();
+    const offer = $("#tourOffer"); if (offer) offer.remove(); document.querySelectorAll(".tour-offer-dim").forEach((d) => d.remove());
     returnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : $("#guideOpen");
     showView("ask");
     shield = mk("tour-shield"); spot = mk("tour-spot"); bubble = mk("tour-bubble");
@@ -2444,16 +2509,23 @@ window.addEventListener("hashchange", async () => {
     let decided = false;
     try { decided = localStorage.getItem(TOUR_KEY) !== null; } catch (_) { /* no storage: offer it */ }
     if (decided) return;
-    const o = mk("tour-offer");
-    o.innerHTML = `<p>First time here? Take a 30-second tour</p>
-      <div class="tour-act"><button type="button" class="btn btn-primary" data-a="start">Start</button>
+    /* BEGIN tour-offer-v2 */
+    const o = mk("tour-offer"), dim = mk("tour-offer-dim");
+    const close = () => { o.remove(); dim.remove(); document.removeEventListener("keydown", onEsc); };
+    const onEsc = (e) => { if (e.key === "Escape" && idx < 0) { remember("declined"); close(); } };
+    o.innerHTML = `<h2>First time here?</h2>
+      <p>A 30-second tour shows how to open a drawing, ask a question in your own words, and check the answer against the drawing.</p>
+      <div class="tour-act"><button type="button" class="btn btn-primary" data-a="start">Start the tour</button>
       <button type="button" class="btn btn-quiet" data-a="no">No thanks</button></div>`;
     o.id = "tourOffer"; o.setAttribute("role", "region"); o.setAttribute("aria-label", "Tour offer");
     o.addEventListener("click", (e) => {
       const b = e.target.closest("[data-a]"), a = b && b.dataset.a;
-      if (a === "start") start(); else if (a === "no") { remember("declined"); o.remove(); }
+      if (a === "start") { dim.remove(); document.removeEventListener("keydown", onEsc); start(); }
+      else if (a === "no") { remember("declined"); close(); }
     });
-    document.body.appendChild(o);
+    document.addEventListener("keydown", onEsc);
+    document.body.append(dim, o);
+    /* END tour-offer-v2 */
   }
 
   $("#guideOpen").addEventListener("click", start);

@@ -114,8 +114,9 @@ async def upload(files: list[UploadFile] = File(...)):
 
 
 @app.get("/api/drawings")
-def drawings(source: str = "", q: str = "", ext: str = "", offset: int = 0, limit: int = Query(60, le=200)):
-    res = CATALOG.search(source=source, q=q, ext=ext, offset=max(offset, 0), limit=limit)
+def drawings(source: str = "", q: str = "", ext: str = "", offset: int = 0, limit: int = Query(60, le=200),
+             not_source: str = ""):
+    res = CATALOG.search(source=source, q=q, ext=ext, offset=max(offset, 0), limit=limit, not_source=not_source)
     res["sources"] = CATALOG.sources()
     return res
 
