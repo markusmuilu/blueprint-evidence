@@ -182,8 +182,14 @@ def describe(tk: dict) -> str:
     """One sentence that says how the question was read; goes into every takeoff answer."""
     names = ", ".join(TYPE_NAMES[t] for t in tk["types"])
     grp = f" ('{tk['group']} rooms' read as {names})" if tk.get("group") else ""
+    tr = tk.get("toilet_rooms")
     mat = f" for {tk['material']}" if tk.get("material") else ""
     s = f"Takeoff{mat}: sum of net floor areas of rooms typed {names}{grp}, as drawn inside the walls, no waste allowance"
+    if tr:
+        other = "".join(f" and rooms typed {TYPE_NAMES[t]}" for t in tr.get("other_types", []))
+        how = ("a toilet symbol drawn inside" if tr["confirmed"] else "a bathroom label, toilet not visible in the drawing")
+        s = (f"Takeoff{mat}: sum of net floor areas of the rooms that contain a toilet ({how}){other}, as there is no "
+             f"separate WC room on this floor, as drawn inside the walls, no waste allowance")
     if tk.get("surface") == "ceiling":
         s += "; ceiling area taken equal to floor area"
     if tk.get("material") == "paint" and tk.get("surface") == "floor":
@@ -198,8 +204,9 @@ def wall_reason(tk: dict) -> str:
             "only (wall takeoffs: IFC models, Swiss DXF floors, and scans with a scale from printed room areas)")
 
 
-def answer_line(value, n_rooms: int, route: str) -> str:
-    return f"Answer: {value:.2f} m2 total over {n_rooms} room(s), floor area only   route: {route} (cost $0)"
+def answer_line(value, n_rooms: int, route: str, estimate: str = "") -> str:
+    tag = f" [ESTIMATE: {estimate}]" if estimate else ""
+    return f"Answer{tag}: {value:.2f} m2 total over {n_rooms} room(s), floor area only   route: {route} (cost $0)"
 
 
 def matches(name: str | None, tk: dict) -> bool:
@@ -254,4 +261,106 @@ def summary(rows: list[dict], tk: dict, unit: str = "m2") -> tuple[float, list[d
         return f"{r['label']} ({no})" if no and no not in r["label"] else r["label"]
     lines = " + ".join(f"{tag(r)} {r['area']:.2f}" for r in rows[:20]) + (" + ..." if len(rows) > 20 else "")
     expl = f"{total:.2f} {unit} = {lines}. {describe(tk)}."
-    return total, items, expl
+    head = interpretation(tk, [((f"{r['label']} {r['number']}" if r.get("number") and str(r["number"]) not in str(r["label"])
+                                 else r["label"]), r["area"]) for r in rows])
+    return total, items, (head + " " + expl) if head else expl
+
+
+# ---------------------------------------------------------------- "the toilets" on a floor without a WC room
+
+# Many dwellings have no separate WC room: the toilet is in the bathroom (Bad, KPH, Badezimmer). Someone
+# asking for "tiling for the toilets" on such a floor means the rooms with a toilet in them. The labels
+# say which rooms are bathrooms; a toilet symbol drawn inside the room (where the route reads fixture
+# geometry) confirms it. The answer states the reading and is an estimate, because it rests on it.
+
+def toilet_fallback(rooms: list[dict], tk: dict, name_key: str = "name", has_toilet=None
+                    ) -> tuple[list[dict], list[dict], dict]:
+    """select() for a takeoff, with "toilets" resolved when the floor has no separate WC room.
+
+    has_toilet: callable room -> True (a toilet symbol inside), False (sanitary symbols inside, none a
+    toilet), None (nothing drawn inside the room: unknown); or has_toilet=None when the floor carries no
+    toilet symbols the route can read (scans read by labels, drawings without typed symbols).
+    Returns (rooms used, generic rooms, interpretation). The interpretation is tk itself unless the
+    fallback was needed; then a copy whose types name bathrooms in place of WC rooms and whose
+    'toilet_rooms' entry records the reading (the route marks the answer an estimate, see
+    fallback_reason). Unchanged cases: the question does not ask for toilets, it also asks for
+    bathrooms, or a room labelled as a separate WC exists (WC rooms only; describe() says that
+    bathrooms with a toilet are not included).
+
+    Rooms used by the fallback: rooms labelled as a bathroom, except those whose drawn fixtures show
+    no toilet (a bathroom with only a tub and a basin, next to a separate one with the WC); a bathroom
+    with nothing drawn inside is used on its label and named as not confirmed. Plus rooms that carry
+    no label at all but hold a toilet symbol (a numbered room whose name is missing). A room labelled
+    as something else (a corridor) is never used."""
+    used, generic = select(rooms, tk, name_key)
+    types = tk["types"]
+    if "wc" not in types or "bathroom" in types:
+        return used, generic, tk
+    if any("wc" in room_types(r.get(name_key)) for r in used):
+        return used, generic, tk
+    rest = [r for r in rooms if not any(r is u for u in used)]
+    baths = [r for r in rest if "bathroom" in room_types(r.get(name_key))]
+    left_out: list[dict] = []
+    unlabelled: list[dict] = []
+    unknown: list[dict] = []
+    if has_toilet is not None:
+        seen = [(r, has_toilet(r)) for r in baths]
+        keep = [r for r, t in seen if t is True]
+        unknown = [r for r, t in seen if t is None]
+        left_out = [r for r, t in seen if t is False]
+        unlabelled = [r for r in rest if not str(r.get(name_key) or "").strip() and has_toilet(r) is True]
+        keep = [r for r in baths if any(r is k for k in keep + unknown)]      # drawing order
+    else:
+        keep = baths
+    tk2 = dict(tk, types=[("bathroom" if t == "wc" else t) for t in types])
+    def lab(r):           # label with the room number when the drawing has one ("Bad 4.05")
+        name, no = str(r.get(name_key) or ""), str(r.get("number") or "")
+        return f"{name} {no}".strip() if no and no not in name else name
+    why = ""
+    if not keep and not unlabelled:
+        if not baths:
+            why = "no separate WC room, no bathroom label" + (" and no unlabelled room with a toilet symbol"
+                                                               if has_toilet is not None else "") + " on this floor"
+        else:
+            why = (f"no separate WC room, and none of the {len(baths)} bathroom(s) ({', '.join(lab(r) for r in baths[:6])}) "
+                   f"has a toilet symbol drawn inside")
+    tk2["toilet_rooms"] = {"confirmed": has_toilet is not None, "rooms": [lab(r) for r in keep],
+                           "unlabelled": len(unlabelled), "left_out": [lab(r) for r in left_out],
+                           "unknown": [lab(r) for r in unknown],
+                           "other_types": [t for t in types if t != "wc"], "why": why}
+    return used + keep + unlabelled, generic, tk2
+
+
+def interpretation(tk: dict, rows: list[tuple[str, float]]) -> str:
+    """The sentence that opens an answer built on the toilet fallback ('' otherwise).
+    rows: (label, floor area) of the rooms used; rooms of other asked types are not named."""
+    tr = tk.get("toilet_rooms")
+    if not tr:
+        return ""
+    other = set(tr.get("other_types", []))
+    named = [f"{lab} ({a:.2f} m2)" for lab, a in rows if not (room_types(lab) & other)]
+    s = "No separate WC room on this floor; using the rooms that contain a toilet: " + (", ".join(named) or "none") + "."
+    if tr["confirmed"]:
+        if tr.get("unknown"):
+            s += (f" {', '.join(tr['unknown'][:8])}: no fixtures drawn inside, used on the bathroom label (toilet not "
+                  f"confirmed); the others have a toilet symbol drawn inside (boxed on the evidence image).")
+        else:
+            s += " Each has a toilet symbol drawn inside it (boxed on the evidence image)."
+        if tr.get("unlabelled"):
+            s += f" {tr['unlabelled']} of them carr{'ies' if tr['unlabelled'] == 1 else 'y'} no room name, only the toilet symbol."
+        if tr["left_out"]:
+            s += f" Left out, no toilet drawn inside: {', '.join(tr['left_out'][:8])}."
+    else:
+        s += " The drawing has no toilet symbols this route can read, so every room labelled as a bathroom is used."
+    return s
+
+
+def fallback_reason(tk: dict) -> str:
+    """Estimate-tier reason for an answer built on the toilet fallback ('' otherwise)."""
+    tr = tk.get("toilet_rooms")
+    if not tr:
+        return ""
+    how = "bathrooms with a toilet symbol inside" if tr["confirmed"] else "bathroom labels, toilet not confirmed"
+    if tr["confirmed"] and tr.get("unknown"):
+        how += f"; {len(tr['unknown'])} bathroom(s) with nothing drawn inside used on the label alone"
+    return "interpretation: no separate WC room, so 'toilets' read as the rooms that contain a toilet (" + how + ")"

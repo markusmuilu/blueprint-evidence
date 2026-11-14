@@ -565,6 +565,7 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         return abstain(ROUTE, "no DXF")
     fl = load(str(dxf))
     boxes, rooms_used, note, conf, label_pts = None, [], "", 0.85, []
+    tku = {}          # takeoff interpretation when the toilet fallback was needed (bpqa/takeoff.py)
 
     if q.measure == "count":
         if q.obj in OBJ_CLASSES:
@@ -630,10 +631,24 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
             tk = q.extra["takeoff"]
             for r in rooms:
                 r["name"] = next((t for t in r["texts"] if text_room_types(t) - {"room"}), r["name"])
-            rooms_used, _ = takeoff.select(rooms, tk)
+            tboxes, _ = fl.fixtures(("toilet",))
+            has_toilet = None
+            if tboxes:            # toilet blocks: a room holds one when the block's centre is inside its outline
+                cents = [Point((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for b in tboxes]
+                fboxes = fl.fixtures(("sink", "bathtub", "shower"))[0] or []
+                others = [Point((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for b in fboxes]
+                has_toilet = lambda r: (True if any(r["poly"].area > (b[2] - b[0]) * (b[3] - b[1]) and r["poly"].contains(c)
+                                                    for b, c in zip(tboxes, cents)) else
+                                        (False if any(r["poly"].contains(c) for c in others) else None))
+            rooms_used, _, tk = takeoff.toilet_fallback(rooms, tk, has_toilet=has_toilet)
             if not rooms_used:
-                return abstain(ROUTE, f"no room of type {', '.join(tk['types'])}")
+                why = (tk.get("toilet_rooms") or {}).get("why")
+                return abstain(ROUTE, why or f"no room of type {', '.join(tk['types'])}")
             note = takeoff.describe(tk)
+            if tk.get("toilet_rooms"):
+                tku, boxes = tk, list(tboxes or [])       # toilet blocks are boxed on the evidence image
+                note = takeoff.interpretation(tk, [(r["name"] or "unlabelled room", r["poly"].area * fl.m_per_unit ** 2)
+                                                   for r in rooms_used]) + " " + note
         else:
             return abstain(ROUTE, "area question not specific enough for a generic DXF (no room label)")
         why = single_room_problem(q, rooms_used, lambda r: r["name"])
@@ -659,6 +674,8 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
     if conf < PROVEN_CONF:
         estimate(ans, f"confidence {conf} < {PROVEN_CONF}: {note}")
         ans.uncertain = items
+    elif tku.get("toilet_rooms"):
+        estimate(ans, takeoff.fallback_reason(tku))
     else:
         ans.tier = "proven"
     col0 = AMBER if ans.tier == "estimate" else BLUE
