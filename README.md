@@ -409,7 +409,24 @@ room labels alone, which fails where a label is missing, mirrored or unreadable 
 - **Evidence**: each counted room boxed and numbered (blue proven, amber estimate), rooms scored near the
   threshold in grey, the labels read boxed thin and numbered L1, L2 ...
 
-ROOMS_RESULTS
+Results, exact count, abstentions counted wrong (accuracy; proven answers and their precision in
+brackets). Before = main (OCR labels + checking layer), after = raster-rooms + the same checking layer.
+Full set test split: 10,032 questions on 1,510 images, run once after the thresholds were frozen. Preview
+dev: 1,048 questions; its images are among the tune images, so dev is not held out from the tuning.
+
+| room type | full test before | full test after | preview dev before | preview dev after |
+|---|---|---|---|---|
+| kitchen | 64.0% (1170, 98.8%) | 90.8% (1008, 98.8%) | 61.4% | 85.1% |
+| bathroom | 61.5% (816, 96.8%) | 85.4% (788, 93.7%) | 82.4% | 93.2% |
+| WC room | 81.2% (1278, 82.0%) | 89.4% (1160, 96.4%) | 89.3% | 93.3% |
+| sauna | 63.6% (518, 81.9%) | 93.4% (1218, 96.2%) | 69.4% | 89.2% |
+| bedroom | 75.1% (1276, 86.4%) | 81.5% (none proven) | 76.7% | 78.6% |
+| balcony | 85.8% (772, 87.6%) | 85.8% (660, 93.6%) | 87.2% | 87.2% |
+| all six | 70.2% | 88.1% | 75.4% | 87.2% |
+
+Bedrooms get no proven tier: no proof rule reached 95% precision on the tune images. Bathroom proven
+precision on test (93.7%) is under the 95% it was tuned to. The detector adds about 0.1 s per image on
+the CPU (plus about 4 s to load the model once).
 
 ### Nemotron
 

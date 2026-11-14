@@ -3,6 +3,34 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: room-type detector and raster-rooms route, branch `room-detector`
+
+Problem: kitchens, saunas, bathrooms and bedrooms on CubiCasa scans were counted only from OCR of the room
+labels, which are often missing or unreadable (kitchens 64% exact on the full test split, most of them
+estimates that were about 20% right).
+
+- Room polygons from public CubiCasa5K (`tools/cubicasa_rooms.py`): Space class + NameLabel + fixtures
+  inside. A WC room is a Bath space named "WC"; most saunas are "Space Undefined" holding a sauna stove.
+  The mapping reproduces Stoa's train-split answers on 99.1-100% of images per type.
+- Dataset (`tools/build_rooms_dataset.py`): same allowed plans and the same 624 held-out tune images as the
+  fixture detector; 2,678 train / 161 val images.
+- Training: Modal GPUs need a payment method on the account (not added), so a `yolo26n` at 640 px trained
+  on a Modal CPU container (`tools/train_rooms_modal.py`, mAP50 0.78 after 8 epochs) was the first model;
+  the final `yolo26s` at 896 px trained on the PC GPU (batch 4, about 3 GB VRAM) for 11 epochs (val
+  mAP50 0.867), stopped early when the GPU got busy. Modal spend about $2.4.
+- Route `raster-rooms` (`bpqa/routes/raster_rooms.py`): detector count vs OCR label count; agreement proven
+  under a per-type proof rule, disagreement an estimate with both readings, valued by a per-type preference;
+  all tuned on the tune images only (`tools/tune_rooms.py`). The router sends raster questions to it; it hands
+  every question that is not a room-type count to `raster.answer` unchanged.
+- TTA (eight rotations/mirrors) was tried on the tune images: under 1 point of cross-validated gain per type
+  for 8x the CPU time, so it is off.
+
+Full set test split (run once, thresholds frozen), exact count: kitchen 64.0% -> 90.8%, bathroom 61.5% ->
+85.4%, WC 81.2% -> 89.4%, sauna 63.6% -> 93.4%, bedroom 75.1% -> 81.5%, balcony 85.8% -> 85.8%; all six
+70.2% -> 88.1% (10,032 questions). Proven precision: WC 82.0% -> 96.4%, sauna 81.9% -> 96.2%, balcony
+87.6% -> 93.6%, kitchen 98.8% both, bathroom 96.8% -> 93.7%; bedrooms are no longer proven (86.4% before).
+Preview dev (its images are tune images): 75.4% -> 87.2%.
+
 ## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
 
 Problem: on a scan with some printed room areas a takeoff abstained for every room that prints none, and wall
