@@ -97,7 +97,8 @@ def main():
                           "why": None if ans.answered else ans.abstain}
                 if ans.answered:
                     q[key]["err"] = round((ans.value - q["gold"]) / q["gold"], 4)
-                    q[key]["object_scale"] = "OBJECT scale" in (ans.explanation or "")
+                    q[key]["object_scale"] = OS.is_object(RA.analyse(str(f)).scale)
+                    q[key]["source"] = (ans.approx or {}).get("source")
         for q in qs:
             rows.append({"file": f.name, **q})
     OS.ENABLED = False
@@ -120,6 +121,11 @@ def main():
             et = np.abs([r["after"]["err"] for r in new if r["type"] == t])
             if len(et):
                 print(f"  {t:9s} n={len(et)} right={int((et <= .02).sum())} median={np.median(et):.1%}")
+    for src in ("modules", "objects"):
+        es = np.abs([r["after"]["err"] for r in new if r["after"].get("source") == src])
+        if len(es):
+            print(f"  scale from {src}: n={len(es)} right={int((es <= .02).sum())} within10={int((es <= .10).sum())} "
+                  f"median={np.median(es):.1%}")
     changed = [r for r in rows if r["before"]["value"] is not None and r["before"]["value"] != r["after"]["value"]]
     print(f"answers that existed before and changed: {len(changed)}")
     if a.out:

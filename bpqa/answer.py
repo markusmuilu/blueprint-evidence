@@ -28,6 +28,9 @@ class Answer:
     # the condition a scan route met, used to look up its measured precision (bpqa/calibration.py), e.g.
     # "clear" for a detector count whose views all agree with no box near the threshold; "" for none
     tier_cell: str = ""
+    # an area approximated from a door or object scale on a scan that prints no areas (raster_area, scale_objects):
+    # the answer sentence, the scale source and objects, and the error band, for the app to show where it comes from
+    approx: dict | None = None
 
     @property
     def answered(self) -> bool:

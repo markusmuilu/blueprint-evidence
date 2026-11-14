@@ -73,11 +73,15 @@ def _record_poly(img, pts, fill):
                         "rect": [min(xs), min(ys), max(xs), max(ys)]})
 
 
-def record_context(img, rect, kind: str = "scale") -> None:
-    """A context mark that is not an answer item (e.g. kind "scale": a printed room used only to fit the pixel
-    scale). Saved with its own kind and tone "grey", so the app does not pin or number it like an item."""
+def record_context(img, rect, kind: str = "scale", tone: str = "grey", label: str | None = None) -> None:
+    """A context mark that is not an answer item (kind "scale": a printed room used only to fit the pixel scale;
+    kind "scale_object": a door, WC pan or bathtub whose assumed or printed size set an approximate scale, tone
+    "amber", with its label "D1 door 0.84 m"). Saved with its own kind, so the app does not pin or number it."""
     x0, y0, x1, y1 = (float(v) for v in rect)
-    _marks(img).append({"kind": kind, "tone": "grey", "rect": [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]})
+    m = {"kind": kind, "tone": tone, "rect": [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]}
+    if label:
+        m["label"] = label
+    _marks(img).append(m)
 
 
 def dashed_rect(d, rect, color=GREY, width: int = 1, dash: int = 6) -> None:
@@ -94,14 +98,20 @@ def record_steps(img, n, steps) -> None:
 
     `n` is the item's number as drawn (the `#n` on the overlay and in the strip, 1-based). Each step is
     {"kind": "label" | "value" | "region" | ..., "title": "Label read", "text": "MH 1", "note": "read as bedroom"}
-    plus where it sits in the canvas's pixel frame: "rect" [x0, y0, x1, y1] and/or "pts" [[x, y], ...].
+    plus where it sits in the canvas's pixel frame: "rect" [x0, y0, x1, y1] and/or "pts" [[x, y], ...], or
+    "rects" [[x0, y0, x1, y1], ...] with "caps" [str, ...] for a step that rests on several places (the doors that
+    set an approximate scale, each captioned with its size).
     Saved in the marks sidecar as {"steps": {"<n>": [...]}}; an older sidecar simply has no "steps".
     """
     rows = []
     for st in steps:
         if not st:
             continue
-        r = {k: v for k, v in st.items() if v is not None and k not in ("rect", "pts")}
+        r = {k: v for k, v in st.items() if v is not None and k not in ("rect", "pts", "rects")}
+        if st.get("rects"):
+            rs = [[min(a[0], a[2]), min(a[1], a[3]), max(a[0], a[2]), max(a[1], a[3])] for a in
+                  ([float(v) for v in q] for q in st["rects"])]
+            r["rects"] = rs
         if st.get("rect") is not None:
             x0, y0, x1, y1 = (float(v) for v in st["rect"])
             r["rect"] = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
@@ -325,6 +335,8 @@ def write_marks(out: Path, marks: list, frame: dict | None, k: float, head_h: in
             r["rect"] = [sc(v) for v in m["rect"]]
         if "pts" in m:
             r["pts"] = [[sc(x), sc(y)] for x, y in m["pts"]]
+        if "rects" in m:
+            r["rects"] = [[sc(v) for v in q] for q in m["rects"]]
         return r
     rows = [scaled(m) for m in marks]
     fr = dict(frame) if frame else None
