@@ -22,6 +22,10 @@
     <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></symbol>
     <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3.5 8h9"/></symbol>
     <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.75 6V2.75H6M10 2.75h3.25V6M13.25 10v3.25H10M6 13.25H2.75V10"/></symbol>
+    <symbol id="i-rot-l" viewBox="0 0 16 16"><path d="M3.25 7.5a4.75 4.75 0 1 0 1.4-3.35"/><path d="M3.75 2.5v2.75H6.5"/></symbol>
+    <symbol id="i-rot-r" viewBox="0 0 16 16"><path d="M12.75 7.5a4.75 4.75 0 1 1-1.4-3.35"/><path d="M12.25 2.5v2.75H9.5"/></symbol>
+    <symbol id="i-mirror" viewBox="0 0 16 16"><path d="M8 2.5v11" stroke-dasharray="1.5 1.5"/><path d="M6.25 4.75L2.75 11.5h3.5z"/><path d="M9.75 4.75l3.5 6.75h-3.5z"/></symbol>
+    <symbol id="i-orient" viewBox="0 0 16 16"><path d="M3.5 2.75v9.75h9.75"/><path d="M3.5 12.5L8 8"/><path d="M6.25 7.9L8 8l-.1 1.75"/></symbol>
     <symbol id="i-header" viewBox="0 0 16 16"><path d="M2.75 2.75h10.5v10.5H2.75z"/><path d="M2.75 6.25h10.5"/></symbol>
     <symbol id="i-external" viewBox="0 0 16 16"><path d="M9 2.75h4.25V7M13.25 2.75L7.5 8.5"/><path d="M11 9.5v3.75H2.75V5H6.5"/></symbol>
     <symbol id="i-copy" viewBox="0 0 16 16"><path d="M5.75 5.75h7.5v7.5h-7.5z"/><path d="M10.25 5.75V2.75h-7.5v7.5h3"/></symbol>
@@ -48,6 +52,8 @@
 
   <!-- ============================================================ ASK -->
   <section class="view view-ask" id="view-ask">
+    <div class="grip grip-picker" id="gripPicker" role="separator" aria-orientation="vertical" tabindex="0" aria-controls="picker" aria-label="Resize the drawing library"></div>
+    <div class="grip grip-detail" id="gripDetail" role="separator" aria-orientation="vertical" tabindex="0" aria-controls="detail" aria-label="Resize the answer panel"></div>
     <aside class="picker" id="picker" aria-label="Drawings">
       <div class="picker-head">
         <h2 class="h-panel">Drawings</h2>
@@ -103,7 +109,7 @@
 
       <div class="viewer" id="viewer" tabindex="0" aria-label="Drawing viewer. Drag to pan, scroll or plus and minus keys to zoom, zero to fit.">
         <div class="stage" id="stage">
-          <img id="viewImg" alt="" draggable="false">
+          <div class="orient" id="orient"><img id="viewImg" alt="" draggable="false"></div>
           <div class="marks" id="marks" aria-hidden="true"></div>
         </div>
 
@@ -135,12 +141,18 @@
             <button type="button" role="radio" aria-checked="false" data-mode="3d">3D</button>
           </div>
           <span class="layer-tag" id="layerTag">Drawing</span>
-          <button class="tool" id="zoomOut" aria-label="Zoom out"><svg class="ico"><use href="#i-minus"/></svg></button>
+          <button class="tool" id="zoomOut" aria-label="Zoom out" data-tip="Zoom out (minus)"><svg class="ico"><use href="#i-minus"/></svg></button>
           <output class="zoom" id="zoomLvl" aria-live="off">100%</output>
-          <button class="tool" id="zoomIn" aria-label="Zoom in"><svg class="ico"><use href="#i-plus"/></svg></button>
-          <button class="tool" id="zoomFit" aria-label="Fit to view"><svg class="ico"><use href="#i-fit"/></svg></button>
-          <button class="tool" id="headerToggle" aria-pressed="false" aria-label="Show the evidence header strip" disabled><svg class="ico"><use href="#i-header"/></svg></button>
-          <a class="tool" id="openImg" aria-label="Open image in a new tab" target="_blank" rel="noopener" hidden><svg class="ico"><use href="#i-external"/></svg></a>
+          <button class="tool" id="zoomIn" aria-label="Zoom in" data-tip="Zoom in (plus)"><svg class="ico"><use href="#i-plus"/></svg></button>
+          <button class="tool" id="zoomFit" aria-label="Fit to view" data-tip="Fit to view (0)"><svg class="ico"><use href="#i-fit"/></svg></button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button class="tool" id="rotL" aria-label="Rotate left" aria-keyshortcuts="Shift+R" data-tip="Rotate left (Shift+R)" disabled><svg class="ico"><use href="#i-rot-l"/></svg></button>
+          <button class="tool" id="rotR" aria-label="Rotate right" aria-keyshortcuts="R" data-tip="Rotate right (R)" disabled><svg class="ico"><use href="#i-rot-r"/></svg></button>
+          <button class="tool" id="mirror" aria-pressed="false" aria-label="Mirror horizontally" aria-keyshortcuts="M" data-tip="Mirror horizontally (M)" disabled><svg class="ico"><use href="#i-mirror"/></svg></button>
+          <button class="tool" id="orientReset" aria-label="Original orientation" aria-keyshortcuts="O" data-tip="Original orientation (O)" disabled><svg class="ico"><use href="#i-orient"/></svg></button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button class="tool" id="headerToggle" aria-pressed="false" aria-label="Show the evidence header strip" data-tip="Evidence header strip" disabled><svg class="ico"><use href="#i-header"/></svg></button>
+          <a class="tool" id="openImg" aria-label="Open image in a new tab" data-tip="Open image in a new tab" target="_blank" rel="noopener" hidden><svg class="ico"><use href="#i-external"/></svg></a>
         </div>
       </div>
 
