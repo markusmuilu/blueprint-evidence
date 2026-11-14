@@ -413,7 +413,9 @@ set T=--stoa ../data/stoa-full/junction-dataset --images ../data/detector/ds_cub
 
 Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG), `python tests/test_tiling.py`
 (tiles, seam merging, rotated and mirrored views mapped back) and
-`python tools/test_overlap.py --work <scratch folder>` (overlap tool on the preview).
+`python tools/test_overlap.py --work <scratch folder>` (overlap tool on the preview),
+`python tests/test_evidence_marks.py` (marks sidecar in evidence pixels) and `python tests/test_witnesses.py`
+(agreement levels, disagreement circles).
 
 ### Verify in seconds
 
@@ -457,7 +459,37 @@ its PNG render have the same page frame), their boxes are matched by position an
 them counted are circled on the drawing, so a disagreement points at the doors to look at, not just at a
 number.
 
-WITNESS_RESULTS
+Measured on the preview set, dev split: 576 questions on drawings with two or more formats (Swiss
+Dwellings DXF + PDF + PNG, IFC plans model + PDF; up to 12 per drawing, text questions excluded), each
+witness scored with `eval.py`'s rule (`tools/witness_eval.py`, `out/witness/witness_summary.json`, 30 minutes on
+the CPU):
+
+| witnesses | questions | share | router answer correct |
+|---|---:|---:|---:|
+| all formats that answered agree | 463 | 80.4% | 99.6% (461) |
+| a majority agrees, one format differs | 107 | 18.6% | 100% (107) |
+| formats disagree, no majority | 1 | 0.2% | 100% (1) |
+| only one format answers | 5 | 0.9% | 100% (5) |
+| all | 576 | | 99.7% (574) |
+
+| each witness answer | answers | correct |
+|---|---:|---:|
+| another format gives the same value | 1,340 | 99.7% (1,336) |
+| another format gives a different value | 109 | 0.9% (1) |
+| no other format answers | 5 | 100% (5, all IFC) |
+
+What this says, plainly: a format's answer that another format matches is almost always right, and one
+that another format contradicts is almost always wrong. On this set that mostly sorts the PNG reader:
+it answered 307 of 564 questions and was right on 200, all 200 of them matched by the DXF and the PDF,
+and all 107 of its contradicted answers were wrong. The router's own answer (from the DXF here) was never
+outvoted, so agreement adds little to its accuracy on Swiss plans, where it is already 99.7%. Agreement is
+not proof: the router's two wrong answers are areas where the DXF and the PDF agree with each other
+(334.17 vs 341.45 m², 34.08 vs 25.54 m²), because both read the same room outlines. Its use is as a
+signal next to a proven or estimated answer, and as a pointer to the items to check when a scan reader
+disagrees.
+
+`.venv\Scripts\python tools/witness_eval.py --split dev --per-drawing 12` reproduces it;
+`--summarize-only` rebuilds the summary from `out/witness/records.jsonl`.
 
 ### Cost and latency, measured
 
@@ -469,7 +501,8 @@ GPU price instead. A question that every route abstained on is booked under the 
 the 14 `pdf-text` rows are IFC-plan and OpeningDesign questions that abstained). The answer panel shows the same numbers as a small cost meter next to the baseline.
 
 Preview set, dev split, 89 questions (up to 10 drawings per source, file type and question type, two
-questions per drawing), evidence rendering on, Nemotron off, 16-thread CPU:
+questions per drawing), evidence rendering on, Nemotron off, 16-thread CPU
+(`.venv\Scripts\python tools/cost_eval.py --split dev --drawings 10 --per 2`, `out/cost/cost_by_route.json`):
 
 | route | questions | answered | median wall | p90 wall | cold median | CPU s, mean | $ per 1,000, CPU | $ per 1,000, detector on a GPU |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|

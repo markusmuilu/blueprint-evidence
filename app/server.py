@@ -494,9 +494,9 @@ def corrections_csv():
 
 @app.get("/api/witness_summary")
 def witness_summary():
-    f = REPO / "out" / "witness" / "summary.json"
+    f = REPO / "out" / "witness" / "witness_summary.json"
     if not f.exists():
-        return {"missing": "out/witness/summary.json not found; run tools/witness_eval.py"}
+        return {"missing": "out/witness/witness_summary.json not found; run tools/witness_eval.py"}
     return json.loads(f.read_text(encoding="utf-8"))
 
 

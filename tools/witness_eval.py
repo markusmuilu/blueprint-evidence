@@ -5,7 +5,7 @@
 For every question on a drawing that exists in more than one format (Swiss Dwellings: DXF, PDF, PNG;
 IFC plans: model and PDF), each format answers on its own (bpqa/witnesses.py), and the router's normal
 answer is computed too. Both are scored against the dataset answer with eval.py's rule. Writes
-out/witness/records.jsonl and out/witness/summary.json (read by the app's Results view).
+out/witness/records.jsonl and out/witness/witness_summary.json (read by the app's Results view).
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def main():
     if args.summarize_only:
         out = Path(args.out)
         recs = [json.loads(x) for x in (out / "records.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
-        old = json.loads((out / "summary.json").read_text(encoding="utf-8")) if (out / "summary.json").exists() else {}
+        old = json.loads((out / "witness_summary.json").read_text(encoding="utf-8")) if (out / "witness_summary.json").exists() else {}
         return write_summary(recs, out, root, args, old.get("elapsed_s", 0))
     qs = [q for q in load_questions(root) if (args.split == "all" or split_of(q.path) == args.split) and q.type != "text"]
     by_path = defaultdict(list)
@@ -159,8 +159,8 @@ def write_summary(recs, out, root, args, elapsed):
                        f"(Swiss Dwellings DXF + PDF + PNG, IFC plans model + PDF), up to {args.per_drawing} per drawing; witnesses read each format alone, "
                        f"no model calls. When the router's answer is matched by at least one other format it is right {pct(cy['router_correct'])} of the time "
                        f"({cy['n']} questions); when no other format matches it, {pct(cn['router_correct'])} ({cn['n']}). "
-                       f"Router correct counts an abstention as wrong. Source: out/witness/summary.json (tools/witness_eval.py).")
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
+                       f"Router correct counts an abstention as wrong. Source: out/witness/witness_summary.json (tools/witness_eval.py).")
+    (out / "witness_summary.json").write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
     print(json.dumps({k: summary[k] for k in ("questions", "elapsed_s", "corroborated", "uncorroborated", "per_format")}, indent=1))
     for r in rows:
         print(f"{r['label']:<34} n={r['n']:<5} share={pct(r['share'])}  router={pct(r['router_correct'])}  majority={pct(r['majority_correct'])}")

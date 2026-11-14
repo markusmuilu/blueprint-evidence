@@ -549,3 +549,4 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
   .busy-bar span { animation: none; width: 100%; opacity: 0.6; }
   .toast { animation: none; }
 }
+.tbl .dim { color: var(--muted); }
