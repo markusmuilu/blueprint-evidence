@@ -580,7 +580,14 @@ function setHash() {
   const q = $("#question").value.trim();
   if (q && (state.answer || state.askingQ)) p.set("q", state.askingQ || q);
   if (state.mode === "3d") p.set("mode", "3d");
-  history.replaceState(null, "", "#" + p.toString());
+  const next = "#" + p.toString();
+  if (location.hash === next) return;
+  /* a new drawing or a new question is a history step, so Back returns to the previous one (Mac QA 14 Nov);
+     other changes (3D toggle, the question appearing while it is asked) replace the current entry */
+  const cur = new URLSearchParams(location.hash.slice(1));
+  const step = cur.get("path") && (cur.get("path") !== p.get("path") || (cur.get("q") && p.get("q") && cur.get("q") !== p.get("q")));
+  if (step) history.pushState(null, "", next);
+  else history.replaceState(null, "", next);
 }
 
 /* ================================================================ viewer */
@@ -2695,7 +2702,7 @@ function renderObjTable(d) {
   if (p.get("view") === "results") showView("results");
 })();
 /* a pasted link or back/forward in the same tab changes only the hash: load what it names (QA 14 Nov). The app's
-   own URL updates use history.replaceState, which fires no hashchange, so this does not loop. */
+   own URL updates use pushState / replaceState, which fire no hashchange, so this does not loop. */
 window.addEventListener("hashchange", async () => {
   const p = new URLSearchParams(location.hash.slice(1));
   if (p.get("view") === "results") { showView("results"); return; }
