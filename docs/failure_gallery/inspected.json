@@ -1,0 +1,835 @@
+{
+ "source": "eval.py --split test --sources cubicasa5k, Nemotron off, preview test split",
+ "modes": {
+  "door_noarc": "Door missed: no swing arc (sliding, double or plain line)",
+  "missed_small": "Small item missed (thick wall, crowded corner, hatched wall)",
+  "thin_window": "Window drawn as a faint thin line, missed",
+  "window_pair": "Counting convention: a window frame with a divider is two annotated windows",
+  "furniture_door": "Extra door: cabinet, wardrobe or closet door",
+  "other_space": "Other flat or space on the same sheet counted too",
+  "scribbles": "Pen marks, handwriting or sketch lines over the plan",
+  "low_res": "Low resolution or a small plan on a large sheet",
+  "degraded": "Old, yellowed or faint scan",
+  "balcony_porch": "Balcony glazing, porch or terrace openings",
+  "gold_vs_drawing": "Annotated count not supported by what is drawn",
+  "label": "Room label unreadable, missing or upside down",
+  "room_detector": "Room-type detector wrong where labels do not decide",
+  "fixture_symbol": "Unusual or confused fixture symbol",
+  "cut_edge": "Plan cut off at the image edge",
+  "no_cause": "No clear cause found"
+ },
+ "cases": [
+  {
+   "drawing": "high_quality_architectural-13388",
+   "size": "298x397",
+   "object": "bathroom",
+   "question": "How many bathrooms or washrooms (e.g. KH, KPH, PH, PESUH, SH) are on this floor plan, not counting separate WC rooms?",
+   "ours": 2,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "rotated",
+    "low_res"
+   ],
+   "note": "298 px wide, upside down; second wet room outside the red line counted"
+  },
+  {
+   "drawing": "high_quality_architectural-14759",
+   "size": "808x1241",
+   "object": "bedroom",
+   "question": "How many bedrooms (makuuhuone, usually marked MH) are on this floor plan?",
+   "ours": 1,
+   "gold": 0,
+   "tier": "estimate",
+   "mode": "room_detector",
+   "tags": [
+    "rotated"
+   ],
+   "note": "alcove with wardrobes of a studio detected as a bedroom"
+  },
+  {
+   "drawing": "high_quality_architectural-1706",
+   "size": "1756x1873",
+   "object": "bedroom",
+   "question": "How many bedrooms (makuuhuone, usually marked MH) are on this floor plan?",
+   "ours": 0,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "label",
+   "tags": [
+    "rotated"
+   ],
+   "note": "upside-down plan with Swedish labels, nothing read"
+  },
+  {
+   "drawing": "high_quality_architectural-1886",
+   "size": "2480x2349",
+   "object": "bedroom",
+   "question": "How many bedrooms (makuuhuone, usually marked MH) are on this floor plan?",
+   "ours": 0,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "label",
+   "tags": [
+    "hand_drawn"
+   ],
+   "note": "handwritten MH label not read"
+  },
+  {
+   "drawing": "high_quality_architectural-7549",
+   "size": "540x445",
+   "object": "bedroom",
+   "question": "How many bedrooms (makuuhuone, usually marked MH) are on this floor plan?",
+   "ours": 2,
+   "gold": 3,
+   "tier": "estimate",
+   "mode": "label",
+   "tags": [],
+   "note": "two MH labels read, the third bedroom carries no MH label"
+  },
+  {
+   "drawing": "colorful-11960",
+   "size": "240x161",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 7,
+   "gold": 5,
+   "tier": "estimate",
+   "mode": "low_res",
+   "tags": [],
+   "note": "240 px wide; two extra doors on a drawing the size of a stamp"
+  },
+  {
+   "drawing": "high_quality-1655",
+   "size": "822x779",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 17,
+   "gold": 16,
+   "tier": "estimate",
+   "mode": "furniture_door",
+   "tags": [
+    "two_floors",
+    "handwriting"
+   ],
+   "note": "kitchen counter edge read as a door"
+  },
+  {
+   "drawing": "high_quality-7768",
+   "size": "4000x3000",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 6,
+   "gold": 3,
+   "tier": "estimate",
+   "mode": "balcony_porch",
+   "tags": [],
+   "note": "porch openings counted; the annotation counts three doors"
+  },
+  {
+   "drawing": "high_quality-8026",
+   "size": "618x724",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 4,
+   "gold": 5,
+   "tier": "estimate",
+   "mode": "scribbles",
+   "tags": [],
+   "note": "blue pen strokes around the entrance, one door missed"
+  },
+  {
+   "drawing": "high_quality_architectural-10026",
+   "size": "793x615",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 10,
+   "gold": 7,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "pen_marks"
+   ],
+   "note": "two flats on one sheet (As 5 and As 4); doors of the second flat counted"
+  },
+  {
+   "drawing": "high_quality_architectural-11059",
+   "size": "1286x659",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 14,
+   "gold": 15,
+   "tier": "estimate",
+   "mode": "low_res",
+   "tags": [
+    "two_floors"
+   ],
+   "note": "plan fills a fifth of the sheet, doors are a few pixels wide"
+  },
+  {
+   "drawing": "high_quality_architectural-11169",
+   "size": "622x667",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 3,
+   "gold": 4,
+   "tier": "estimate",
+   "mode": "door_noarc",
+   "tags": [],
+   "note": "sliding door drawn as a thick bar without an arc"
+  },
+  {
+   "drawing": "high_quality_architectural-11426",
+   "size": "966x1156",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 12,
+   "gold": 11,
+   "tier": "estimate",
+   "mode": "scribbles",
+   "tags": [
+    "degraded"
+   ],
+   "note": "blue pen strokes over the kitchen wall read as a door"
+  },
+  {
+   "drawing": "high_quality_architectural-1153",
+   "size": "1054x536",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 16,
+   "gold": 15,
+   "tier": "estimate",
+   "mode": "furniture_door",
+   "tags": [
+    "mirrored"
+   ],
+   "note": "mirrored plan (text reads backwards); extra door at the wash room cabinet"
+  },
+  {
+   "drawing": "high_quality_architectural-13075",
+   "size": "396x818",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 9,
+   "gold": 7,
+   "tier": "estimate",
+   "mode": "furniture_door",
+   "tags": [],
+   "note": "kitchen cabinet arc and utility door read as doors"
+  },
+  {
+   "drawing": "high_quality_architectural-13309",
+   "size": "592x523",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 15,
+   "gold": 16,
+   "tier": "estimate",
+   "mode": "missed_small",
+   "tags": [],
+   "note": "door at the bottom right, next to another door, scored low"
+  },
+  {
+   "drawing": "high_quality_architectural-13607",
+   "size": "363x739",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 6,
+   "gold": 7,
+   "tier": "estimate",
+   "mode": "door_noarc",
+   "tags": [],
+   "note": "door drawn as a short line in the wall"
+  },
+  {
+   "drawing": "high_quality_architectural-14759",
+   "size": "808x1241",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 7,
+   "gold": 6,
+   "tier": "estimate",
+   "mode": "no_cause",
+   "tags": [
+    "rotated"
+   ],
+   "note": "plan rotated 90 degrees, one extra door near the crop edge"
+  },
+  {
+   "drawing": "high_quality_architectural-14762",
+   "size": "629x1042",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 8,
+   "gold": 7,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "rotated"
+   ],
+   "note": "plan rotated 180 degrees; a stair-hall door outside the flat counted"
+  },
+  {
+   "drawing": "high_quality_architectural-14812",
+   "size": "506x653",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 9,
+   "gold": 8,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "marker"
+   ],
+   "note": "door of the neighbouring flat at the image edge counted; green marker on the sheet"
+  },
+  {
+   "drawing": "high_quality_architectural-1772",
+   "size": "755x563",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 11,
+   "gold": 12,
+   "tier": "estimate",
+   "mode": "door_noarc",
+   "tags": [
+    "two_floors"
+   ],
+   "note": "gate in the yard fence drawn as a thin line"
+  },
+  {
+   "drawing": "high_quality_architectural-4897",
+   "size": "970x748",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 19,
+   "gold": 17,
+   "tier": "estimate",
+   "mode": "furniture_door",
+   "tags": [],
+   "note": "doors of small utility closets counted; the annotation has none there"
+  },
+  {
+   "drawing": "high_quality_architectural-6355",
+   "size": "887x485",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 23,
+   "gold": 24,
+   "tier": "estimate",
+   "mode": "degraded",
+   "tags": [
+    "two_floors"
+   ],
+   "note": "yellowed old scan, two floors on one sheet, extra and missed doors together"
+  },
+  {
+   "drawing": "high_quality_architectural-6467",
+   "size": "640x434",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 6,
+   "gold": 5,
+   "tier": "estimate",
+   "mode": "furniture_door",
+   "tags": [],
+   "note": "door-like edge of the kitchen units counted"
+  },
+  {
+   "drawing": "high_quality_architectural-7098",
+   "size": "863x520",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 15,
+   "gold": 14,
+   "tier": "estimate",
+   "mode": "scribbles",
+   "tags": [],
+   "note": "hand-drawn curves and sketch lines read as doors, one double door missed"
+  },
+  {
+   "drawing": "high_quality_architectural-7924",
+   "size": "513x807",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 9,
+   "gold": 11,
+   "tier": "estimate",
+   "mode": "door_noarc",
+   "tags": [],
+   "note": "double door drawn as two arcs and a thin sliding door both missed; neighbouring spaces on the sheet"
+  },
+  {
+   "drawing": "high_quality_architectural-9198",
+   "size": "573x802",
+   "object": "door",
+   "question": "How many doors are shown on this floor plan? Count doorways fitted with a door; open doorways without a door leaf do not count.",
+   "ours": 21,
+   "gold": 22,
+   "tier": "estimate",
+   "mode": "door_noarc",
+   "tags": [],
+   "note": "door drawn as a short tick without a leaf"
+  },
+  {
+   "drawing": "high_quality_architectural-9460",
+   "size": "666x507",
+   "object": "kitchen",
+   "question": "How many kitchens (including kitchenettes, open kitchens and utility kitchens) are on this floor plan?",
+   "ours": 2,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "room_detector",
+   "tags": [],
+   "note": "kitchen and dining area boxed as two kitchens"
+  },
+  {
+   "drawing": "high_quality_architectural-1886",
+   "size": "2480x2349",
+   "object": "sauna",
+   "question": "How many saunas are on this floor plan?",
+   "ours": 0,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "room_detector",
+   "tags": [
+    "hand_drawn"
+   ],
+   "note": "sauna label read, room detector says none, detector wins"
+  },
+  {
+   "drawing": "high_quality_architectural-10026",
+   "size": "793x615",
+   "object": "shower_or_bath",
+   "question": "How many showers and bathtubs are drawn on this floor plan in total?",
+   "ours": 2,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "pen_marks"
+   ],
+   "note": "bath fixture of the second flat counted"
+  },
+  {
+   "drawing": "high_quality_architectural-13388",
+   "size": "298x397",
+   "object": "shower_or_bath",
+   "question": "How many showers and bathtubs are drawn on this floor plan in total?",
+   "ours": 1,
+   "gold": 0,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "rotated",
+    "low_res"
+   ],
+   "note": "298 px wide, upside down; fixture of the neighbouring flat (outside the red line) counted"
+  },
+  {
+   "drawing": "high_quality_architectural-6355",
+   "size": "887x485",
+   "object": "shower_or_bath",
+   "question": "How many showers and bathtubs are drawn on this floor plan in total?",
+   "ours": 1,
+   "gold": 6,
+   "tier": "estimate",
+   "mode": "degraded",
+   "tags": [],
+   "note": "fixtures too faint to see at this size; 6 annotated, 1 found"
+  },
+  {
+   "drawing": "high_quality_architectural-7098",
+   "size": "863x520",
+   "object": "shower_or_bath",
+   "question": "How many showers and bathtubs are drawn on this floor plan in total?",
+   "ours": 4,
+   "gold": 5,
+   "tier": "estimate",
+   "mode": "scribbles",
+   "tags": [],
+   "note": "sketch lines across the bathroom, fixtures not separable"
+  },
+  {
+   "drawing": "high_quality-3086",
+   "size": "989x793",
+   "object": "sink",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "ours": 0,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "fixture_symbol",
+   "tags": [],
+   "note": "coloured furniture-style plan, sink icon not recognised"
+  },
+  {
+   "drawing": "high_quality-3692",
+   "size": "701x582",
+   "object": "sink",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "ours": 4,
+   "gold": 5,
+   "tier": "estimate",
+   "mode": "fixture_symbol",
+   "tags": [],
+   "note": "sink drawn as a dark filled shape missed"
+  },
+  {
+   "drawing": "high_quality_architectural-10026",
+   "size": "793x615",
+   "object": "sink",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "ours": 4,
+   "gold": 2,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "pen_marks"
+   ],
+   "note": "sinks of the second flat counted"
+  },
+  {
+   "drawing": "high_quality_architectural-1402",
+   "size": "1214x707",
+   "object": "sink",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "ours": 3,
+   "gold": 5,
+   "tier": "estimate",
+   "mode": "fixture_symbol",
+   "tags": [],
+   "note": "sauna stove read as a sink, two adjacent sinks boxed once"
+  },
+  {
+   "drawing": "high_quality_architectural-2580",
+   "size": "4500x2100",
+   "object": "sink",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "ours": 4,
+   "gold": 2,
+   "tier": "estimate",
+   "mode": "fixture_symbol",
+   "tags": [
+    "large_sheet"
+   ],
+   "note": "toilet and basin symbols at tiny scale read as extra sinks"
+  },
+  {
+   "drawing": "high_quality_architectural-4897",
+   "size": "970x748",
+   "object": "sink",
+   "question": "How many sinks and wash basins (kitchen and bathroom combined; a double-bowl sink counts as one) are drawn on this floor plan?",
+   "ours": 3,
+   "gold": 4,
+   "tier": "estimate",
+   "mode": "fixture_symbol",
+   "tags": [],
+   "note": "round basin in the WC missed"
+  },
+  {
+   "drawing": "high_quality_architectural-10026",
+   "size": "793x615",
+   "object": "toilet",
+   "question": "How many toilet bowls (WC seats) are drawn on this floor plan?",
+   "ours": 2,
+   "gold": 1,
+   "tier": "estimate",
+   "mode": "other_space",
+   "tags": [
+    "pen_marks"
+   ],
+   "note": "WC of the second flat counted"
+  },
+  {
+   "drawing": "high_quality-1647",
+   "size": "488x490",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 0,
+   "gold": 2,
+   "tier": "estimate",
+   "mode": "gold_vs_drawing",
+   "tags": [],
+   "note": "no window symbols drawn in the walls; the annotation has two windows"
+  },
+  {
+   "drawing": "high_quality-1655",
+   "size": "822x779",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 7,
+   "gold": 8,
+   "tier": "estimate",
+   "mode": "missed_small",
+   "tags": [
+    "two_floors"
+   ],
+   "note": "small window in the corner of the kitchen annex missed"
+  },
+  {
+   "drawing": "high_quality_architectural-1000",
+   "size": "1236x835",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 19,
+   "gold": 18,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [],
+   "note": "one window boxed twice"
+  },
+  {
+   "drawing": "high_quality_architectural-10491",
+   "size": "1059x807",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 9,
+   "gold": 14,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [
+    "degraded"
+   ],
+   "note": "orange blueprint, double windows boxed once, annotated as two"
+  },
+  {
+   "drawing": "high_quality_architectural-11059",
+   "size": "1286x659",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 21,
+   "gold": 23,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [
+    "small_plan"
+   ],
+   "note": "adjacent windows boxed as one on a small plan"
+  },
+  {
+   "drawing": "high_quality_architectural-11169",
+   "size": "622x667",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 3,
+   "gold": 6,
+   "tier": "estimate",
+   "mode": "balcony_porch",
+   "tags": [
+    "cropped"
+   ],
+   "note": "balcony glazing counted as windows in the annotation; plan cut at the border"
+  },
+  {
+   "drawing": "high_quality_architectural-11426",
+   "size": "966x1156",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 8,
+   "gold": 18,
+   "tier": "estimate",
+   "mode": "gold_vs_drawing",
+   "tags": [
+    "scribbles",
+    "degraded"
+   ],
+   "note": "18 windows annotated, about 8 can be seen on the sheet"
+  },
+  {
+   "drawing": "high_quality_architectural-1153",
+   "size": "1054x536",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 11,
+   "gold": 12,
+   "tier": "estimate",
+   "mode": "missed_small",
+   "tags": [
+    "mirrored"
+   ],
+   "note": "window in the hatched wall of the wash room missed"
+  },
+  {
+   "drawing": "high_quality_architectural-13309",
+   "size": "592x523",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 7,
+   "gold": 12,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [],
+   "note": "windows with the dimension text over them, boxed once, annotated as two"
+  },
+  {
+   "drawing": "high_quality_architectural-13607",
+   "size": "363x739",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 4,
+   "gold": 5,
+   "tier": "estimate",
+   "mode": "cut_edge",
+   "tags": [],
+   "note": "window at the right image edge, plan cut off"
+  },
+  {
+   "drawing": "high_quality_architectural-1402",
+   "size": "1214x707",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 22,
+   "gold": 26,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [],
+   "note": "double bedroom windows boxed once"
+  },
+  {
+   "drawing": "high_quality_architectural-14566",
+   "size": "1174x722",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 4,
+   "gold": 7,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [],
+   "note": "double windows in thick walls boxed once, plan cut at the bottom"
+  },
+  {
+   "drawing": "high_quality_architectural-1903",
+   "size": "623x631",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 6,
+   "gold": 8,
+   "tier": "estimate",
+   "mode": "thin_window",
+   "tags": [
+    "faint"
+   ],
+   "note": "pale scan, windows drawn as thin faint lines"
+  },
+  {
+   "drawing": "high_quality_architectural-20093",
+   "size": "771x587",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 11,
+   "gold": 13,
+   "tier": "estimate",
+   "mode": "thin_window",
+   "tags": [
+    "hand_drawn"
+   ],
+   "note": "pencil plan, windows in the left wall drawn as thin double lines"
+  },
+  {
+   "drawing": "high_quality_architectural-2014",
+   "size": "666x386",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 6,
+   "gold": 9,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [],
+   "note": "double windows boxed once"
+  },
+  {
+   "drawing": "high_quality_architectural-2145",
+   "size": "426x511",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 3,
+   "gold": 2,
+   "tier": "estimate",
+   "mode": "no_cause",
+   "tags": [],
+   "note": "wall hatch at the left edge read as a window"
+  },
+  {
+   "drawing": "high_quality_architectural-2580",
+   "size": "4500x2100",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 27,
+   "gold": 26,
+   "tier": "estimate",
+   "mode": "no_cause",
+   "tags": [
+    "large_sheet"
+   ],
+   "note": "busy plan, one extra at the top left corner"
+  },
+  {
+   "drawing": "high_quality_architectural-5906",
+   "size": "1227x847",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 39,
+   "gold": 40,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [
+    "busy"
+   ],
+   "note": "40 windows annotated; merges, splits and extras partly cancel"
+  },
+  {
+   "drawing": "high_quality_architectural-6299",
+   "size": "1033x437",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 7,
+   "gold": 8,
+   "tier": "estimate",
+   "mode": "balcony_porch",
+   "tags": [
+    "scribbles"
+   ],
+   "note": "balcony glazing under handwriting missed, one extra on the first plan"
+  },
+  {
+   "drawing": "high_quality_architectural-6355",
+   "size": "887x485",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 18,
+   "gold": 19,
+   "tier": "estimate",
+   "mode": "degraded",
+   "tags": [
+    "two_floors"
+   ],
+   "note": "faint window lines in the log wall of an old scan"
+  },
+  {
+   "drawing": "high_quality_architectural-7567",
+   "size": "588x508",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 9,
+   "gold": 10,
+   "tier": "estimate",
+   "mode": "window_pair",
+   "tags": [],
+   "note": "two adjacent windows boxed as one"
+  },
+  {
+   "drawing": "high_quality_architectural-7924",
+   "size": "513x807",
+   "object": "window",
+   "question": "How many windows are shown on this floor plan?",
+   "ours": 7,
+   "gold": 11,
+   "tier": "estimate",
+   "mode": "thin_window",
+   "tags": [],
+   "note": "windows drawn as thin lines with small tags, scored low"
+  }
+ ]
+}
