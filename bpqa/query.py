@@ -102,6 +102,20 @@ ROOM_BEFORE_QUOTE = re.compile(r"\b(room|space|raums?|raumes|zimmers?|piece|loca
 PLURAL_SCOPE = re.compile(r"\b(all|every|each|total|sum|together|combined|alle|tous|tutti|kaikki)\b")
 
 
+# A question that names the whole model or building asks for whole-model numbers, even when it is
+# asked on a single-storey plan sheet: "in the model", "in the building", "whole building", and the
+# same in NL, ES, DA, DE, FR, IT, FI, ET. A quoted model name does not count (strip_quoted first).
+WHOLE_MODEL = re.compile(
+    r"\b(model|modell?\w*|modelo|modele|modello|mudel\w*|malli\w*)\b"
+    r"|\b(in|of|throughout|across|within|inside) (the |this )?(whole |entire |complete |overall )?building\b"
+    r"|\b(whole|entire|complete|overall|total) building\b|\ball (the )?(floors|storeys|levels)\b"
+    r"|\b(gebouw\w*|gebaude\w*|gebaeude\w*|edificio\w*|batiment\w*|bygning\w*|rakennu\w*|hoone\w*|kogu maja)\b")
+
+
+def whole_model_asked(question: str) -> bool:
+    return bool(WHOLE_MODEL.search(fold(strip_quoted(question))))
+
+
 def detect_lang(f: str) -> str:
     for lang, cue in [("fi", r"kuinka|pohjapiirustu"), ("de", r"wie |grundriss|geschoss|wohnung"),
                       ("fr", r"combien|quelle|piece|etage"), ("it", r"quant|qual |pianta|locale"),
@@ -206,6 +220,8 @@ class RuleParser(QueryParser):
         if not qs and re.search(r"\b(on|in) (the )?(level|floor|ground|basement|first|second|underground|"
                                 r"north|south|east|west|house)\b", f):
             q.extra["unresolved_scope"] = True
+        if whole_model_asked(question):
+            q.extra["whole_model"] = True
         if q.scope == "model" and qs:
             names = [x for x in qs if x != room_quote]
             if names:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -167,11 +168,59 @@ def space_label_variants(sp):
     return {norm(f"{ln} ({n})"), norm(n), norm(ln), norm(f"{n} {ln}")}
 
 
+_TOKEN_ALIASES = {"lvl": "level", "lev": "level", "fl": "floor", "flr": "floor", "bsmt": "basement",
+                  "gf": "ground", "korrus": "floor", "sal": "floor", "etg": "floor", "og": "floor"}
+
+
+def _tokens(s) -> list:
+    """Lower-case alphanumeric tokens, digits split from letters ('og1' -> og 1), leading zeros and
+    common abbreviations normalised ('Lvl 01' -> level 1)."""
+    out = []
+    for t in re.findall(r"[a-z]+|\d+", unicodedata.normalize("NFKD", norm(s)).encode("ascii", "ignore").decode()):
+        t = t.lstrip("0") or "0" if t.isdigit() else t
+        out.append(_TOKEN_ALIASES.get(t, t))
+    return out
+
+
+def storey_from_sheet_name(M, pdf_path):
+    """Storey whose own name (token sequence, abbreviations normalised) appears as a contiguous run
+    of tokens in the sheet's file name; the longest match wins and it must be unique.
+    Returns (storey or None)."""
+    ftoks = _tokens(Path(pdf_path).stem)
+    best, hits = 0, []
+    for st in M.storeys:
+        nt = _tokens(st.Name or "")
+        if not nt or not any(ch.isalnum() for ch in (st.Name or "")):
+            continue
+        if any(ftoks[i:i + len(nt)] == nt for i in range(len(ftoks) - len(nt) + 1)):
+            if len(nt) > best:
+                best, hits = len(nt), [st]
+            elif len(nt) == best:
+                hits.append(st)
+    return hits[0] if len(hits) == 1 else None
+
+
 def storey_of_sheet(M, pdf_path):
-    """The storey a plan sheet shows, from its text layer: the storey's own name printed on the sheet
-    (title block) counts 3, and each space label printed on it counts 1 / (number of storeys that
-    have a space with that label), so labels repeated on every floor ('Bad', 'Gang') do not decide.
-    Needs a clear winner; returns (storey or None, how it was decided)."""
+    """The storey a plan sheet shows. Content first (_storey_from_content: the storey name and space
+    labels printed on the sheet). The storey named in the sheet's file name is a tie-breaker, and the
+    answer when the content gives no winner; if the content has a winner that disagrees with the file
+    name, nothing is clear and the result is None. Returns (storey or None, how it was decided)."""
+    try:
+        sc, note = _storey_from_content(M, pdf_path)
+    except Exception as ex:
+        sc, note = None, f"sheet text layer not readable ({type(ex).__name__})"
+    sn = storey_from_sheet_name(M, pdf_path)
+    fname = Path(pdf_path).name
+    if sn is None:
+        return sc, note
+    if sc is None:
+        return sn, f"storey {sn.Name} taken from the sheet file name '{fname}' (the sheet content gave no winner: {note})"
+    if sc == sn:
+        return sc, f"{note}; the file name '{fname}' names the same storey"
+    return None, (f"the sheet content points to storey {sc.Name} but the file name '{fname}' names storey {sn.Name}")
+
+
+def _storey_from_content(M, pdf_path):
     import pymupdf
     with pymupdf.open(str(pdf_path)) as doc:
         text = " ".join(page.get_text() for page in doc)
@@ -327,9 +376,92 @@ def space_type_label(sp) -> str:
     return getattr(sp, "LongName", None) or sp.Name or ""
 
 
+FIXTURE_KINDS = [("shower", r"shower|dusch|suihku|douche|doccia"), ("bath", r"bath ?tub|bathtub|\bbath\b|badewanne|kylpyamme|baignoire|vasca"),
+                 ("wc", r"\bwc\b|toilet|water ?closet|closet|urinal|\bpan\b|vessa|toilette|cuvette"),
+                 ("basin", r"wash ?basin|\bbasin\b|lavabo|lavatory|hand ?basin|sink|pesuallas|waschtisch|waschbecken")]
+
+
+def fixture_kind(e) -> str | None:
+    """shower | bath | wc | basin from the fixture's PredefinedType, name and type name."""
+    t = E.get_type(e)
+    txt = " ".join(str(x) for x in (getattr(e, "PredefinedType", None), getattr(e, "Name", None),
+                                    getattr(t, "Name", None) if t is not None else None,
+                                    getattr(t, "PredefinedType", None) if t is not None else None) if x).lower()
+    for kind, rx in FIXTURE_KINDS:
+        if re.search(rx, txt):
+            return kind
+    return None
+
+
+def _space_fixtures(M, spaces):
+    """{space id: [(fixture, how)]}: a fixture belongs to the space that contains it by an IFC spatial
+    relation (IfcRelContainedInSpatialStructure / IfcRelReferencedInSpatialStructure), else to the
+    space on its storey whose footprint holds the fixture's footprint centre."""
+    out = {sp.id(): [] for sp in spaces}
+    by_storey = {}
+    for sp in spaces:
+        by_storey.setdefault(M.storey_of(sp), []).append(sp)
+    for e in M.entities("sanitary"):
+        if fixture_kind(e) is None:
+            continue
+        host = None
+        for rel in getattr(e, "ContainedInStructure", None) or ():
+            if rel.RelatingStructure.id() in out:
+                host = (rel.RelatingStructure, "contained in the space")
+        for rel in getattr(e, "ReferencedInStructures", None) or ():
+            if rel.RelatingStructure.id() in out:
+                host = (rel.RelatingStructure, "referenced in the space")
+        if host is None:
+            fp = M.footprint(e)[0]
+            if fp is not None and not fp.is_empty:
+                c = fp.centroid
+                for sp in by_storey.get(M.storey_of(e), []):
+                    sfp = M.footprint(sp)[0]
+                    if sfp is not None and not sfp.is_empty and sfp.buffer(0.05).contains(c):
+                        host = (sp, "inside the space footprint")
+                        break
+        if host is not None:
+            out[host[0].id()].append((e, host[1]))
+    return out
+
+
+def infer_space_types(M, spaces):
+    """{space id: (types, fixture description)} for spaces whose type is not in their name but follows
+    from the sanitary fixtures in them: a shower or bathtub = bathroom; a WC pan (with or without a
+    basin) and no shower/bath = wc. A basin alone says nothing."""
+    res = {}
+    fx = _space_fixtures(M, spaces)
+    for sp in spaces:
+        kinds = Counter(fixture_kind(e) for e, _ in fx[sp.id()])
+        if not kinds:
+            continue
+        how = ", ".join(f"{n} {k}" for k, n in sorted(kinds.items())) + " (" + "/".join(sorted({h for _, h in fx[sp.id()]})) + ")"
+        if kinds.get("shower") or kinds.get("bath"):
+            res[sp.id()] = ({"bathroom"}, how)
+        elif kinds.get("wc"):
+            res[sp.id()] = ({"wc"}, how)
+    return res
+
+
 def space_display(sp) -> str:
     n, ln = sp.Name or "", getattr(sp, "LongName", None) or ""
     return f"{ln} ({n})" if ln and n and ln != n else (ln or n)
+
+
+def sheet_scope_applies(ctx, q) -> bool:
+    """True when the question was asked on a plan sheet (PDF/SVG rendered from an IFC model) and names
+    neither a level nor the whole model/building: the numbers then belong to the storey the sheet shows.
+    Questions asked on the .ifc itself keep whole-model scope unless a level is named."""
+    return (ctx.q.ext in ("pdf", "svg") and q.scope != "model" and not q.extra.get("whole_model")
+            and not (q.scope == "level" and q.level))
+
+
+def sheet_storey(M, ctx):
+    """(storey or None, note). Never raises: an unreadable sheet gives (None, reason)."""
+    try:
+        return storey_of_sheet(M, ctx.file)
+    except Exception as ex:
+        return None, f"sheet text layer not readable ({type(ex).__name__})"
 
 
 def answer(ctx, q) -> Answer:
@@ -343,13 +475,15 @@ def answer(ctx, q) -> Answer:
         if storey is None:
             return abstain(ROUTE, f"storey '{q.level}' not in model")
     sheet_note = ""
-    if q.variant == "type_sum" and storey is None and ctx.q.ext == "pdf":
-        # a plan sheet shows one storey: find it from the space labels printed on the sheet
-        storey, sheet_note = storey_of_sheet(M, ctx.file)
+    if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or q.obj in CLASSES and sheet_scope_applies(ctx, q)):
+        # a plan sheet shows one storey: find it from the storey name and space labels printed on the sheet
+        storey, sheet_note = sheet_storey(M, ctx)
         if storey is None:
-            return abstain(ROUTE, f"cannot tell which storey this sheet shows ({sheet_note})")
+            return abstain(ROUTE, f"cannot tell which storey this sheet shows ({sheet_note}); "
+                                  f"ask with a level name or for the whole model")
 
     used, value, note, unit = [], None, "", ""
+    inferred, inf_note = {}, ""
     if q.measure == "count":
         if q.obj not in CLASSES:
             return abstain(ROUTE, f"no IFC class for {q.obj}")
@@ -369,7 +503,17 @@ def answer(ctx, q) -> Answer:
                 spaces = [s for s in spaces if M.storey_of(s) == storey]
             if q.variant == "type_sum":
                 tk = q.extra["takeoff"]
-                spaces = [sp for sp in spaces if takeoff.room_types(space_type_label(sp)) & set(tk["types"])]
+                want = set(tk["types"]) | ({"bathroom", "wc"} if "wet" in tk["types"] else set())
+                by_name = [sp for sp in spaces if takeoff.room_types(space_type_label(sp)) & set(tk["types"])]
+                spaces = by_name
+                if not spaces:
+                    inf = infer_space_types(M, M.entities("room") if storey is None else
+                                            [s for s in M.entities("room") if M.storey_of(s) == storey])
+                    spaces = [sp for sp in (M.entities("room") if storey is None else
+                                            [s for s in M.entities("room") if M.storey_of(s) == storey])
+                              if sp.id() in inf and inf[sp.id()][0] & want]
+                    if spaces:
+                        inferred = {sp.id(): inf[sp.id()][1] for sp in spaces}
                 if not spaces:
                     names = sorted({space_type_label(sp) for sp in M.entities("room")} - {""})
                     return abstain(ROUTE, f"no IfcSpace of type {', '.join(tk['types'])} "
@@ -419,7 +563,7 @@ def answer(ctx, q) -> Answer:
 
     items = [{"guid": e.GlobalId, "name": getattr(e, "Name", None), "value": (round(v, 3) if v is not None else None)} for e, v in used]
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=0.9, items=items,
-                 explanation=f"{value} = {note} in {path.name}")
+                 explanation=f"{value} = {note} in {path.name}" + (f"; {sheet_note}" if sheet_note else ""))
     if q.variant == "type_sum":
         rows = []
         for e, v in used:
@@ -431,6 +575,14 @@ def answer(ctx, q) -> Answer:
             it["guid"] = e.GlobalId
         ans.explanation = expl + f" Source: {path.name}, {note}" + (f"; {sheet_note}." if sheet_note else ".")
         value = ans.value
+        if inferred:
+            ans.tier = "estimate"
+            ans.tier_reason = (f"no space name reads as {', '.join(q.extra['takeoff']['types'])}; the room type was inferred "
+                               f"from sanitary fixtures in the {len(inferred)} spaces used")
+            inf_note = (" Room type inferred from fixtures (no IfcSpace name matches): "
+                        + "; ".join(f"{space_display(sp)}: {inferred[sp.id()]}" for sp, _ in used[:8])
+                        + (" ..." if len(used) > 8 else "") + ".")
+            ans.explanation += inf_note
         tk = q.extra["takeoff"]
         if wallmod.surfaces(tk)[1]:
             rooms, why = wall_rooms(M, used)
@@ -440,7 +592,7 @@ def answer(ctx, q) -> Answer:
             for it, r in zip(ans.items, rooms):
                 it["guid"] = r["guid"]
             ans.items.append({"totals": totals})
-            ans.explanation = wexpl + f" Source: {path.name}" + (f"; {sheet_note}." if sheet_note else ".")
+            ans.explanation = wexpl + f" Source: {path.name}" + (f"; {sheet_note}." if sheet_note else ".") + inf_note
             ans.checks = wall_checks(ans.items)
             if any(c["status"] == "fail" for c in ans.checks):
                 ans.tier, ans.tier_reason = "estimate", "computed wall area differs from the model's own NetWallArea by more than 5%"
