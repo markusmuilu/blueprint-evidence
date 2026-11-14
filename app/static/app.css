@@ -863,6 +863,16 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .tour-bubble[hidden], .tour-offer[hidden], .tour-spot[hidden], .tour-shield[hidden] { display: none; }
 @media (max-width: 1080px) { #guideOpen, .tour-offer { display: none; } }
 
+/* answer panel busy state and tour wait line */
+.detail-q { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
+.tour-wait { margin: 0; }
+
+/* BEGIN used-line */
+.used-line { display: flex; flex-wrap: wrap; gap: 2px var(--s4); margin: var(--s2) 0; font-size: var(--fs-xs); color: var(--fg-2); line-height: 1.5; }
+.used-line span { white-space: nowrap; }
+.used-line b { font-weight: 500; color: var(--muted); }
+/* END used-line */
+
 /* approximations on scans that print no areas (scale from doors / WC pans): where the number comes from, said first */
 .ans-value .about { font-size: var(--fs-base); color: var(--warn); font-weight: 500; margin-right: 0.4em; align-self: center; }
 .approx-note { margin: 6px 0 2px; padding: 8px 10px; border-left: 3px solid var(--warn); background: color-mix(in oklch, var(--warn) 9%, transparent);

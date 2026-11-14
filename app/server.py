@@ -366,18 +366,22 @@ def ask(body: AskBody):
             except Exception:
                 geo = None
     status, rule = tier(a)
+    qx = qd.get("extra") or {}
+    parse_usd = float(qx.get("parse_cost_usd") or 0.0)      # question reading by the language model (0 when cached)
     gold = CATALOG.gold(rel, question) if not body.path.startswith("upload:") else None
     rec = {
         "path": body.path, "drawing": display_name(rel.rsplit("/", 1)[-1]), "question": question, "query": qd,
         "value": a.get("value"), "unit": a.get("unit") or "", "route": a.get("route"),
         "confidence": a.get("confidence"), "abstain": a.get("abstain"), "explanation": a.get("explanation"),
         "approx": a.get("approx"),
-        "checks": a.get("checks") or [], "items": a.get("items") or [], "cost_usd": a.get("cost_usd") or 0.0,
+        "checks": a.get("checks") or [], "items": a.get("items") or [], "cost_usd": (a.get("cost_usd") or 0.0) + parse_usd,
         "evidence_id": ev_id, "evidence_geometry": geo, "tried": list(ctx.tried),
         "status": status, "status_rule": rule,
         "where": where(a, qd, rel), "why": why(a, qd, rel.rsplit(".", 1)[-1].lower()),
         "time_ms": round(ms, 1), "cached": False, "gold": gold, "marks": marks,
-        "compute": costs.compute_record(ms / 1000, cpu_s, a.get("route"), a.get("cost_usd") or 0.0),
+        "compute": costs.compute_record(ms / 1000, cpu_s, a.get("route"), a.get("cost_usd") or 0.0, parse_usd=parse_usd,
+                                        parse_orig_usd=float(qx.get("parse_cost_orig_usd") or 0.0),
+                                        parse_cached=bool(qx.get("parse_cached"))),
         "no_overlay_reason": None if ev_id or a.get("abstain") else
             "No overlay for this file (its licence does not allow derivatives, or the route draws none). "
             "The numbered items are the evidence.",

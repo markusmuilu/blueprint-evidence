@@ -48,8 +48,13 @@ function toast(msg, err = false) {
   toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 2600);
 }
 
+const UPLOAD_EXPIRED = "This upload has expired (uploads are deleted after 15 minutes). Please upload it again.";
 async function api(url, opts) {
   const r = await fetch(url, opts);
+  /* expired upload block: uploads are named "upload:<id>/..." (deploy/web.py); a 404 on one means it was deleted */
+  if (r.status === 404 && /upload(:|%3A)/i.test(String(url) + (opts && typeof opts.body === "string" ? opts.body : ""))) {
+    const err = new Error(UPLOAD_EXPIRED); err.expired = true; throw err;
+  }
   if (!r.ok) {
     let msg = r.statusText;
     try { const j = await r.json(); msg = j.detail || msg; } catch (_) { /* not JSON */ }
@@ -1384,6 +1389,11 @@ async function ask(refresh = false) {
   btn.disabled = true;
   btn.setAttribute("aria-busy", "true");
   $("#viewerBusy").hidden = false;
+  /* answer panel busy block: show the question while it runs */
+  const firstOnDrawing = !(state.answeredPaths && state.answeredPaths.has(state.drawing.path));
+  $("#detailQ").textContent = q;
+  $("#detailWait").hidden = !firstOnDrawing;
+  $("#detailBusy").hidden = false; $("#detailEmpty").hidden = true; $("#detailBody").hidden = true;
   const t0 = performance.now();
   const tick = () => { $("#busyText").textContent = `Reading the drawing  ${((performance.now() - t0) / 1000).toFixed(1)} s`; };
   tick();
@@ -1398,6 +1408,7 @@ async function ask(refresh = false) {
     // a slow answer that comes back after another drawing or question was opened is dropped, never shown on it
     if (ticket !== state.askTicket || !state.drawing || state.drawing.path !== asked) return;
     state.answer = a;
+    (state.answeredPaths = state.answeredPaths || new Set()).add(asked);
     state.corr = { removed: new Set(), added: [] };
     state.witnesses = null;
     renderAnswer(a);
@@ -1407,11 +1418,12 @@ async function ask(refresh = false) {
     setHash();
     loadWitnesses(a, refresh);
   } catch (e) {
-    toast("The question failed: " + e.message, true);
+    toast(e.expired ? e.message : "The question failed: " + e.message, true);
   } finally {
     if (ticket === state.askTicket) {         // only the latest question owns the busy state
       clearInterval(busyT);
       $("#viewerBusy").hidden = true;
+      $("#detailBusy").hidden = true; $("#detailEmpty").hidden = !!state.answer; $("#detailBody").hidden = !state.answer;
       btn.disabled = false;
       btn.removeAttribute("aria-busy");
     }
@@ -1488,6 +1500,7 @@ function renderAnswer(a) {
         <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>
         <dt>Model calls</dt><dd>${a.cost_usd ? "yes" : "none"}</dd>
       </dl>
+      ${usedLine(a)}
       ${costMeter(a)}
       ${a.cached ? `<p class="note">Served from the answer cache. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
     </div>
@@ -1591,9 +1604,33 @@ function costMeter(a) {
     <span class="label">Cost per 1,000 questions like this</span>
     ${row("This answer", c.usd_per_1000, "ours")}
     ${base ? row("Nemotron, plain prompt", base.usd_per_1000, "base") : ""}
+    ${c.parse_usd || c.parse_orig_usd ? `<p class="note parse-cost">Language model reading: ${fmtUsd(c.parse_orig_usd * 1000)} per 1,000${c.parse_cached ? " (cached now, counted as €0 for this repeat)" : " (included above)"}.</p>` : ""}
     <p class="note">CPU ${fmtSec(c.cpu_s)}${c.gpu_s ? `, GPU ${fmtSec(c.gpu_s)}` : ""}${c.model_usd ? `, model ${fmtUsd(c.model_usd)}` : ""} at an assumed $${as.cpu_vcpu_hour_usd} per vCPU-hour${c.gpu_s ? ` and $${as.gpu_hour_usd} per GPU-hour` : ""}.${base ? ` Nemotron: ${num(Math.round(base.prompt_tokens_mean + base.completion_tokens_mean))} measured tokens per question at an assumed $${base.price_in_per_mtok} / $${base.price_out_per_mtok} per million in / out.` : ""} ${FX_NOTE} Log scale.</p>
   </div>`;
 }
+
+/* BEGIN used-line: a plain "what was used" line on every answer, with the AI calls counted (his request, 14 Nov) */
+const USED_PART = { "dxf-geometry": "CAD geometry", "dxf-generic": "CAD geometry", ifc: "IFC model", "ifc-props": "IFC model", "pdf-text": "PDF text", "pdf-vector": "PDF linework", "pdf-generic": "PDF linework", "raster-detector": "object detector", "raster-ocr-labels": "OCR (room labels)", "raster-area": "OCR (room labels)", "raster-cv": "object detector", "raster-cv-fixtures": "object detector", "raster-rooms": "room detector", "sheet-scale": "sheet scale", "nemotron-estimate": "Nemotron image estimate", nemotron: "Nemotron image estimate", "raster-prior": "baseline prior" };
+function usedLine(a) {
+  const q = a.query || {}, ex = q.extra || {}, c = a.compute || {};
+  const llm = q.parser === "llm";
+  const parts = [];
+  for (const r of String(a.route || "").split("+")) {
+    const w = USED_PART[r] || ROUTE_LABEL[r] || r;
+    if (w && !parts.includes(w)) parts.push(w);
+  }
+  const second = (a.checks || []).some((k) => k.name === "nemotron-second-opinion" && k.status !== "error");
+  if (second && !parts.includes("Nemotron image estimate")) parts.push("Nemotron second opinion");
+  const imageEst = String(a.route || "").split("+").includes("nemotron-estimate") || second;
+  const readCall = llm && !ex.parse_cached && (ex.parse_cost_orig_usd || ex.parse_cost_usd) ? 1 : 0;
+  const calls = [];
+  if (readCall) calls.push("question reading");
+  if (imageEst) calls.push(second ? "Nemotron second opinion" : "Nemotron image estimate");
+  const callTxt = calls.length ? `${calls.length} (${calls.join(", ")})` : (llm && ex.parse_cached ? "none (question reading cached)" : "none");
+  const per = c.usd_per_1000 != null ? `${fmtUsd(c.usd_per_1000)} per 1,000 questions like this` : "";
+  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${llm ? "language model" : "rules"}</span><span><b>Answered with:</b> ${esc(parts.join(" and ") || "-")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}</p>`;
+}
+/* END used-line */
 
 /* ---------------------------------------------------------------- witnesses */
 const FMT_NAME = { DXF: "DXF layers", IFC: "IFC model", PDF: "PDF alone", PNG: "PNG image" };
@@ -1952,6 +1989,8 @@ window.addEventListener("hashchange", async () => {
     { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language." },
     { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
     { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
+    /* tour step (verify strip) */
+    { el: () => { const st = $("#strip"); return st && !st.hidden && st.offsetParent ? st : $("#viewer") || $("#viewerWrap"); }, side: ["top", "left"], text: "Every counted item is numbered on the drawing. Click one to see step by step how it was read." },
   ];
 
   let shield, spot, bubble, idx = -1, returnFocus = null, busy = false;
@@ -2026,6 +2065,9 @@ window.addEventListener("hashchange", async () => {
       busy = true;
       const b = bubble.querySelector('[data-a="next"]'); b.disabled = true; b.textContent = "Working";
       bubble.setAttribute("aria-busy", "true");
+      /* tour waiting line */
+      const w = document.createElement("p"); w.className = "meta tour-wait"; w.textContent = "Answering, about 15 s...";
+      bubble.querySelector("p").after(w);
       await step.run();
       busy = false;
       if (idx < 0) return;                       // skipped while it ran

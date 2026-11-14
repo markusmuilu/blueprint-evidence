@@ -38,14 +38,21 @@ def _gpu_used() -> bool:
 
 
 def compute_record(wall_s: float, cpu_s: float, route: str | None, model_usd: float = 0.0,
-                   gpu_s: float | None = None) -> dict:
+                   gpu_s: float | None = None, parse_usd: float = 0.0, parse_orig_usd: float = 0.0,
+                   parse_cached: bool = False) -> dict:
     if gpu_s is None:
         gpu_s = wall_s if route in GPU_ROUTES and _gpu_used() else 0.0
     cpu_usd = cpu_s / 3600 * CPU_VCPU_HOUR
     gpu_usd = gpu_s / 3600 * GPU_HOUR
-    usd = cpu_usd + gpu_usd + (model_usd or 0.0)
+    # model_usd = the route's own model call (Nemotron estimate / second opinion) + the question reading by the
+    # language model; a cached reading is billed 0 here and its original cost is shown beside it
+    route_model = model_usd or 0.0
+    model_total = route_model + (parse_usd or 0.0)
+    usd = cpu_usd + gpu_usd + model_total
     return {"wall_s": round(wall_s, 3), "cpu_s": round(cpu_s, 3), "gpu_s": round(gpu_s, 3),
-            "model_usd": round(model_usd or 0.0, 6), "usd": usd, "usd_per_1000": round(usd * 1000, 4),
+            "model_usd": round(model_total, 6), "route_model_usd": round(route_model, 6),
+            "parse_usd": round(parse_usd or 0.0, 6), "parse_orig_usd": round(parse_orig_usd or 0.0, 6),
+            "parse_cached": bool(parse_cached), "usd": usd, "usd_per_1000": round(usd * 1000, 4),
             "assumed": assumptions()}
 
 
