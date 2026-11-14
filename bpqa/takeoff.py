@@ -147,6 +147,9 @@ AREA_WORD = re.compile(r"pinta-ala|\barea\b|\bareas\b(?=.*\b(?:combined|together
                        # "total size of the bedrooms", "makuuhuoneiden koko yhteensa" (genitive + koko = size of;
                        # "koko talo" = the whole house stays out)
                        r"\btotal size\b|\bsizes?\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|"
+                       # "How big is the kitchen?" (QA 14 Nov: wrong on every IFC sheet, read as a room list)
+                       r"\bhow (?:big|large) (?:is|are|was)\b|\b(?:kuinka|miten) (?:iso|suuri|suuria|isoja) (?:on|ovat)\b|"
+                       r"\bwie gross (?:ist|sind)\b|\bhur stor[at]? (?:ar)\b|"
                        r"\b\w+(?:iden|jen|ien|den|tten|en)\s+koko\b|"
                        r"how much|kuinka paljon|paljonko|wie viel")
 COUNT_Q = re.compile(r"\b(how many|kuinka monta|montako|wie viele|combien|quant[ie])\b")
