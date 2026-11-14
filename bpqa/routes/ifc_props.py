@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 import ifcopenshell.util.element as E
 
 from ..answer import Answer, abstain
-from ..query import fold
-from .ifc_route import load, norm, space_display
+from ..query import fold, whole_model_asked
+from .ifc_route import load, norm, sheet_storey, space_display
 
 ROUTE = "ifc-props"
 
@@ -68,6 +68,7 @@ FIRE_Q = re.compile(r"fire ?rat|fire ?resist|fire ?protect|feuerwiderstand|brand
 LOADBEAR_KEY = re.compile(r"^(loadbearing|tragend|baerende|kantava)$", re.I)
 # intents whose mapping from the question is narrow (one element, one attribute, the storey list): "proven";
 # broad keyword-mapped intents (type breakdowns, property search, systems) answer as "estimate"
+SHEET_SCOPED = {"types", "spaces", "total", "stats", "extreme", "search", "absent", "materials", "fire"}
 PROVEN_INTENTS = {"extreme", "storeys", "fire", "element", "meta", "project"}
 NUM_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "ten": 10}
 
@@ -978,8 +979,18 @@ def run(M, L):
             from .. import takeoff as _tk
             from .ifc_route import space_type_label
             want = set(L.prop[6:].split(","))
+            es_all = es
             es = [e for e in es if _tk.room_types(space_type_label(e)) & want]
             scope = f" typed {', '.join(sorted(want))} from their names"
+            if not es:
+                from .ifc_route import infer_space_types
+                inf = infer_space_types(M, es_all)
+                w2 = want | ({"bathroom", "wc"} if "wet" in want else set())
+                es = [e for e in es_all if e.id() in inf and inf[e.id()][0] & w2]
+                if es:
+                    scope = (f" typed {', '.join(sorted(want))} from the sanitary fixtures in them (no space name says so; "
+                             + "; ".join(f"{space_display(e)}: {inf[e.id()][1]}" for e in es[:6]) + ")")
+                    L.fixture_inferred = True
             if not es:
                 names = sorted({space_type_label(e) for e in ents(M, ["IfcSpace"])} - {""})
                 return (f"No space whose name reads as {', '.join(sorted(want))} in this model (space names: "
@@ -1204,6 +1215,14 @@ def answer(ctx, q) -> Answer:
         L = map_with_nemotron(M, question)
     if L is None:
         return abstain(ROUTE, "no property lookup matches the question")
+    if (ctx.q.ext in ("pdf", "svg") and L.storey is None and L.intent in SHEET_SCOPED and not L.by_level
+            and L.element is None and L.room is None and not whole_model_asked(question)):
+        # asked on a plan sheet without a level or the whole model: the sheet's storey is meant
+        st, snote = sheet_storey(M, ctx)
+        if st is None:
+            return abstain(ROUTE, f"cannot tell which storey this sheet shows ({snote}); "
+                                  f"ask with a level name or for the whole model")
+        L.storey, L.storey_note = st, snote
     try:
         text, rows, cited, note = run(M, L)
     except LookupError as ex:
@@ -1218,7 +1237,9 @@ def answer(ctx, q) -> Answer:
             + (f" {L.storey_note}." if L.storey_note else "") + f" Cited entities: {len(cited)} (GlobalIds in items).")
     ans = Answer(value=text, unit="", route=ROUTE, confidence=0.85 if L.mapper == "rules" else 0.6,
                  items=items + [{"cited_guids": guids}], explanation=expl, cost_usd=cost)
-    if L.mapper != "rules":
+    if getattr(L, "fixture_inferred", False):
+        ans.tier, ans.tier_reason = "estimate", "room type inferred from the sanitary fixtures in the spaces, not from their names"
+    elif L.mapper != "rules":
         ans.tier, ans.tier_reason = "estimate", "the question was mapped to the lookup by Nemotron; values are from the file"
     elif L.intent not in PROVEN_INTENTS and not (L.intent in ("materials", "types") and (L.room is not None or L.element is not None)):
         ans.tier = "estimate"
