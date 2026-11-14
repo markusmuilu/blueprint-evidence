@@ -15,10 +15,14 @@ areas x k, waste recomputed on the new net), then 600 ms after the last change t
 - **Mixed objects.** The scale is the median of all candidates, each with the size of its class, so the app
   recomputes that median from the per-object candidates in the answer (`approx.assume.candidates`). On
   high_quality-10241 (7 doors, 1 WC pan) a WC pan length alone does not move the scale; the box says so.
-- **Preview and recompute differ a little** because the server picks the wall-gap setting nearest the new scale:
-  10241 bedrooms 14.71 m2, door 0.90 m preview 16.58, recompute 16.73; bathroom tiling 40.64, preview 43.75,
-  recompute 43.76. Big sheet (school plan, 1:200 on A2 read), 1:100 on A3: classrooms 354.7, preview 44.33,
-  recompute 44.3 (the rooms keep the outlines traced at the read scale; only the conversion changes).
+- **An override keeps the default answer's rooms** (branch `scale-assumption-2`, after QA): the recompute uses the
+  same traced regions and pixel areas as the default answer and changes only the conversion (as on big sheets), so
+  areas move by exactly k^2 and lengths by k, and the preview and the recompute agree to the rounding of the items
+  (at most 0.03 m2 on a 5-room sum). Before, the new scale could pick another wall-gap setting: 10241 bedrooms at
+  0.70 m gave 11.16 m2. Now 11.38 = 14.71 x 0.7735. The factor is the median's, not the door ratio's: with 7 doors
+  and 1 WC pan the WC is one of the middle two values, so 0.84 to 0.70 m gives k^2 0.77, not (0.70/0.84)^2 = 0.69; the
+  box says so ("areas x0.77, lengths x0.88 against the default; the scale is the median of all 8 objects").
+  Tyneside (doors carry the median) scales by the door ratio: 74.69 to 51.85 at 0.70 m.
 - **In the question.** "if the doors are 0.9 m wide", "assuming 90 cm doors", "the WC is 0.7 m long", "scale
   1:100 on A3" (and "jos ovet ovat 0,9 m leveitä") set the same assumption (`takeoff.parse_assumption`), read in
   `router.solve` before the question is parsed and removed from it, so "doors" in the clause does not turn an area
