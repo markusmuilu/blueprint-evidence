@@ -802,7 +802,8 @@ function renderAnswer(a) {
       </div>
       <p class="note corr-note" id="corrNote" hidden></p>
       <dl class="kv facts">
-        <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span>${a.status === "cannot" ? `<span class="cannot-reason">${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</span>` : ""}</dd>
+        <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span></dd>
+        ${a.status === "cannot" ? `<dd class="wide cannot-reason">${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</dd>` : ""}
         ${gold}
         <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
         <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>

@@ -218,9 +218,9 @@ detector (its launcher downloads a binary), so it is a degraded run: a design re
   because they repeat the evidence overlay drawn by the routes; square citation numerals, which are
   the signature; a dashed upload zone, because it is a drop target; a centred bottom toast; the
   amber box on an uncorroborated witness value, which follows the existing witness logic.
-- Weak spots: the answer panel is long when witnesses, order and items are all present; the "Cannot
-  prove" reason is cramped in the 280px value column; the Results tables carry long file paths that
-  push the source column off screen; control borders are low contrast (see Accessibility).
+- Weak spots: the answer panel is long when witnesses, order and items are all present; the Results
+  tables carry long file paths that push the source column off screen; control borders are low
+  contrast (see Accessibility).
 - Deliberate deviation: one type superfamily (Plex Sans + Plex Mono) instead of a display and body
   pairing, because this is an Operate surface.
 - Not done: light mode; a keyboard shortcut list; a full screen-reader pass.
