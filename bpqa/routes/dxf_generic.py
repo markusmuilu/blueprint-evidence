@@ -39,7 +39,7 @@ from .. import takeoff
 from ..answer import Answer, abstain, estimate
 from ..evidence import AMBER, BLUE, PALETTE, VectorCanvas, evidence_path, finish
 from ..query import fold
-from .scope_guard import single_room_problem
+from .scope_guard import ambiguous_room, single_room_problem
 
 ROUTE = "dxf-generic"
 PROVEN_CONF = 0.8      # the line below which an answer is an estimate (same line the app and README use)
@@ -566,6 +566,7 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
     fl = load(str(dxf))
     boxes, rooms_used, note, conf, label_pts = None, [], "", 0.85, []
     tku = {}          # takeoff interpretation when the toilet fallback was needed (bpqa/takeoff.py)
+    scope_why = ""
 
     if q.measure == "count":
         if q.obj in OBJ_CLASSES:
@@ -645,6 +646,10 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
                 why = (tk.get("toilet_rooms") or {}).get("why")
                 return abstain(ROUTE, why or f"no room of type {', '.join(tk['types'])}")
             note = takeoff.describe(tk)
+            scope_why = takeoff.scope_reason(tk, [r["name"] or "unlabelled room" for r in rooms_used])
+            _ss = takeoff.scope_sentence(tk, [r["name"] or "unlabelled room" for r in rooms_used])
+            if _ss:
+                note += ". " + _ss.rstrip(".")
             if tk.get("toilet_rooms"):
                 tku, boxes = tk, list(tboxes or [])       # toilet blocks are boxed on the evidence image
                 note = takeoff.interpretation(tk, [(r["name"] or "unlabelled room", r["poly"].area * fl.m_per_unit ** 2)
@@ -653,7 +658,7 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
             return abstain(ROUTE, "area question not specific enough for a generic DXF (no room label)")
         why = single_room_problem(q, rooms_used, lambda r: r["name"])
         if why:
-            return abstain(ROUTE, why)
+            return ambiguous_room(ROUTE, why)
         value = round(sum(r["poly"].area * fl.m_per_unit ** 2 for r in rooms_used), 2)
         note += f"; units {fl.units_source}"
     else:
@@ -678,6 +683,8 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         estimate(ans, takeoff.fallback_reason(tku))
     else:
         ans.tier = "proven"
+    if scope_why:
+        estimate(ans, scope_why)
     col0 = AMBER if ans.tier == "estimate" else BLUE
     if ctx.evidence:
         cv = VectorCanvas(fl.bounds)

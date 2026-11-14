@@ -3,6 +3,41 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: vector and IFC consistency, branch `vector-ifc-consistency`
+
+QA visual passes on the IFC sheets and Swiss floors found answers that contradicted each other on the same sheet. No
+accuracy change was intended or measured on dev (see numbers below); these are answers the dev questions do not ask.
+
+IFC (`ifc_route.py`, `ifc_props.py`):
+- A storey with no room of the asked type answers `0 m2` (proven, as the count question already did) and lists the rooms on
+  that storey and where such rooms are elsewhere ("Bad - Dame is on Kaelder"), instead of "cannot" with the whole
+  building's room names. Bedroom, bathroom and toilet areas and tilings on Molio, Esplanades and FZK Dachgeschoss.
+  A bedroom or living room asked on a storey whose rooms carry only generic labels still abstains (final), as before.
+  Whole-model questions keep the abstention.
+- "Toilets" with no WC fixture in the model: the count says "0 WC fixture objects ... and 0 spaces named as WC / toilet
+  room"; the tiling for the toilets says "no WC fixtures in the model; using the rooms named as bathrooms" (estimate).
+  The evidence header no longer cuts the estimate reason mid-bracket (`short_reason`).
+- Sinks and washbasins are counted from the sanitary fixtures of basin type on the storey. A model with no sanitary
+  fixture at all abstains with "cannot prove: this model has no sink objects" (final); one with fixtures but no sink says 0.
+  `ifc_props` headers no longer say "lookup chosen by keyword rules".
+
+Swiss DXF (`dxf_swiss.py`, `pdf_vector.py`):
+- "Sinks" read as washbasins (FIXTURE ellipses with a drain circle, the rule that is 99.9% on dev for washbasins), estimate:
+  kitchen sinks are not told apart from the other 4-vertex FIXTURE rectangles. The dataset has no sink question on Swiss
+  plans, so there is no gold; the washbasin rule is the validated part. A bare "sinks" now parses (`query.py`).
+- Bathroom area and tiling on a floor with no bathroom label use the same reading: unnamed numbered rooms that hold a
+  toilet, bathtub or shower (`takeoff.fixture_room_fallback`), estimate, wording stated.
+- Tiling deducts only door leaves that touch the room's outline (3 cm); doors 0.1 to 0.35 m away belong to a
+  neighbouring room and were deducted before (site695 bathrooms: 51.38 to 62.07 m2).
+
+Shared:
+- A singular room type asked with several matching rooms ("How big is the kitchen?") is summed, every room listed, and
+  said so; estimate when more than one room matched. Before, the English question abstained and fell through to a model
+  while the Finnish one gave the sum. A quoted room name keeps the guard, and its abstention is now final.
+- Combined room names (`ELUTUBA+KOOK` = living room and kitchen) are named in the explanation and make the answer an estimate.
+- Evidence headers wrap to the image width (`evidence.finish`, `wrap_px`), answer line and note included.
+- Tests: `tests/test_vecfix.py`.
+
 ## 2026-11-14: object scale for scans without printed areas, branch `object-scale` (behind a flag, off)
 
 Problem: `raster_area.py` sets a pixel scale only from 2+ printed room areas that agree, so on a scan that prints

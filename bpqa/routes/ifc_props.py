@@ -1236,7 +1236,7 @@ def answer(ctx, q) -> Answer:
         guids = [e.GlobalId for e in cited]
     else:
         guids = [e.GlobalId for e in cited[:200]]
-    expl = (f"Lookup ({L.mapper}): {L.describe()}. Values read from {path.name}: {note}."
+    expl = (f"Lookup{'' if L.mapper == 'rules' else f' ({L.mapper})'}: {L.describe()}. Values read from {path.name}: {note}."
             + (f" {L.storey_note}." if L.storey_note else "") + f" Cited entities: {len(cited)} (GlobalIds in items).")
     ans = Answer(value=text, unit="", route=ROUTE, confidence=0.85 if L.mapper == "rules" else 0.6,
                  items=items + [{"cited_guids": guids}], explanation=expl, cost_usd=cost)
@@ -1247,7 +1247,7 @@ def answer(ctx, q) -> Answer:
     elif L.intent not in PROVEN_INTENTS and not (L.intent in ("materials", "types") and (L.room is not None or L.element is not None)):
         ans.tier = "estimate"
         ans.tier_reason = (f"every value is read from the file, but the question was matched to a broad '{L.intent}' "
-                           f"lookup by keyword rules; check that the lookup line answers what was asked")
+                           f"broad lookup; check that the lookup line answers what was asked")
     if ctx.evidence:
         try:
             ans.evidence = render(ctx, M, L, text, cited, estimate=ans.tier == "estimate")
@@ -1317,6 +1317,6 @@ def render(ctx, M, L, text, cited, estimate=False):
         img = panel
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     first = lines[0] if lines else ""
-    tag = "ESTIMATE (lookup chosen by keyword rules)" if estimate else "proven"
+    tag = "ESTIMATE (broad lookup, check it answers the question)" if estimate else "proven"
     return finish(img, out, ctx.q.question, f"Answer [{tag}]: {first[:90]}   route: {ROUTE} (cost $0)",
                   note=f"Lookup: {L.describe()}" + (f"; {L.storey_note}" if L.storey_note else ""))
