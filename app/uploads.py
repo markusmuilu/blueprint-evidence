@@ -96,7 +96,7 @@ def _raster_pages(Image, UnidentifiedImageError, data, name):
     try:
         img = Image.open(io.BytesIO(data))
         fmt, (w, h) = img.format, img.size
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as ex:
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError, ImportError) as ex:
         raise UploadError(400, f"{name}: could not be read as an image ({type(ex).__name__}). "
                                f"Is the file damaged, or named with the wrong extension?")
     if w * h > MAX_PIXELS:
