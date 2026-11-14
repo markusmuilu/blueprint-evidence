@@ -203,18 +203,43 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#status
 
 /* ================================================================ drawing library */
 /* The library is grouped by what the system can do with each kind of file, not by dataset. */
+/* ---- library groups: collapsible categories (block start) ---- */
 const GROUPS = [
-  { id: "bim", ext: "ifc", title: "BIM model (3D, proven)",
-    note: "IFC. Quantities come from the model's own elements, with a 3D view." },
-  { id: "cad", ext: "dxf", title: "CAD drawing (vector, proven)",
-    note: "DXF. Read from the drawing's own geometry.",
+  { id: "bim", ext: "ifc", tone: "proven", title: "Building models (IFC)",
+    note: "3D model; answers read from the model, proven" },
+  { id: "cad", ext: "dxf", tone: "proven", title: "CAD drawings (DXF)",
+    note: "Vector lines and layers, proven",
     none: "None listed on their own: Swiss PDFs come with a DXF twin, and you can upload a DXF." },
-  { id: "pdf", ext: "pdf", title: "PDF plan (vector, proven; scale found on the sheet)",
-    note: "Vector PDFs with a text layer. The scale is read off the sheet." },
-  { id: "scan", ext: "png", title: "Scanned plan (pixels; estimates to check)",
-    note: "PNG scans. A detector counts the items, so answers are estimates and each counted item is shown to check." },
+  { id: "pdf", ext: "pdf", tone: "proven", title: "PDF plans",
+    note: "Vector PDF with a text layer; scale read from the sheet" },
+  { id: "scan", ext: "png", tone: "estimate", title: "Scanned plans",
+    note: "Pixels only; counts are estimates to check" },
 ];
 const GROUP_FIRST = 8, GROUP_MORE = 30;
+const GROUP_KEY = "bpe-lib-collapsed";
+const groupStore = {
+  read() { try { const a = JSON.parse(localStorage.getItem(GROUP_KEY)); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); } },
+  write(set) { try { localStorage.setItem(GROUP_KEY, JSON.stringify([...set])); } catch { /* storage blocked: state lasts for this visit */ } },
+};
+const collapsedGroups = groupStore.read();
+
+function groupHead(g, r, open, bodyId) {
+  const h = document.createElement("h3");
+  h.className = "h-group";
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "dgroup-toggle";
+  b.setAttribute("aria-expanded", String(open));
+  b.setAttribute("aria-controls", bodyId);
+  const tone = g.tone === "proven" ? "Proven" : "Estimates";
+  b.innerHTML = `<svg class="ico chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+    <span class="dg-text"><span class="dg-title"><span class="dg-mark ${g.tone}" title="${tone}" aria-hidden="true"></span>${esc(g.title)}</span>
+    <span class="dg-note">${esc(r.total ? g.note : g.none)}</span></span>
+    <span class="n mono" aria-label="${num(r.total)} drawings">${num(r.total)}</span>`;
+  if (!r.total) { b.disabled = true; b.removeAttribute("aria-expanded"); b.removeAttribute("aria-controls"); }  // nothing to fold
+  h.appendChild(b);
+  return h;
+}
+/* ---- library groups (block end; loadDrawings below uses groupHead) ---- */
 
 let searchT, loadSeq = 0;
 function groupQuery(g, offset, limit) {
@@ -242,12 +267,25 @@ async function loadDrawings() {
       if (!r.total && (filtered || !g.none)) return;
       const sec = document.createElement("section");
       sec.className = "dgroup";
-      sec.innerHTML = `<header class="dgroup-head"><h3 class="h-group">${esc(g.title)}<span class="n mono">${num(r.total)}</span></h3>
-        <p class="meta">${esc(r.total ? g.note : g.none)}</p></header>`;
+      const bodyId = "dg-" + g.id;
+      // searching opens every group that has matches; the stored state is left alone
+      const open = state.query ? r.total > 0 : !collapsedGroups.has(g.id);
+      const head = groupHead(g, r, open, bodyId);
+      const body = document.createElement("div");
+      body.className = "dgroup-body"; body.id = bodyId; body.hidden = !open;
+      sec.appendChild(head);
+      sec.appendChild(body);
+      head.firstChild.addEventListener("click", (e) => {
+        const now = body.hidden;                       // hidden now, so this click opens it
+        body.hidden = !now;
+        e.currentTarget.setAttribute("aria-expanded", String(now));
+        if (now) collapsedGroups.delete(g.id); else collapsedGroups.add(g.id);
+        groupStore.write(collapsedGroups);
+      });
       if (r.total) {
         const ul = document.createElement("ul");
         r.items.forEach((d) => ul.appendChild(drawItem(d)));
-        sec.appendChild(ul);
+        body.appendChild(ul);
         let off = r.items.length;
         if (off < r.total) {
           const more = document.createElement("button");
@@ -260,7 +298,7 @@ async function loadDrawings() {
             off += next.items.length;
             if (off >= r.total) more.remove(); else more.textContent = label();
           });
-          sec.appendChild(more);
+          body.appendChild(more);
         }
       }
       list.appendChild(sec);

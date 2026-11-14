@@ -9,6 +9,7 @@ Version 2.2 (2026-11-14) adds view rotation and mirroring to the viewer toolbar 
 side panels. Version 2.3 (2026-11-14) adds evidence layers: a Steps card that shows the reasoning for one
 item, one layer at a time.
 Version 2.4 (2026-11-14) adds an app bar that keeps the name on every view and a first-visit guide.
+Version 2.5 (2026-11-14) makes the library groups collapsible, with plainer titles and a count and tone marker in each header.
 
 ## Context
 
@@ -145,13 +146,20 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
 - Inputs: visible labels above, never placeholder-as-label; focus is a 1px accent border plus 1px ring.
 - Focus elsewhere: 2px accent ring offset by 2px of bg; inside lists and rows an inset 2px accent ring.
 - Library sources: plain text filters with mono counts; the current one has a 2px accent underline.
-- Library groups: under the filters the list is grouped by what the system can do with the file, as
-  plain text headings with a count and one sentence each: "BIM model (3D, proven)" (IFC), "CAD
-  drawing (vector, proven)" (DXF; none are listed on their own in the dataset, so the group says
-  so), "PDF plan (vector, proven; scale found on the sheet)" and "Scanned plan (pixels; estimates to
-  check)" (PNG). Eight rows per group, then "Show more (n left)". Grouping uses the catalog's `ext`
-  filter, no backend change. Source filter and search narrow every group; empty groups are hidden
-  while filtering.
+- Library groups (v2.5): under the filters the list is grouped by what the system can do with the file:
+  "Building models (IFC)", "CAD drawings (DXF)", "PDF plans" and "Scanned plans" (PNG), each with a
+  one-line description ("3D model; answers read from the model, proven", "Vector lines and layers,
+  proven", "Vector PDF with a text layer; scale read from the sheet", "Pixels only; counts are
+  estimates to check"). The header is one full-width button: chevron (right when folded, down when
+  open), an 8px square marker (blue for proven groups, amber for scans, with the status also in the
+  description words), the title, the description, and the mono count at the right. It carries
+  `aria-expanded` and `aria-controls`; the state of each group is kept in localStorage
+  (`bpe-lib-collapsed`, a list of folded ids, read and written inside try/catch so it also works with
+  storage blocked). A search opens every group that has matches without changing the stored state.
+  A group with no files (DXF in the dataset) shows its note and is not a toggle. Eight rows per
+  group, then "Show more (n left)". Grouping uses the catalog's `ext` filter, no backend change. The
+  source filters and the groups overlap (source is where a file came from, group is what it is); they
+  are kept because they answer different questions, and both narrow the same list.
 - Try these: the empty answer panel opens with four one-click examples (tiling on a Swiss plan, room
   area from an IFC model with the 3D view, a window count on a scan, and an upload hint), each a text
   command with one muted sentence, followed by the "each answer reads like this" table. A row is
