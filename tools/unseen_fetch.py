@@ -39,12 +39,6 @@ GITHUB = [
     ("kjdraw_architecture_floor_plan", "architecture-floor-plan.dxf",
      "https://raw.githubusercontent.com/KanJieTeam/kjdraw/main/docs/latest/showcase/assets/architecture-floor-plan.dxf",
      "Apache-2.0 (KanJieTeam/kjdraw)", "https://github.com/KanJieTeam/kjdraw"),
-    ("kjdraw_compact_office_plan", "compact-office-plan.dxf",
-     "https://raw.githubusercontent.com/KanJieTeam/kjdraw/main/docs/latest/showcase/assets/compact-office-plan.dxf",
-     "Apache-2.0 (KanJieTeam/kjdraw)", "https://github.com/KanJieTeam/kjdraw"),
-    ("kjdraw_courtyard_plan", "courtyard-circulation-plan.dxf",
-     "https://raw.githubusercontent.com/KanJieTeam/kjdraw/main/docs/latest/showcase/assets/courtyard-circulation-plan.dxf",
-     "Apache-2.0 (KanJieTeam/kjdraw)", "https://github.com/KanJieTeam/kjdraw"),
 ]
 
 COMMONS = [
