@@ -26,7 +26,7 @@ from shapely.ops import unary_union
 from .. import takeoff
 from .. import walls as wallmod
 from ..answer import Answer, abstain, estimate
-from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
+from ..evidence import PALETTE, VectorCanvas, evidence_path, finish, record_steps
 from .scope_guard import single_room_problem
 
 ROUTE = "dxf-geometry"
@@ -38,6 +38,74 @@ OUTDOOR = {"balkon", "balcon", "balcone", "loggia", "terrasse", "terrazza", "sit
            "veranda", "aussenraum"}
 SHAFT_VOID = {"schacht", "luftraum", "gaine", "vide", "cavedio", "vuoto", "shaft", "void",
               }
+
+
+def _text_box(e, s, xy):
+    """Approximate world box of a TEXT entity: cap height x 0.6 per character, placed by its alignment."""
+    h = float(e.dxf.get("height", 0.2) or 0.2)
+    w = 0.6 * h * max(len(s), 1) * float(e.dxf.get("width", 1.0) or 1.0)
+    ha, va = e.dxf.get("halign", 0), e.dxf.get("valign", 0)
+    x0 = xy[0] - w * {1: 0.5, 2: 1.0, 4: 0.5}.get(ha, 0.0)
+    y0 = xy[1] - h * {2: 0.5, 3: 1.0}.get(va, 0.0)
+    if ha == 4:                       # "middle": centred both ways
+        y0 = xy[1] - h * 0.5
+    return (x0, y0, x0 + w, y0 + h)
+
+
+def draw_room_texts(cv, r) -> None:
+    """The room's own TEXT entities (name, number, printed area) at their DXF positions, so the label step of the
+    evidence points at text that is visible on the image (the base canvas draws linework only)."""
+    for key, s in (("name_box", r.get("name")), ("number_box", r.get("number")), ("area_box", r.get("area_text"))):
+        b = r.get(key)
+        if b is None or not s:
+            continue
+        size = max(9, round((b[3] - b[1]) * cv.s * 0.95))
+        cv.text(((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), s, size=size, color=(60, 60, 60), bg=False)
+
+
+def label_point(r):
+    """Where the route's own room label goes: the representative point, moved below the room's name and number
+    when it would cover them."""
+    rp = r["poly"].representative_point()
+    boxes = [b for b in (r.get("name_box"), r.get("number_box")) if b is not None]
+    if not boxes:
+        return rp.x, rp.y
+    x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    if x0 - 0.8 <= rp.x <= x1 + 0.8 and y0 - 0.3 <= rp.y <= y1 + 0.3:
+        return (x0 + x1) / 2, y0 - 0.35
+    return rp.x, rp.y
+
+
+def room_steps(cv, fl, r, types=None) -> list[dict]:
+    """The reasoning for one room, in evidence pixels: the label read inside the outline (and the room type it
+    names), where the area comes from (the ROOM_OUTLINE polygon; a printed area is the cross-check), and the
+    outline itself."""
+    def px(b):
+        a, c = cv.px(b[0], b[3]), cv.px(b[2], b[1])
+        return [a[0], a[1], c[0], c[1]]
+    area = fl.room_area(r)
+    steps = []
+    boxes = [px(b) for b in (r.get("name_box"), r.get("number_box")) if b is not None]
+    if boxes:
+        name = r["name"] or "unnamed"
+        tt = sorted(takeoff.room_types(r["name"] or ""))
+        if types:
+            tt = sorted(set(tt) & set(types)) or tt
+        steps.append({"kind": "label", "title": "Label read",
+                      "text": name + (f" ({r['number']})" if r["number"] else ""),
+                      "note": f"read as {', '.join(tt)}" if tt else "room name inside the outline",
+                      "rect": [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)]})
+    if r.get("area_box") is not None:
+        agree = abs(r["area_label"] - area) <= 0.02 * max(r["area_label"], 1e-9)
+        steps.append({"kind": "value", "title": "Size printed", "text": r["area_text"],
+                      "note": f"cross-check: {'agrees with' if agree else 'differs from'} the outline's {area:.2f} m2",
+                      "cap": f"printed {r['area_label']:g} m2",
+                      "rect": px(r["area_box"])})
+    steps.append({"kind": "region", "title": "Room outline", "text": f"{area:.2f} m2", "cap": f"outline {area:.2f} m2",
+                  "note": "computed from the ROOM_OUTLINE polygon" + ("" if r.get("area_box") is not None else "; no area printed"),
+                  "pts": [cv.px(x, y) for x, y in r["poly"].exterior.coords]})
+    return steps
 
 
 def _pts(e):
@@ -53,6 +121,7 @@ class SwissFloor:
         self.units = []        # dicts: poly, letter, label_pt
         self.doors, self.windows_raw, self.fixtures, self.fix_circles = [], [], [], []
         texts = []
+        tboxes = []            # world box of each TEXT, approximate (height x characters), for the evidence steps
         room_polys = []
         unit_polys = []
         for e in msp:
@@ -82,13 +151,14 @@ class SwissFloor:
                 use_align = e.dxf.get("halign", 0) or e.dxf.get("valign", 0)
                 p = e.dxf.align_point if use_align else e.dxf.insert
                 texts.append((layer, e.dxf.text.strip(), (p.x, p.y)))
+                tboxes.append(_text_box(e, e.dxf.text.strip(), (p.x, p.y)))
         self.texts = texts
         allb = [_bbox(p) for _, p in self.lines if len(p) > 1]
         self.bounds = (min(b[0] for b in allb), min(b[1] for b in allb), max(b[2] for b in allb), max(b[3] for b in allb))
 
         # Rooms: attach number / name / printed area to the outline that contains them
         rooms = [{"poly": p, "name": None, "number": None, "area_label": None, "unit": None} for p in room_polys]
-        for layer, s, xy in texts:
+        for (layer, s, xy), tb in zip(texts, tboxes):
             if layer != "ROOM_TEXT" or UNIT_RE.match(s):
                 continue
             pt = Point(xy)
@@ -101,10 +171,13 @@ class SwissFloor:
             r = min(cands, key=lambda r: r["poly"].area)
             if NUM_RE.match(s):
                 r["number"] = s
+                r["number_box"] = tb
             elif (m := AREA_RE.match(s)):
                 r["area_label"] = float(m.group(1))
+                r["area_text"], r["area_box"] = s, tb
             elif r["name"] is None:
                 r["name"] = s
+                r["name_box"] = tb
         self.rooms = rooms
 
         # Apartments: one label per unit; attach outline and rooms
@@ -409,7 +482,11 @@ def answer(ctx, q) -> Answer:
                         o["deducted"] = d["area"]
                 wallmod.draw_rooms(cv, wrooms, PALETTE[0], PALETTE[0], (231, 140, 8),
                                    lambda i, r: f"{i + 1}. {r['label']}: floor {r['floor_area']:.2f}, walls "
-                                                f"{wallmod.room_walls(r, inp)['net']:.2f} m²")
+                                                f"{wallmod.room_walls(r, inp)['net']:.2f} m²",
+                                   label_at=lambda i, r: label_point(rooms_used[i]))
+                for i, r in enumerate(rooms_used):
+                    draw_room_texts(cv, r)
+                    record_steps(cv.img, i + 1, room_steps(cv, fl, r, tk.get("types")))
                 out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
                 est = "; ".join(x for x in ("assumed heights" if ans.tier and "room height" in ans.tier_reason else "",
                                              "rooms with a toilet, no WC room" if fb else "") if x)
@@ -428,11 +505,14 @@ def answer(ctx, q) -> Answer:
             col = PALETTE[i % len(PALETTE)]
             ext = r["poly"].exterior.coords
             cv.poly(list(ext), fill=col + (70,), outline=col, width=3)
-            rp = r["poly"].representative_point()
             lab = f"{r['number'] or ''} {fl.room_area(r):.2f} m²" if q.measure == "area" else f"#{i + 1}"
             if q.variant == "type_sum":
                 lab = f"{i + 1}. {r['name'] or 'unlabelled'} {fl.room_area(r):.2f} m²"
-            cv.text((rp.x, rp.y), lab, size=13, color=(0, 0, 0))
+            if q.measure == "area":
+                draw_room_texts(cv, r)
+            cv.text(label_point(r) if q.measure == "area" else tuple(r["poly"].representative_point().coords[0]), lab, size=13, color=(0, 0, 0))
+            if q.measure == "area":
+                record_steps(cv.img, i + 1, room_steps(cv, fl, r, (tku or q.extra.get("takeoff") or {}).get("types")))
         for i, b in enumerate(boxes):
             cv.box(b, n=i + 1)
         if q.obj == "apartment" and q.measure == "count":

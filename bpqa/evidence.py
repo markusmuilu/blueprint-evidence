@@ -73,6 +73,34 @@ def _record_poly(img, pts, fill):
                         "rect": [min(xs), min(ys), max(xs), max(ys)]})
 
 
+def record_steps(img, n, steps) -> None:
+    """The reasoning behind one answer item, layer by layer, for the app's Steps card.
+
+    `n` is the item's number as drawn (the `#n` on the overlay and in the strip, 1-based). Each step is
+    {"kind": "label" | "value" | "region" | ..., "title": "Label read", "text": "MH 1", "note": "read as bedroom"}
+    plus where it sits in the canvas's pixel frame: "rect" [x0, y0, x1, y1] and/or "pts" [[x, y], ...].
+    Saved in the marks sidecar as {"steps": {"<n>": [...]}}; an older sidecar simply has no "steps".
+    """
+    rows = []
+    for st in steps:
+        if not st:
+            continue
+        r = {k: v for k, v in st.items() if v is not None and k not in ("rect", "pts")}
+        if st.get("rect") is not None:
+            x0, y0, x1, y1 = (float(v) for v in st["rect"])
+            r["rect"] = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+        if st.get("pts") is not None and len(st["pts"]) >= 3:
+            pts = [(float(x), float(y)) for x, y in st["pts"]]
+            step = max(1, len(pts) // 96)
+            r["pts"] = [[round(x, 1), round(y, 1)] for x, y in pts[::step]]
+            if "rect" not in r:
+                xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+                r["rect"] = [min(xs), min(ys), max(xs), max(ys)]
+        rows.append(r)
+    if rows:
+        img.info.setdefault("bp_steps", {})[str(n)] = rows
+
+
 class _RecordingDraw:
     """ImageDraw wrapper: routes that draw polygons straight on `cv.d` are recorded too."""
 
@@ -192,6 +220,7 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
         _STASH.clear()
     _STASH[str(out)] = (img, question, answer_line, note)
     marks, frame = list(img.info.get("bp_marks") or []), img.info.get("bp_frame")
+    steps = dict(img.info.get("bp_steps") or {})
     src_w = img.width
     if img.width > max_w:
         img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
@@ -227,7 +256,7 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     canvas.paste(img, (0, head_h))
     out.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(out)
-    write_marks(out, marks, frame, img.width / src_w, head_h, img.width, img.height)
+    write_marks(out, marks, frame, img.width / src_w, head_h, img.width, img.height, steps)
     return str(out)
 
 
@@ -235,25 +264,30 @@ def marks_path(png: Path) -> Path:
     return png.with_name(png.stem + ".marks.json")
 
 
-def write_marks(out: Path, marks: list, frame: dict | None, k: float, head_h: int, w: int, h: int) -> None:
-    """Sidecar for the app: marks in body pixels of the saved PNG (below the header strip)."""
+def write_marks(out: Path, marks: list, frame: dict | None, k: float, head_h: int, w: int, h: int,
+                steps: dict | None = None) -> None:
+    """Sidecar for the app: marks (and per-item reasoning steps) in body pixels of the saved PNG (below the header strip)."""
     def sc(v):
         return round(v * k, 1)
-    rows = []
-    for m in marks:
+
+    def scaled(m):
         r = dict(m)
-        r["rect"] = [sc(v) for v in m["rect"]]
+        if "rect" in m:
+            r["rect"] = [sc(v) for v in m["rect"]]
         if "pts" in m:
             r["pts"] = [[sc(x), sc(y)] for x, y in m["pts"]]
-        rows.append(r)
+        return r
+    rows = [scaled(m) for m in marks]
     fr = dict(frame) if frame else None
     if fr and fr.get("kind") == "world":
         fr.update(s=fr["s"] * k, m=fr["m"] * k)
     elif fr:
         fr["scale"] = k                 # source pixel -> body pixel
     try:
-        marks_path(out).write_text(json.dumps({"v": 1, "w": w, "h": h, "header": head_h, "frame": fr, "marks": rows}),
-                                   encoding="utf-8")
+        doc = {"v": 1, "w": w, "h": h, "header": head_h, "frame": fr, "marks": rows}
+        if steps:
+            doc["steps"] = {n: [scaled(st) for st in sts] for n, sts in steps.items()}
+        marks_path(out).write_text(json.dumps(doc), encoding="utf-8")
     except OSError:
         pass
 

@@ -233,7 +233,7 @@ def read_rooms(toks: list[dict], min_conf: float = 0.5) -> tuple[list[Room], lis
     rooms = []
     for a in areas:
         if a["rest"]:                       # "MH1 15.3m2" in one token
-            rooms.append(Room(a["rest"], a["box"], a["v"], a["box"], _center(a["box"])))
+            rooms.append(Room(a["rest"], a["box"], a["v"], a["box"], _center(a["box"]), extra={"area_text": a["text"]}))
             continue
         b = a["box"]
         h = max(b[3] - b[1], 6)
@@ -254,9 +254,9 @@ def read_rooms(toks: list[dict], min_conf: float = 0.5) -> tuple[list[Room], lis
             used.add(best)
             lb = labels[best]["box"]
             seed = ((lb[0] + lb[2]) / 2, (lb[3] + b[1]) / 2)
-            rooms.append(Room(labels[best]["text"], lb, a["v"], b, seed))
+            rooms.append(Room(labels[best]["text"], lb, a["v"], b, seed, extra={"area_text": a["text"]}))
         else:
-            rooms.append(Room(None, None, a["v"], b, _center(b)))
+            rooms.append(Room(None, None, a["v"], b, _center(b), extra={"area_text": a["text"]}))
     free = [l for i, l in enumerate(labels) if i not in used]
     return rooms, free
 
@@ -589,11 +589,36 @@ def _name(r) -> str:
     return r.label or (f"unlabelled {r.printed:g} m2" if r.printed is not None else "unlabelled room")
 
 
+def _room_steps(row, r, want) -> list[dict]:
+    """The reasoning for one room of the answer, in the order a person checks it: the label that was read and
+    the room type it was read as, the printed area, and the traced region. Pixel boxes of the source image."""
+    from .. import takeoff
+    types = sorted(takeoff.room_types(r.label or "") & set(want)) or sorted(takeoff.room_types(r.label or ""))
+    steps = []
+    if r.label_box is not None and r.label:
+        steps.append({"kind": "label", "title": "Label read", "text": r.label,
+                      "note": f"read as {', '.join(types)}" if types else "room label", "rect": r.label_box})
+    if row["kind"] == "printed" and r.area_box is not None:
+        raw = (r.extra or {}).get("area_text") or f"{r.printed:g} m2"
+        steps.append({"kind": "value", "title": "Size printed", "text": raw, "note": f"size {r.printed:.1f} m2",
+                      "rect": r.area_box})
+    if r.contour is not None and r.region_ok:
+        pts = [(float(p[0][0]), float(p[0][1])) for p in r.contour]
+        if row["kind"] == "printed":
+            note = (f"measures {r.measured:.2f} m2, printed {r.printed:g}" if r.measured is not None
+                    else "no pixel scale to measure it")
+        else:
+            note = f"no printed size: measured {row['area']:.2f} m2 (region x scale), an estimate"
+        cap = f"region {r.measured:.1f} m2" if r.measured is not None else "region"
+        steps.append({"kind": "region", "title": "Room region", "text": "outlined", "note": note, "cap": cap, "pts": pts})
+    return steps
+
+
 def takeoff_answer(ctx, q, img):
     from .. import takeoff
     from .. import walls as wallmod
     from ..answer import Answer, abstain, estimate
-    from ..evidence import AMBER, BLUE, ImageCanvas, evidence_path, finish, font
+    from ..evidence import AMBER, BLUE, ImageCanvas, evidence_path, finish, font, record_steps
     from PIL import Image
 
     tk = q.extra["takeoff"]
@@ -638,6 +663,7 @@ def takeoff_answer(ctx, q, img):
             inn = [a for a in loose if _inside(r.contour, _center(a.area_box))]
             if len(inn) == 1:
                 r.printed, r.area_box = inn[0].printed, inn[0].area_box
+                r.extra["area_text"] = inn[0].extra.get("area_text")
                 loose.remove(inn[0])
     sc = pa.scale
     want_floor, want_walls, how = wallmod.surfaces(tk)
@@ -747,6 +773,7 @@ def takeoff_answer(ctx, q, img):
                 tb = cv.d.textbbox((x, y + fs), txt, font=f, anchor="mm")
                 cv.d.rectangle([tb[0] - 3, tb[1] - 2, tb[2] + 3, tb[3] + 2], fill=AMBER)
                 cv.d.text((x, y + fs), txt, fill=(28, 48, 65), font=f, anchor="mm")
+            record_steps(cv.img, i + 1, _room_steps(row, r, want))
         for j in sc.rooms if sc.known else []:            # printed rooms that set the scale, thin blue
             b = pa.rooms[j].area_box
             if b is not None:

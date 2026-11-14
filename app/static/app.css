@@ -375,6 +375,67 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .layer-tag { padding: 0 var(--s2); font-size: var(--fs-xs); color: var(--muted); border-right: 1px solid var(--rule); margin-right: 2px; line-height: 24px; }
 .layer-tag.ev { color: var(--accent); }
 
+/* ------------------------------------------------------------ evidence layers (Steps card) */
+/* the selected item's reasoning, one layer per step, drawn in view space like the pins; strokes keep 2px at any zoom */
+.layers { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
+.layers rect, .layers polygon {
+  fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.layers polygon { fill: oklch(0.70 0.12 240 / 0.10); stroke-dasharray: 6 3; }
+.layers rect.lk-value { stroke-dasharray: none; }
+.layers .dim, .lcap.dim { opacity: 0.15; }
+.layers .veil { fill: oklch(0.135 0.010 245 / 0.5); fill-rule: evenodd; stroke: none; pointer-events: none; }
+/* the room's own outline steps back while another layer is shown alone */
+.marks[data-solo]:not([data-solo="region"]) .room-outlines polygon { opacity: 0.25; }
+.marks[data-solo] .pin { opacity: 0.35; }
+/* while an item's steps are shown, the other items step back and its own number tag gives way to the captions */
+.marks.stepping .pin:not(.steps-of), .marks.stepping .room-outlines polygon:not(.steps-of) { opacity: 0.4; }
+.marks.stepping .pin.steps-of > span { display: none; }
+.marks.stepping .reticle { display: none; }
+.lcap { position: absolute; width: 0; height: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.lcap span {
+  position: absolute; left: 0; bottom: 0; transform: scale(var(--inv, 1)); transform-origin: 0 100%;
+  padding: 0 5px 0 0; background: var(--accent); color: var(--accent-fg); white-space: nowrap; font: 500 12px/16px var(--font);
+}
+.lcap.below span { bottom: auto; top: 0; transform-origin: 0 0; }
+.lcap b { display: inline-block; padding: 0 4px; margin-right: 5px; font: 600 12px/16px var(--mono); background: var(--accent-fg); color: var(--accent); }
+.steps-card {
+  position: absolute; left: var(--s3); bottom: var(--s3); z-index: 4; width: min(340px, calc(100% - 24px)); max-height: calc(100% - 72px);
+  overflow-y: auto; padding: var(--s1) var(--s3) var(--s2); background: var(--overlay); border: 1px solid var(--border-strong);
+  border-radius: var(--r); cursor: default; font-size: var(--fs-sm);
+}
+.viewer.mode-3d .steps-card { display: none; }
+.sc-head { display: flex; align-items: center; gap: var(--s2); min-height: 32px; }
+.sc-head h3 { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-n { color: var(--accent); font-weight: 500; margin-right: var(--s2); }
+.sc-gap { flex: 1; }
+.sc-head .btn { min-height: 26px; padding: 0 var(--s1); }
+.sc-head .btn[aria-pressed="true"] { color: var(--accent); }
+.sc-close { width: 26px; height: 26px; margin-right: -6px; }
+.sc-list { list-style: none; margin: 0; padding: 0; }
+.sc-step {
+  display: grid; grid-template-columns: 26px 88px minmax(0, 1fr); gap: var(--s2); align-items: start; width: 100%;
+  padding: 5px 0; border: 0; border-top: 1px solid var(--rule); border-radius: 0; background: transparent; color: var(--fg-2);
+  font-size: var(--fs-sm); text-align: left; cursor: pointer;
+}
+.sc-step .k { color: var(--muted); font-weight: 500; padding-top: 1px; }
+.sc-step .v { color: var(--fg-2); overflow-wrap: anywhere; padding-top: 1px; }
+.sc-step .v .mono { color: var(--fg); }
+.sc-step:hover, .sc-step.on { background: var(--raised); }
+.sc-step.on .k { color: var(--fg); }
+.sc-step[aria-pressed="true"] .cite { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.sc-step.flat { cursor: default; }
+.sc-step:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.sc-3d { color: var(--accent); }
+.sc-step:hover .sc-3d { text-decoration: underline; text-underline-offset: 3px; }
+.sc-foot { margin: var(--s1) 0 0; padding-top: var(--s1); border-top: 1px solid var(--rule); color: var(--muted); font-size: var(--fs-xs); }
+@media (max-width: 760px) {
+  .steps-card { max-height: 55%; }
+  .sc-step { grid-template-columns: 28px 80px minmax(0, 1fr); }
+  .sc-foot { display: none; }
+}
+
 /* ------------------------------------------------------------ verification strip */
 .strip { border-top: 1px solid var(--rule); background: var(--bg); padding: var(--s2) var(--s4) var(--s3); display: grid; gap: var(--s2); min-width: 0; }
 .strip-head { display: flex; align-items: center; flex-wrap: nowrap; gap: var(--s1) var(--s2); min-height: 32px; white-space: nowrap; }

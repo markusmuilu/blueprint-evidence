@@ -6,7 +6,8 @@ pills, chips and tinted boxes with ruled tables and plain coloured text; the aud
 at the end. Version 2.1 (2026-11-14) is a type pass: no display numeral, no small mono labels, a
 library grouped by what the system can do, and a "Try these" list in the empty answer panel.
 Version 2.2 (2026-11-14) adds view rotation and mirroring to the viewer toolbar and drag-resizable
-side panels.
+side panels. Version 2.3 (2026-11-14) adds evidence layers: a Steps card that shows the reasoning for one
+item, one layer at a time.
 
 ## Context
 
@@ -177,6 +178,25 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
   never mirror. Verification strip crops are drawn in the same orientation as the viewer. A click for
   "Add missed item" is converted back to image pixels. Opening a different drawing resets the
   orientation; the evidence for the same drawing keeps it.
+- Evidence layers (v2.3): selecting an item (a crop in the strip, a row in the item list, or the number
+  tag or box of a pin on the drawing) opens a Steps card over the bottom left of the viewer and zooms the
+  item into the part of the viewer the card leaves free. The card is a floating overlay box (overlay
+  surface, 1px strong border, 3px radius) titled with the item's `#n` and name; inside it is a ruled
+  list, one row per step, each with a square citation numeral, a muted Sans title ("Label read", "Size
+  printed", "Room region", "Symbol found", "Element") and the text as read in mono followed by "→" and
+  its interpretation in Sans ("MH 1 → read as bedroom", "11,0 m2 → size 11.0 m²"). Text that was read is
+  never reformatted. Every step with a place on the drawing is drawn in the marks layer in view space (so
+  rotation, mirroring and the header strip keep it aligned): boxes for read text, a dashed outline for a
+  region, each with a small accent caption that repeats the step number ("1 read as bedroom"). Captions
+  of two stacked boxes go above the upper one and below the lower one. Strokes stay 2px at any zoom.
+  Default: all layers visible, other items and the item's own pin tag step back. Hovering a step shows
+  only its layer: the other layers fade to 15% and the rest of the drawing is veiled at 50% (the only
+  dimming besides the reticle). Clicking holds a step (its numeral fills accent), arrow keys move through
+  the steps, Escape releases and then closes. "Step through" shows the layers one by one, 1.1 s each, then
+  all again. An IFC item ends with a "Select in 3D" step that opens the 3D view with the element selected.
+  Steps come from the routes (marks sidecar `steps`); a route that does not record them gets steps derived
+  from its item (detector class and score, OCR text and confidence, IFC name and GUID). The 3D view hides
+  the card. Phone width: the card spans the viewer and its hint line is hidden.
 - Pins: proven items use the overlay's paper blue oklch(0.50 0.13 240), items to check the paper amber,
   so pins hold on the white drawing; a selected pin takes the accent. Number tags are square.
 - Witnesses: one ruled row per format (format code in accent mono, route name, value in mono, tier
@@ -215,6 +235,8 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
 ## Accessibility
 
 - All controls are buttons or links with names; icon-only buttons carry aria-label.
+- The Steps card is a labelled region of buttons with aria-pressed for a held step; its keys (arrows,
+  Escape) do not reach the viewer behind it.
 - Viewer is focusable: arrows pan, plus and minus zoom, 0 fits. R, Shift+R, M and O rotate, mirror and
   restore the orientation (aria-keyshortcuts on the buttons). Panel handles are focusable separators.
 - Status is never colour alone (icon and words); check results say Pass or Fail.
@@ -294,3 +316,23 @@ the only hits left are the acronym codes and the 26px answer.
 
 Not changed on purpose: file names, table numerals, citation numerals and the dataset answer in
 mono (data); the Results tables; the printable order sheet.
+
+## Evidence layers (v2.3, 2026-11-14)
+
+Markus asked to "make the evidence layered": selecting an answer item should show the reasoning step by step,
+which text was read, how it was interpreted and which area it covers. Judges score visualised reasoning a human
+can verify in seconds, so the card puts the steps where the eye already is (over the drawing) instead of
+lengthening the answer panel, and each step is one layer that can be seen alone.
+
+Data: `bpqa/evidence.record_steps(img, n, steps)` stores per item (keyed by the drawn `#n`) a list of
+`{kind, title, text, note, cap, rect | pts}` in canvas pixels; `finish()` scales them with the marks and writes
+them as an optional `steps` object in the `.marks.json` sidecar (older sidecars and readers are unaffected).
+Written by: scan room areas (label box, printed value box with its raw OCR text, traced region), Swiss DXF rooms
+and PDF linework rooms (room name and number boxes, printed area if any as a cross-check, outline; the area
+source says "computed from the outline"). The DXF evidence now also draws each used room's own name, number
+and area text at its DXF position, so the label box points at visible text. Derived in the app: scan symbol
+counts, scan room label counts, IFC elements.
+
+Checked in Chromium at 1440 x 900, 1280 x 800 and 390 x 844: layers align at 0, 90 and 90 + mirror on a scan
+and on a DXF plan, and with the header strip on or off; "Not this one", "Add missed item", the 3D switch and
+resizable panels still work; no horizontal page scroll.
