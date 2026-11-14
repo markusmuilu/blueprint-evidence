@@ -17,6 +17,7 @@ def test_finnish_heights_and_waste_are_read():
     assert _parse_inputs("tiles for the bathroom walls up to 1.2 m with 15% waste")["tile_m"] == 1.2
     assert _parse_inputs("huonekorkeus on 2,6 metriä")["ceiling_m"] == 2.6
     assert parse_baseboard("Paljonko jalkalistaa makuuhuoneisiin 10 % hukalla?")["waste_pct"] == 10.0
+    assert _parse_inputs("Paljonko parkettia makuuhuoneisiin 8 %:n hukalla?")["waste_pct"] == 8.0
     q = P.read("Paljonko lattiamateriaalia tarvitaan makuuhuoneisiin 10 % hukalla?", use_llm=False)
     assert "weak" not in q.extra and q.extra["takeoff"]["material"] == "flooring"
 
@@ -82,3 +83,23 @@ def test_area_of_the_apartment_is_one_flat():
     q = P.read("What is the total area of the apartment?", use_llm=False)
     assert (q.obj, q.variant) == ("room", "total") and q.extra.get("one_apartment")
     assert not P.read("What is the total floor area?", use_llm=False).extra.get("one_apartment")
+
+
+def test_qa_journey_round_3_readings():
+    assert C.plan("What is the total area of the apartments on this floor?") == {"kind": "per_apartment", "types": []}
+    assert C.plan("How many bathrooms per apartment?") == {"kind": "per_apartment", "types": ["bathroom"], "count": True}
+    assert C.plan("How many meeting rooms are on this floor and how big are they?") == {"kind": "list", "types": ["meeting"]}
+    # a material takeoff over two room types is one order, not two counts
+    assert C.plan("How many square meters of parquet for all bedrooms and the living room?") is None
+    assert C.split_parts("How many square metres are the kitchen and the bathroom together?") is None
+    q = P.read("How big is the apartment?", use_llm=False)
+    assert (q.measure, q.obj, q.variant) == ("area", "room", "total") and q.extra["one_apartment"]
+    a = P.read("How big is apartment A?", use_llm=False)
+    assert a.obj == "apartment" and a.apartment == "A"
+
+
+def test_flat_numbering_assigns_rows_to_apartments():
+    from bpqa.answer import Answer
+    rows = C.rows_of(Answer(value=1, items=[{"number": "11-1", "name": "ELUTUBA", "area_m2": 20.0},
+                                            {"number": "201", "name": "TREPIKODA", "area_m2": 9.0}]))
+    assert [r["unit"] for r in rows] == ["11", None] and rows[0]["item"]["unit_from"] == "space numbering"

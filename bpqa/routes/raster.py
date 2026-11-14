@@ -19,6 +19,7 @@ in the route; eval.py --prior reports it as a labelled baseline only.
 """
 from __future__ import annotations
 
+import re
 
 import cv2
 import numpy as np
@@ -57,6 +58,12 @@ def answer(ctx, q) -> Answer:
         # the flat's own printed summary line ("3H+KT+S 73,50 m2"), or the largest printed room area
         from . import raster_summary
         a = (raster_summary.largest_room(ctx, q) if q.variant == "max" else raster_summary.answer(ctx, q))
+        if not a.answered and q.measure == "area" and q.variant == "total":
+            # no flat area printed: the labelled rooms of every type added up, as an estimate that says so
+            b = _rooms_of_every_type(ctx, q)
+            if b.answered:
+                return b
+            a.abstain = f"{a.abstain}; the rooms of every labelled type could not be measured either ({b.abstain})"
         if a.answered or q.measure == "area":
             return a
         if q.measure == "count" and not q.extra.get("apartment_scope"):
@@ -103,6 +110,47 @@ def answer(ctx, q) -> Answer:
             else:
                 first.abstain = f"{first.abstain}; {second.route}: {second.abstain}"
     return first or abstain(ROUTE, f"no raster method for {q.obj}")
+
+
+def _rooms_of_every_type(ctx, q) -> Answer:
+    """'Total floor area' on a scan with no printed flat area: the room-type takeoff over every known type."""
+    from ..compose import ALL_TYPES, _base_query
+    from . import raster_area
+    img = cv2.imread(str(ctx.file))
+    if img is None:
+        return abstain(ROUTE, "unreadable image")
+    q2 = _base_query(ctx.q.question, ALL_TYPES)
+    b = raster_area.takeoff_answer(ctx, q2, img)
+    if b.answered:
+        b.explanation = ("No floor area is printed for the whole flat: the rooms of every labelled type are added up "
+                         "(rooms without a readable label are not included). " + (b.explanation or ""))
+        estimate(b, "the flat's area is not printed; sum of the labelled rooms")
+        return b
+    # one type at a time: the types that are measured are added up, the others are named
+    got, missed, seen, first = [], [], set(), None
+    for t in ALL_TYPES:
+        at = raster_area.takeoff_answer(ctx, _base_query(ctx.q.question, [t]), img)
+        if at.answered:
+            first = first or at
+            for it in at.items or []:
+                if isinstance(it, dict) and isinstance(it.get("area_m2"), (int, float)):
+                    k = (it.get("room"), round(it["area_m2"], 2), tuple(it.get("xyxy") or ()))
+                    if k not in seen:
+                        seen.add(k)
+                        got.append(it)
+        elif at.abstain and not re.search(r"no room (of type|on this floor is labelled)|not found|no room", at.abstain):
+            missed.append(t)
+    if first is None or not got:
+        return b
+    total = round(sum(it["area_m2"] for it in got), 2)
+    expl = (f"{total:.2f} m2: no floor area is printed for the whole flat, so the rooms of every labelled type are added "
+            f"up, one type at a time: " + " + ".join(f"{it.get('room') or 'room'} {it['area_m2']:.2f}" for it in got)
+            + (f". Not measured: {', '.join(missed)}" if missed else "") + ". Rooms without a readable label are not included.")
+    out = Answer(value=total, unit="m2", route=first.route, confidence=0.4, items=got, explanation=expl,
+                 evidence=first.evidence)
+    estimate(out, "the flat's area is not printed; sum of the labelled rooms"
+                  + (f"; not measured: {', '.join(missed)}" if missed else ""))
+    return out
 
 
 LABEL_ROUTE = "raster-ocr-labels"

@@ -89,6 +89,22 @@ question themselves, and they missed:
   (212.4 and 870.29 with the first version of the whole-flat reading). "Total floor area" still answers the floor.
 - **Plain reasons** (`answer.py`): the `public_reason` patterns had literal backspace characters where `\b` was meant,
   so env flags and exception text ("AssertionError: Invalid device id") reached the app; fixed.
+- **QA judge journey, round 3** (`compose.py`, `query.py`, `routes/raster.py`):
+  - Esplanades 2.korrus "What is the total area of the apartments on this floor?": the room areas grouped by flat, the
+    flat read from the space numbering <flat>-<room> (`rows_of`), an estimate that says so: 18 flats (11: 36.17 m2 ...),
+    the stair and corridors listed outside any apartment. Was "no IFC rule for apartment area".
+  - "How many bathrooms per apartment?": a count per apartment over every flat the route knows ("0 in each of the 18
+    apartments", the storey's room names listed: the flats have a TUALETTRUUM, no bathroom), not an area.
+  - Molio 1. Sal "How many meeting rooms are on this floor and how big are they?": the list of the three Møde rooms
+    with areas (68.62 m2 in total); "and how big are they" no longer dropped.
+  - site695 "How many square meters of parquet for all bedrooms and the living room?": one flooring takeoff (67.68 m2,
+    estimate: Wohnen/Essen counted whole, 3 generic Zimmer not typed), not split into "How many bedrooms?". A material
+    or an area unit stops the split into counts.
+  - "How big is the apartment?" (and "hur stor är lägenhet A?", "how big is apartment A?") is an area question; one flat
+    without a letter reads as the whole-flat total. On colorful-11960 it is now a plain cannot (no summary printed, no
+    room area readable on the 240 px scan) instead of "not understood".
+  - Total floor area on a scan with no printed flat area: the labelled rooms of every type added up, one type at a time,
+    as an estimate that names the types not measured (10372: 129.10 m2, sauna not measured).
 - Not reproduced: Tyneside "how many bathrooms" is 1 (estimate, adopted from the shower check), on AY's own branch too
   with today's caches; AY reported 2. The detector's two bathroom boxes now hold Bedroom labels (scores 0.77, 0.32), so
   the label filter drops both.

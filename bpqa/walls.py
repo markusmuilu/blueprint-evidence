@@ -38,7 +38,7 @@ _NUM = r"(\d+(?:[.,]\d+)?)"
 _UNIT = (r"(mm|cm|m|millimet\w*|millimeter\w*|sentti\w*|centimet\w*|zentimeter\w*|centimeter\w*|"
          r"metri\w*|meter\w*|metre\w*)")
 # a percentage, with the sign or the word ("10 %", "10 percent", "10 prosentin")
-_PCT = r"\s*(?:%|percent\b|per cent\b|prosent\w*|prozent\w*|procent\w*)"
+_PCT = r"\s*(?:%(?::n\b)?|percent\b|per cent\b|prosent\w*|prozent\w*|procent\w*)"    # "8 %:n hukalla"
 # waste words after / before the percentage, in every language the rules read. Finnish inflects the stem
 # (hukka, hukkaa, hukalla, hukan; varaus, varauksella). bpqa/baseboard.py uses the same patterns.
 WASTE_AFTER = (rf"{_NUM}{_PCT}\s*(?:of\s*)?(?:waste|cutting|allowance|extra|spare|reserve|huk(?:ka|a)\w*|lisaa|varaa|"

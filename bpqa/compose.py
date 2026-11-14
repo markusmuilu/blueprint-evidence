@@ -107,10 +107,16 @@ def plan(question: str) -> dict | None:
         return None                        # one schedule entry or sheet: the schedule routes read those
     if WHICH_STOREY.search(f) and not COUNT_CUE.search(f):
         return {"kind": "which_storey"}
+    types = _types(question)
+    if types and COUNT_CUE.search(f) and FOLLOW_SIZE.search(f) and not MATERIAL.search(f):
+        # "how many meeting rooms are there and how big are they": the rooms of that type, one row each, with the count
+        return {"kind": "list", "types": types}
     parts = split_parts(question)
     if parts:
         return {"kind": "parts", "parts": parts}
-    types = _types(question)
+    if APTS_AREA.search(f) and not COUNT_CUE.search(f) and not MATERIAL.search(f):
+        # "the total area of the apartments on this floor": the room areas grouped by apartment
+        return {"kind": "per_apartment", "types": types}
     rooms = bool(types) or bool(ROOMS_ANY.search(f))
     if not rooms or MATERIAL.search(f):
         return None
@@ -118,7 +124,7 @@ def plan(question: str) -> dict | None:
     if _parse_inputs(question).get("waste_pct") is not None:
         return None                        # "hukkaa kymmenen prosenttia" is a takeoff's waste, not a share
     if PER_APT.search(f) and not re.search(r"\bhow many (apartments|flats|units)\b", f):
-        return {"kind": "per_apartment", "types": types}
+        return {"kind": "per_apartment", "types": types, **({"count": True} if COUNT_CUE.search(f) else {})}
     if SHARE.search(f) and types:
         return {"kind": "share", "types": types}
     m = COND.search(f)
@@ -147,6 +153,12 @@ def plan(question: str) -> dict | None:
     return None
 
 
+FOLLOW_SIZE = re.compile(r"\b(and|,)\s+(how big|how large|what size|what sizes|what are their (areas|sizes)|their (areas|sizes))\b|"
+                         r"\bja\s+(kuinka|miten)\s+(isoja|suuria|isoa|suurta|iso|suuri)\b|\bja\s+niiden\s+(koko|koot|pinta-ala\w*)\b|"
+                         r"\bund\s+wie\s+gross\b|\boch\s+hur\s+stora\b")
+APTS_AREA = re.compile(r"\b(area|areas|size|sizes|floor area|pinta-ala\w*|flache|yta)\b.*\b(apartments|flats|dwellings|"
+                       r"asuntojen|asunnot|huoneistojen|huoneistot|wohnungen|lagenheter\w*)\b|"
+                       r"\b(apartments|flats|asunnot|huoneistot|wohnungen)\b.*\b(areas?|sizes?|how big|how large|pinta-ala\w*)\b")
 LIST_VERB = re.compile(r"\b(list|enumerate|itemi[sz]e|tabulate|luettele\w*|listaa|liste|auflist\w*|lista|listan)\b")
 ROOMS_THERE = re.compile(r"\b(what|which)\s+(rooms|spaces)\s+(are there|are shown|are drawn|does (it|the \w+|this \w+) have|"
                          r"are (on|in) (this|the) (plan|drawing|floor ?plan|sheet|apartment|flat))\b|"
@@ -193,7 +205,11 @@ def split_parts(question: str) -> list[str] | None:
         for c in clauses:
             out += split_parts(c) or [c]
         return out if 2 <= len(out) <= 4 else None
-    count = bool(COUNT_CUE.search(f))
+    if MATERIAL.search(f) or re.search(r"\bparquet|parket\w*|laminate|lattiamateriaal\w*|\bbaseboards?|skirting|"
+                                       r"jalkalist\w*", f):
+        return None             # "m2 of parquet for the bedrooms and the living room": one takeoff over both types
+    # "how many square metres ..." asks an area, not a count
+    count = bool(COUNT_CUE.search(f)) and not re.search(r"square met|\bm2\b|\bsqm\b|nelio\w*|quadratmeter|kvadratmeter", f)
     # the things named, in order of appearance: element objects, then room types
     found = []
     for name, pat in OBJECTS:
@@ -254,6 +270,9 @@ def rows_of(a: Answer) -> list[dict]:
         unit = it.get("unit") or it.get("apartment")
         if not unit and re.fullmatch(r"[A-Z]\d{2,4}", str(num or nm)):
             unit = str(num or nm)[0]           # IFC numbering A203 / B104: house or flat letter
+        elif not unit and re.fullmatch(r"\d{1,4}-\d{1,3}", str(num or nm).strip()):
+            unit = str(num or nm).strip().split("-")[0]   # <flat>-<room> (Esplanades '3-1 ELUTUBA+KOOK')
+            it = dict(it, unit_from="space numbering")
         out.append({"name": str(name or "unnamed room"), "area": float(area), "unit": unit, "item": it})
     return out
 
@@ -397,6 +416,8 @@ def run(ctx, p: dict, solve_q) -> tuple[Query, Answer]:
     shell.measure, shell.obj, shell.level, shell.scope = "area", "room", q.level, q.scope
     if not base.answered:
         return shell, abstain(base.route or "compose", base.abstain or "the base answer is missing")
+    if kind == "per_apartment" and p.get("count") and types:
+        return shell, _count_per_apartment(ctx, question, types, base, rows, solve_q, shell)
     if not rows:
         return shell, abstain(base.route, f"the route answered {base.value} {base.unit} but did not list the rooms it "
                                           f"used, so a per-room answer cannot be given")
@@ -458,14 +479,58 @@ def run(ctx, p: dict, solve_q) -> tuple[Query, Answer]:
             return shell, abstain(base.route, f"the route does not assign the {noun} to apartments on this drawing "
                                               f"({sum(1 for r in rows if r['unit'] is None)} of {len(rows)} rooms have no "
                                               f"apartment), so a breakdown per apartment cannot be given")
-        lines = [(u, sum(r["area"] for r in rs), rs) for u, rs in sorted(units.items())]
+        lines = [(u, sum(r["area"] for r in rs), rs) for u, rs in sorted(units.items(), key=lambda kv: _unit_key(kv[0]))]
         items = [{"label": f"apartment {u}", "value": round(s, 2), "rooms": [r["name"] for r in rs]} for u, s, rs in lines]
         val = "; ".join(f"{u}: {s:.2f} m2" for u, s, _ in lines)
+        flats = [u for u, _, _ in lines if u != "outside any apartment"]
         a = _derived(base, val, "", items + [r["item"] for r in rows],
-                     f"{noun.capitalize()} per apartment: " + "; ".join(f"{u} {s:.2f} m2 ({len(rs)} room(s))" for u, s, rs in lines)
+                     f"{noun.capitalize()} per apartment ({len(flats)} apartments): "
+                     + "; ".join(f"{u} {s:.2f} m2 ({len(rs)} room(s))" for u, s, rs in lines)
                      + f". {base.explanation or ''}")
+        if any(r["item"].get("unit_from") for r in rows):
+            from .answer import estimate
+            estimate(a, "apartments read from the space numbering <flat>-<room>; the model has no apartment objects")
         return shell, a
     return shell, abstain("compose", f"unknown composite {kind}")
+
+
+def _unit_key(u):
+    s = str(u)
+    return (s == "outside any apartment", int(s) if s.isdigit() else 0, s)
+
+
+def _count_per_apartment(ctx, question: str, types: list[str], base: Answer, rows: list[dict], solve_q, shell) -> Answer:
+    """'How many bathrooms per apartment?': the rooms of the type counted in each apartment, over every apartment the
+    route assigns rooms to (a flat with none of them counts 0)."""
+    from collections import Counter
+    from .answer import estimate
+    shell.measure = "count"
+    noun = _noun(types)
+    _, aa, ra = _base(ctx, question, [], solve_q, per_apartment=True)
+    units = sorted({r["unit"] for r in ra if r["unit"]}, key=_unit_key)
+    if len(units) < 2:
+        return abstain(base.route or aa.route or "compose", f"the route does not assign rooms to apartments on this "
+                                                            f"drawing, so the {noun} cannot be counted per apartment")
+    key = lambda r: (str(r["item"].get("number") or r["name"]), round(r["area"], 1))
+    unit_of = {key(r): r["unit"] for r in ra if r["unit"]}
+    for r in rows:
+        r["unit"] = r["unit"] or unit_of.get(key(r))
+    counts = {u: sum(1 for r in rows if r["unit"] == u) for u in units}
+    outside = sum(1 for r in rows if r["unit"] not in counts)
+    dist = Counter(counts.values())
+    if len(dist) == 1:
+        val = f"{next(iter(dist))} in each of the {len(units)} apartments"
+    else:
+        val = "; ".join(f"{u}: {c}" for u, c in counts.items())
+    expl = (f"{noun.capitalize()} per apartment, {len(units)} apartments ("
+            + ", ".join(f"{c} in {k} apartment{'s' if k != 1 else ''}" for c, k in sorted(dist.items())) + ")"
+            + (f"; {outside} outside any apartment" if outside else "") + ". Per apartment: "
+            + ", ".join(f"{u}: {c}" for u, c in counts.items()) + f". {base.explanation or ''}")
+    items = [{"label": f"apartment {u}", "value": c} for u, c in counts.items()] + [r["item"] for r in rows]
+    a = _derived(base, val, "", items, expl)
+    if any(r["item"].get("unit_from") for r in ra):
+        estimate(a, "apartments read from the space numbering <flat>-<room>; the model has no apartment objects")
+    return a
 
 
 def describe(p: dict) -> str:

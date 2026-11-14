@@ -120,7 +120,8 @@ def test_policy_weak_parses():
     q = "Fliesen für die Wände von Bad und WC mit 10 % Verschnitt"
     from bpqa.walls import parse_inputs
     assert parse_inputs(q)["waste_pct"] == 10
-    assert P.weak(p.parse("Hur stor är lägenhet A?"), "Hur stor är lägenhet A?")      # no parse
+    a = p.parse("Hur stor är lägenhet A?")            # "hur stor" is a size question (integration check, 14 Nov)
+    assert (a.measure, a.obj, a.apartment) == ("area", "apartment", "A") and P.weak(a, "Hur stor är lägenhet A?") is None
     q = "Wie viele Duschen und Badewannen gibt es?"
     assert "both" in P.weak(p.parse(q), q)
     assert P.weak(p.parse("area of the bedroom"), "area of the bedroom") is None       # takeoff, nothing ignored
