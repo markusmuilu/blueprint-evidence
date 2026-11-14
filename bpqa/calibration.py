@@ -74,6 +74,8 @@ def reason(route: str, obj: str | None, value, measure: str | None = "count", ce
     object, for that count, or (with `cell`, a condition the route met) for that condition and count."""
     if not ENABLED or not route.startswith("raster"):
         return None
+    if route == "raster-area" and cell == "printed-agree":
+        return None                   # printed values cross-checked by an agreeing scale (see raster_area.py)
     base = f"{route}|{key(obj, measure)}"
     if cell and _supports(cells().get(f"{base}|{cell}"), value):
         return None

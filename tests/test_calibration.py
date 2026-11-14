@@ -103,7 +103,7 @@ def test_router_never_lets_a_check_raise_a_tier(monkeypatch, tmp_path):
         a.tier = "proven"
         a.checks = [{"name": "doors>=rooms-1", "status": "pass"}]
         return a
-    monkeypatch.setattr(router, "candidate_routes", lambda ctx: [route])
+    monkeypatch.setattr(router, "candidate_routes", lambda ctx, query=None: [route])
     monkeypatch.setattr(router.checking, "apply", bad_checks)
     ctx = router.Context(root=tmp_path, q=q, out_dir=tmp_path / "ev", evidence=False, nemotron=False)
     _, a = router.solve(ctx)
@@ -114,7 +114,7 @@ def test_router_calibrates_a_proven_scan_answer_from_any_raster_route(monkeypatc
     (tmp_path / "data" / "cubicasa5k").mkdir(parents=True)
     q = Question(0, "data/cubicasa5k/x.png", "How many windows are shown on this floor plan?", 8, "count", "count")
     monkeypatch.setattr(router, "candidate_routes",
-                        lambda ctx: [lambda c, qq: Answer(value=5, unit="count", route="raster-detector", tier=None)])
+                        lambda ctx, query=None: [lambda c, qq: Answer(value=5, unit="count", route="raster-detector", tier=None)])
     ctx = router.Context(root=tmp_path, q=q, out_dir=tmp_path / "ev", evidence=False, checks=False, nemotron=False)
     _, a = router.solve(ctx)
     assert a.tier == "estimate" and "70%" in a.tier_reason

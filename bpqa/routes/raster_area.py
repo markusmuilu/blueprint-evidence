@@ -752,6 +752,12 @@ def takeoff_answer(ctx, q, img):
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=conf, items=items, explanation=expl)
         if meas_rows:
             ans.tier, ans.tier_reason = "estimate", f"{len(meas_rows)} room(s) have no printed area: measured region x scale; {bt}"
+        elif sc.known and not OS.is_object(sc) and len(sc.rooms) >= 2 and not conflict and not fb:
+            # every value is printed on the plan, and 2+ printed rooms give the same pixel scale: an OCR misread would
+            # break that agreement. A two-witness check, not a dev measurement (Stoa has no area questions on scans)
+            ans.tier_cell = "printed-agree"
+        if conflict:
+            estimate(ans, f"{len(conflict)} printed value(s) disagree with the measured room by more than 10%")
         if fb:
             estimate(ans, fb)
         head = (f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows
