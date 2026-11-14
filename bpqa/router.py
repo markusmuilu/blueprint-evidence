@@ -28,6 +28,7 @@ from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
 from . import phrasing
+from . import understand
 from . import second_opinion
 from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_scale
 
@@ -144,8 +145,87 @@ def calibrate(a: Answer, query: Query) -> Answer:
     return a
 
 
+def _sig(q: Query) -> tuple:
+    tk = q.extra.get("takeoff") or {}
+    return (q.measure, q.obj, q.variant, q.label, q.room_no, q.apartment, q.level, tuple(sorted(tk.get("types") or ())))
+
+
+# "every route said cannot, and fast": the rule reading may be the wrong question. A cannot that took longer means the
+# routes really looked at the drawing, so the reading is kept.
+FAST_CANNOT_S = float(os.environ.get("FAST_CANNOT_S", "1.0"))
+
+
+def _retry_with_reader(ctx: Context, query: Query, a: Answer, elapsed: float) -> tuple[Query, Answer]:
+    """When every route ended in 'cannot' in under FAST_CANNOT_S with a rule reading the language model was not asked
+    about, ask it once (4 s limit, cached) and solve again with its reading if it differs. The first answer stands
+    when the second reading does not answer either."""
+    from .query import quotes
+    if a.answered or elapsed >= FAST_CANNOT_S or query.parser != "rules" or not (ctx.nemotron and nemo_client.enabled()):
+        return query, a
+    if any(k in query.extra for k in ("llm_reason", "llm_rejected", "parse_cost_orig_usd", "parts")):
+        return query, a
+    question = ctx.q.question
+    if quotes(question) or '"' in question:
+        return query, a                   # the dataset templates: the rules are authoritative
+    q2 = phrasing.llm_parse(phrasing.casual(question))
+    for k in ("parse_cost_usd", "parse_cost_orig_usd", "parse_cached", "llm_rejected"):
+        if k in q2.extra:
+            query.extra[k] = q2.extra[k]
+    if not q2.ok() or _sig(q2) == _sig(query):
+        return query, a
+    understand.finish(q2, question)
+    q2.raw = question
+    q2.extra["rule_parse"] = query.as_dict()
+    q2.extra["llm_reason"] = f"every route said cannot within {elapsed:.1f} s with the rule reading ({query.measure} of {query.obj})"
+    q2r, a2 = _solve(ctx, q2)
+    if a2.answered:
+        return q2r, a2
+    return query, a
+
+
+def _composite(ctx: Context) -> tuple[Query, Answer] | None:
+    """Lists, superlatives, conditions, shares, several parts, per apartment, the sheet's storey (bpqa/compose.py):
+    answered from ordinary answers on the same drawing, or None for a question one route answers."""
+    from . import compose
+    p = compose.plan(ctx.q.question)
+    if p is None:
+        return None
+    if p["kind"] not in ("parts", "which_storey"):
+        # a list or superlative the property lookups already answer (IFC: "what are all the spaces on level 2 with
+        # their areas", "which room is the largest") keeps that answer: names, storeys and heights included
+        rq = phrasing.read(ctx.q.question, use_llm=False)
+        if rq.ok() and (rq.extra.get("compound") or rq.extra.get("unresolved_scope") or rq.measure == "text")                 and text_routes(ctx):
+            tried = list(ctx.tried)
+            q0, a0 = _solve(ctx, rq)
+            if a0.answered and (a0.route or "").startswith(("ifc-props", "pdf-text")):
+                return q0, a0
+            ctx.tried[:] = tried
+
+    def solve_q(text: str, q: Query | None):
+        sub = Context(root=ctx.root, q=Question(qid=ctx.q.qid, path=ctx.q.path, question=text), out_dir=ctx.out_dir,
+                      evidence=ctx.evidence, checks=ctx.checks, pdf_only=ctx.pdf_only, nemotron=ctx.nemotron)
+        r = solve(sub, q)
+        ctx.tried.extend(t for t in sub.tried if t not in ctx.tried)
+        return r
+
+    return compose.run(ctx, p, solve_q)
+
+
 def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
+    import time
+    t0 = time.perf_counter()
+    given = query is not None
+    if not given:
+        comp = _composite(ctx)
+        if comp is not None:
+            return comp
     query, a = _solve(ctx, query)
+    if not given and not a.answered:
+        query, a = _retry_with_reader(ctx, query, a, time.perf_counter() - t0)
+    if a.answered and query.extra.get("unit_out") == "sqft" and a.unit == "m2" and isinstance(a.value, (int, float)):
+        m2 = float(a.value)              # "in square feet": the same answer, converted (1 m2 = 10.7639 sq ft)
+        a.value, a.unit = round(m2 * 10.7639, 1), "sq ft"
+        a.explanation = f"{m2:.2f} m2 = {a.value:g} sq ft (1 m2 = 10.7639 sq ft). {a.explanation or ''}".strip()
     if a.answered and query.measure == "area" and isinstance(a.value, float):
         a.value = round(a.value, 2)     # areas are stated to the centimetre squared (QA 14 Nov: "536.718")
     if a.answered and query.extra.get("scope_resolved"):
@@ -269,6 +349,18 @@ def _solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
             query.extra["scope_resolved"] = f"'ground floor' read as this sheet's storey {st}"
             from .query import attach_qualifier
             query = attach_qualifier(ctx.q.question, query)    # qualifiers are not read under an unresolved scope
+    if query.extra.get("storey_ref") and query.extra.get("unresolved_scope") and not query.level             and not query.extra.get("compound") and not query.extra.get("takeoff", {}).get("scope_named"):
+        # "windows on the top floor", "kellarissa", "im Obergeschoss": the storey of the model it names (bpqa/understand.py)
+        name, note = understand.storey_scope(ctx, query)
+        if name is None:
+            a = abstain("parser", f"not answered: {note}; ask with the storey name")
+            a.final = True
+            return query, a
+        query.level, query.scope = name, "level"
+        query.extra.pop("unresolved_scope", None)
+        query.extra["scope_resolved"] = note
+        from .query import attach_qualifier
+        query = attach_qualifier(ctx.q.question, query)
     if query.extra.get("blocked") and not (query.extra.get("compound") or query.extra.get("unresolved_scope")):
         a = abstain("parser", f"not answered: {query.extra['blocked']}. Ask for a room type the drawings name "
                               f"(bedroom, kitchen, bathroom, WC, office, meeting room ...) or for all rooms")

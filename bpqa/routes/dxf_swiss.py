@@ -549,7 +549,8 @@ def answer(ctx, q) -> Answer:
         return abstain(ROUTE, f"measure {q.measure} not supported on DXF")
 
     if rooms_used:
-        items = [{"number": r["number"], "name": r["name"], "area_m2": fl.room_area(r), "printed": r["area_label"]} for r in rooms_used]
+        items = [{"number": r["number"], "name": r["name"], "area_m2": fl.room_area(r), "printed": r["area_label"],
+                  **({"unit": r["unit"]} if r.get("unit") else {})} for r in rooms_used]
     elif boxes:
         items = [{"n": i + 1, "bbox": [round(v, 2) for v in b]} for i, b in enumerate(boxes)]
 

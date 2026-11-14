@@ -158,11 +158,11 @@ def test_read_policy_with_a_fake_model(monkeypatch):
     q = P.read("How many doors are shown on this floor plan?")
     assert q.parser == "rules" and not calls
     # no rule parse: the reading is the takeoff the rules would build, labelled as read by the model
-    q = P.read("sovrummens golvyta, tack")
+    q = P.read("sovrummens storlek, tack")
     assert q.parser == "llm" and q.extra["takeoff"]["types"] == ["bedroom"]
     assert q.extra["reading"] == "area of rooms typed bedroom, summed" and q.extra["llm_reason"]
     # the model switched off: the rule parse stands, marked weak
-    q = P.read("sovrummens golvyta, tack", use_llm=False)
+    q = P.read("sovrummens storlek, tack", use_llm=False)
     assert q.parser == "rules" and not q.ok() and q.extra["weak"]
     # a reading that is not a measurable question leaves the (empty) rule parse in place
     monkeypatch.setattr(P, "_llm_reading", lambda question: ({"intent": "other"}, "", 0.0, 1.0))
@@ -234,3 +234,11 @@ def test_count_word_typos_and_storey_phrases():
               "doors on the second floor", "doors on level 2"):
         assert STOREY_NAMED.search(s), s
     assert not STOREY_NAMED.search("how many doors are on this floor plan?")
+
+
+def test_swedish_area_words_reach_the_rules():
+    # "sovrummens yta", "koksytan": Swedish area words are rewritten for the rule parse (bpqa/understand.py)
+    for text, t in [("Vad är sovrummens yta?", "bedroom"), ("Vad är köksytan?", "kitchen"),
+                    ("Vad är badrummets yta?", "bathroom"), ("sovrummens golvyta, tack", "bedroom")]:
+        q = P.read(text, use_llm=False)
+        assert q.ok() and q.extra["takeoff"]["types"] == [t], text

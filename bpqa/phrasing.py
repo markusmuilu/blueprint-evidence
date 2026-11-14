@@ -314,6 +314,9 @@ def normalise(d, question: str) -> tuple[dict | None, str]:
     # 13 spaces): count_room / area_room_total become the typed intent, or the reading is rejected
     named = _named_types(question)
     unknown = unknown_room_modifier(question)
+    if not unknown and not named:         # "pukuhuoneiden", "Gaestezimmer": a compound room word the vocabulary lacks
+        from .understand import unknown_compound_room
+        unknown = unknown_compound_room(question)
     if intent == "count_room":
         if len(named) == 1 and next(iter(named)) in _TYPE_TO_COUNT:
             intent = _OBJ_TO_INTENT[_TYPE_TO_COUNT[next(iter(named))]]
@@ -637,7 +640,7 @@ _ROOM_MOD = re.compile(r"\b([a-z]+)[ -](rooms?|spaces?)\b")
 _GENERIC_MODS = set("""a all an and any are as at both different each empty enclosed entire every few for free gross habitable
 heated how in individual indoor interior internal its main many more my named net numbered of on open or other our outdoor
 exterior external residential separate several single such that the their there these this those total two three four
-unheated usable what which whole with your number big bigger biggest large larger largest small smaller smallest
+unheated usable what which whole with your number big bigger biggest large larger largest small smaller smallest floor
 different labelled labeled listed existing remaining have has can finish complete schedule listing including containing showing""".split())
 
 
@@ -651,6 +654,8 @@ def unknown_room_modifier(question: str) -> str | None:
             continue
         if any(rx.search(m.group(0)) for rx in TK._Q_TYPE_RE.values()):
             continue
+        if m.group(0) in TYPE_SYN or re.sub(r"s$", "", m.group(0)) in TYPE_SYN:
+            continue                      # "sleeping rooms": a synonym the reader maps onto a room type
         return m.group(0)
     return None
 
@@ -703,7 +708,8 @@ def weak(q: Query, question: str) -> str | None:
     tk = q.extra.get("takeoff")
     if tk is not None and _unused_numbers(question, tk):
         return "the question gives a height or a waste percentage the rules did not read"
-    return None
+    from . import understand
+    return understand.gaps(q, question)     # a room type or qualifier the question names and the reading lacks
 
 
 UNIT_WORDS = re.compile(r"\bm2\b|\bm3\b|\bsqm\b|\bsq\.? ?m\b|square met|cubic met|neliom|neliot|kuutiom|kuutio|kvadratmeter|"
@@ -738,10 +744,12 @@ BLOCKING = ("the question names a room type the vocabulary does not know; all ro
 def read(question: str, use_llm: bool = True) -> Query:
     """Rules first; the LLM reading only for a missing, unanswerable or weak rule parse. The question first goes
     through `casual()` ("how big r the bedrooms", "dooors"); ordinary text is unchanged."""
+    from . import understand
     raw = question
     question = casual(question)
-    q = RuleParser().parse(question)
+    q = RuleParser().parse(understand.rewrite(question))   # Swedish area words for the rules; the model sees the question
     q.raw = raw
+    understand.finish(q, question)       # storey named in words, a qualifier the adjacency rule missed, sq ft
     why = weak(q, question)
     if why is None or not use_llm:
         if why is not None:
@@ -751,6 +759,7 @@ def read(question: str, use_llm: bool = True) -> Query:
         return q
     q2 = llm_parse(question)
     if q2.ok():
+        understand.finish(q2, question)
         q2.extra["rule_parse"] = q.as_dict() if q.ok() else None
         q2.extra["llm_reason"] = why
         q2.raw = raw
