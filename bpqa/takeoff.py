@@ -123,7 +123,11 @@ AREA_UNIT = re.compile(r"\bm2\b|\bm\^2|square ?met|\bsq\.? ?m\b|\bsqm\b|sq\.? ?f
                        r"quadratmeter|metres? carres|metri quadr")
 # plural "areas" only with a sum word ("how large areas do the bedrooms have combined"): "restrooms along with
 # their areas" lists rooms, it is not a takeoff
+# "how big/large are the bedrooms in total", "kuinka isoja alueita makuuhuoneet ovat yhteensa": size words count as
+# an area only next to a sum word (QA 14 Nov: the Finnish phrasing fell through to Nemotron)
 AREA_WORD = re.compile(r"pinta-ala|\barea\b|\bareas\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|flache|surface|superficie|\bala\b|lattiapinta|lattiaala|floor ?space|"
+                       r"\bhow (?:big|large)\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|"
+                       r"\b(?:kuinka|miten) (?:iso|suur)\w*\b(?=.*\byhteensa\b)|\balue(?:ita|et|en|iden)?\b(?=.*\byhteensa\b)|"
                        r"how much|kuinka paljon|paljonko|wie viel")
 COUNT_Q = re.compile(r"\b(how many|kuinka monta|montako|wie viele|combien|quant[ie])\b")
 NAMED = re.compile(r"\b(named|labell?ed|called|schedule|nimetty|bezeichnung)\b")
