@@ -370,7 +370,9 @@ def build(reading: dict, question: str) -> Query:
         return q
     q.measure, q.obj, q.variant = measure, obj, variant
     qs = quotes(question)
-    if reading.get("level"):
+    # a storey is taken as named only when the question quotes it, as the rules do ("on 'Level 2'"); "this floor",
+    # "the ground floor" stay unresolved and go to the text route
+    if reading.get("level") and any(fold(reading["level"]) == fold(x) for x in qs):
         q.level = reading["level"]
         if q.scope == "drawing":
             q.scope = "level"
@@ -571,8 +573,12 @@ def weak(q: Query, question: str) -> str | None:
     """Why the rule parse is not good enough to stand alone (the LLM reading is asked for), or None."""
     if not q.ok():
         return "the rules read no measurable question"
+    if q.measure == "count" and UNIT_WORDS.search(fold(strip_quoted(question))):
+        return "a count was read, but the question asks in units of area or volume"
     if quotes(question) or '"' in question:
         return None                       # quoted names: the dataset templates, the rules are authoritative
+    if q.measure == "count" and q.obj == "apartment" and not APARTMENTS_PLURAL.search(fold(question)):
+        return "the apartment is the scope of the question, not the thing counted"
     if not shape_known(q):
         return f"no route answers {q.measure} of {q.obj}"
     if q.measure == "area" and q.obj == "room" and q.variant == "total" and _named_types(question):
@@ -596,6 +602,8 @@ UNIT_WORDS = re.compile(r"\bm2\b|\bm3\b|\bsqm\b|\bsq\.? ?m\b|square met|cubic me
                         r"kubikmeter|\bkvm\b|quadratmeter|kubikmeter|\bmetres\b|\bmeters\b|metrina|\bmetreinä\b")
 APARTMENT_LETTER = re.compile(r"\b(?:apartment|flat|wohnung|lagenhet|lägenhet|huoneisto\w*|asunto\w*|appartement|appartamento)\s+([A-Z])\b",
                               re.I)
+APARTMENTS_PLURAL = re.compile(r"apartments|flats|residential units|wohnungen|appartements|appartamenti|lagenheter|"
+                               r"huoneistoa|huoneistoja|asuntoa|asuntoja|units")
 SHOWER_WORDS = re.compile(r"shower|dusche|douche|docce|suihku|dusch")
 BATH_WORDS = re.compile(r"bathtub|badewanne|wanne|baignoire|vasch|kylpyamme|ammetta|ammeit|ammeen|badkar|\bbaths?\b|\btubs?\b")
 _NUMBER_INPUT = re.compile(r"\d+(?:[.,]\d+)?\s*(?:%|cm\b|mm\b|m\b|metr)")

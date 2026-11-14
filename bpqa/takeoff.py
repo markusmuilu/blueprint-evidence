@@ -154,7 +154,7 @@ NAMED = re.compile(r"\b(named|labell?ed|called|schedule|nimetty|bezeichnung)\b")
 SCOPE_ID = re.compile(r"\b(house|building|block|wing|unit|apartment|flat|talo|rakennus|asunto|huoneisto)\s+[a-z0-9]{1,3}\b")
 MATERIALS = {
     "tiles": r"\btil(e|es|ing|ed)\b|laatta|laato|laatoi|laatat|laattoj|klinkkeri|fliese|carrelage|piastrell|kakel",
-    "flooring": r"flooring|floor covering|floor finish|parquet|laminate|vinyl|carpet|linoleum|lattiapaallyste|"
+    "flooring": r"flooring|floor covering|floor finish|parquet|laminat|vinyl|carpet|linoleum|lattiapaallyste|"
                 r"parketti|laminaatti|vinyyli|\bmatto|bodenbelag|parkett|revetement de sol|pavimento",
     "paint": r"\bpaint|maali|maalaus|farbe|peinture|vernice|pittura",
     "waterproofing": r"waterproof|vedeneristy|membrane|abdichtung|etancheite",

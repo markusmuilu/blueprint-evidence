@@ -43,7 +43,7 @@ def fold(s: str) -> str:
 
 # Count / measure cues. Checked on accent-folded lower-case text.
 COUNT = (r"\b(how many|wie viele|wieviele|combien|quant[ie]|kuinka monta|montako|hvor mange|mitu|hur manga|"
-         r"^number of|count the|anzahl|antal|lukumaara|raekna|rakna|zahl mal|zahl die)\b")
+         r"^number of|count the|anzahl|antalet|antal|lukumaara|raekna|rakna|zahl mal|zahl die)\b")
 AREA = r"(area|flache|surface|superficie|nettoareal|areal|pind|pinta-ala|\byta\b|\bytan\b|golvyta)"
 LENGTH = r"(length|lange|laengde|langde|longueur|lunghezza|pituus|wie lang)"
 VOLUME = r"(volume|volumen|volym|tilavuus|maht)"
@@ -86,7 +86,7 @@ COUNT_ROOM_TYPES = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bat
 # or the room (IFC questions: "how many toilets on the ground floor" answered with WC spaces). It is read as
 # the object toilet with extra["toilet_ambiguous"]; each route applies its dataset's convention. A named
 # room ("toilet rooms", "restrooms", "WC-tila") is a WC room.
-WC_ROOM_WORDS = re.compile(r"\b(wc|toilet|toilette)s?[ -]?(rooms?|til[aoe]\w*|raume?|raeume)\b|restrooms?|powder rooms?|"
+WC_ROOM_WORDS = re.compile(r"\b(wc|toilet|toilette|toiletten)s?[ -]?(rooms?|til[aoe]\w*|raume?|raeume)\b|restrooms?|powder rooms?|"
                            r"\bvesso|\bvessa(?!npont)|separate wc|erillis\w* wc|tualettruum|toalett ?rum|\bwc-?rum")
 STOREY_COUNT = re.compile(r"\b(floors|levels|storeys|stories|stockwerke|geschosse|etagen|vaningar|vaningarna)\b|"
                           r"\bhur manga plan\b|\bkerrosten\b|\bkerroksia\b")
