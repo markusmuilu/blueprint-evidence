@@ -6,7 +6,7 @@
 // person's looking time; the number of captures is the number of views a person has to look at.
 async (page) => {
   const base = "http://127.0.0.1:8013/";
-  const out = "C:/Users/Markus/Coding/junction-2026/stoa-wt-verify/out/app/verify_timing/";
+  const out = require("path").join(__dirname, "..", "out", "app", "verify_timing") + "/";
   const cases = [
     ["data/swiss_dwellings/site1000_bldg2082_floor9385.pdf", "How many doors are shown on this floor plan?"],
     ["data/swiss_dwellings/site1000_bldg2082_floor9385.pdf", "How many windows are drawn on this floor plan?"],
