@@ -806,11 +806,19 @@ function focusRect(r, i, focus) {
   if (focus) viewer.focusRect(...r);
   if (focus) openSteps(i);                     // evidence layers: the Steps card for the clicked item
 }
+/* click the selected item again, click empty drawing or press Escape: back to the plain answer (his request) */
+function isSelected(i) { return layers.sel != null && String(layers.sel.i) === String(i); }
+function deselect() { closeSteps(); clearFocus(); lastFocus = null; }
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.defaultPrevented || e.target?.closest?.("input, textarea, select")) return;
+  if (layers.sel != null || lastFocus) deselect();
+});
 function markItem(btn, it, a, n, focus) {
   if (state.mode === "3d" && it && it.guid && window.Viewer3D) {
     if (focus) { document.querySelectorAll("#itemList .item.on").forEach((b) => b.classList.remove("on")); btn.classList.add("on"); Viewer3D.select(it.guid); }
     return;
   }
+  if (focus && isSelected(btn.dataset.i)) { deselect(); return; }
   focusRect(itemRect(it, a, +btn.dataset.i), btn.dataset.i, focus);
 }
 
@@ -1028,7 +1036,7 @@ function bindStepsCard(card) {
     e.stopPropagation();
     const n = layers.sel?.steps.length || 0;
     if (!n) return;
-    if (e.key === "Escape") { if (layers.solo != null) setSolo(null, false); else closeSteps(); e.preventDefault(); return; }
+    if (e.key === "Escape") { if (layers.solo != null) setSolo(null, false); else deselect(); e.preventDefault(); return; }
     const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
     if (!d) return;
     e.preventDefault();
@@ -1081,13 +1089,15 @@ viewer.onOrient(() => { if (layers.sel && state.layer === "evidence") focusSteps
     const tag = [...document.querySelectorAll("#marks .pin[data-i] > span")].find(hit);        // the number tag first,
     const pin = tag ? tag.parentElement : [...document.querySelectorAll("#marks .pin[data-i]:not(.room)")].filter(hit)   // then the smallest box
       .sort((p, q) => p.offsetWidth * p.offsetHeight - q.offsetWidth * q.offsetHeight)[0];
-    down = pin ? { i: pin.dataset.i, x: e.clientX, y: e.clientY } : null;
+    down = { i: pin ? pin.dataset.i : null, x: e.clientX, y: e.clientY };      // i null: a click on empty drawing
   }, true);
   vp.addEventListener("pointerup", (e) => {
     const d = down;
     down = null;
     if (!d || state.addMode || Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 4) return;
+    if (d.i == null) { if (e.target.closest(".viewer-tools, #stepsCard")) return; if (layers.sel != null || lastFocus) deselect(); return; }
     const a = state.shown, row = a && layerRow(a, d.i);
+    if (row && row.rect && isSelected(row.i)) { deselect(); return; }
     if (row && row.rect) { focusRect(row.rect, row.i, false); openSteps(row.i); }
   });
 })();
@@ -1196,7 +1206,7 @@ function renderStrip() {
     list.appendChild(li);
     drawThumb(li.querySelector("canvas"), img, r.rect, removed, r.mark && r.mark.kind === "poly" ? { pts: r.mark.pts, off, tone: r.tone } : null);
     const t = li.querySelector(".thumb");
-    t.addEventListener("click", () => focusRect(r.rect, r.i, true));
+    t.addEventListener("click", () => { if (isSelected(r.i)) deselect(); else focusRect(r.rect, r.i, true); });
     t.addEventListener("mouseenter", () => focusRect(r.rect, r.i, false));
   }
   list.querySelectorAll(".tx[data-n]").forEach((b) => b.addEventListener("click", () => {
