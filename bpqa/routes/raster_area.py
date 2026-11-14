@@ -227,6 +227,10 @@ def _center(b):
 def read_rooms(toks: list[dict], min_conf: float = 0.5) -> tuple[list[Room], list[dict]]:
     """Printed areas attached to room labels, and room labels without a printed area."""
     toks = [t for t in toks if t["conf"] >= min_conf and not t.get("mirror")]
+    from .raster_summary import summary_tokens        # the flat's printed summary ("3H+KT+S 73,50 m2") is not a room
+    skip = summary_tokens(toks)
+    if skip:
+        toks = [t for t in toks if id(t) not in skip]
     areas, labels = [], []
     for t in toks:
         b = quad_box(t["quad"])
@@ -1113,9 +1117,9 @@ def takeoff_answer(ctx, q, img):
         if bb:
             head = baseboard.answer_line(total, totals, ROUTE, "perimeter of measured regions, doors not deducted")
         else:
-          head = (f"Answer [ESTIMATE]: {total:.2f} m2 = floor {totals['floor_m2'] or 0:.2f} + walls {totals['walls_m2']:.2f}"
-                f" + {totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}   route: {ROUTE}") if want_floor else                (f"Answer [ESTIMATE]: {total:.2f} m2 = walls {totals['walls_m2']:.2f} + {totals['waste_pct']:g}% waste "
-                f"{totals['waste_m2']:.2f}   route: {ROUTE}")
+          wst = (lambda t: f" + {t['waste_pct']:g}% waste {t['waste_m2']:.2f}" if t.get("waste_in_value", True) else "")(totals)
+          head = (f"Answer [ESTIMATE]: {total:.2f} m2 = floor {totals['floor_m2'] or 0:.2f} + walls {totals['walls_m2']:.2f}{wst}   route: {ROUTE}"
+                  if want_floor else f"Answer [ESTIMATE]: {total:.2f} m2 = walls {totals['walls_m2']:.2f}{wst}   route: {ROUTE}")
     else:
         total, items, expl = takeoff.summary([{k: v for k, v in r.items() if k not in ("room", "kind")} for r in rows], tk)
         for it, r in zip(items, rows):

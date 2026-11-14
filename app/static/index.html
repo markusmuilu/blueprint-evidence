@@ -89,7 +89,7 @@
       <label class="drop" id="drop">
         <input type="file" id="fileInput" multiple accept=".pdf,.dxf,.ifc,.png,.jpg,.jpeg,.tif,.tiff,.svg,.dwg">
         <svg class="ico"><use href="#i-upload"/></svg>
-        <span><strong>Upload a drawing</strong><br><span class="meta">PDF, DXF, IFC, PNG, JPEG, TIFF or SVG, up to 30 MB each. Drop several at once: each becomes its own drawing, except a PDF and DXF with the same name, which are used together.</span></span>
+        <span><strong>Upload a drawing</strong><br><span class="meta">PDF, DXF, IFC, PNG, JPEG, TIFF or SVG, up to 200 MB each. Drop several at once: each becomes its own drawing, except a PDF and DXF with the same name, which are used together.</span></span>
       </label>
       <div class="uploads" id="uploadList" hidden></div>
 
@@ -109,6 +109,7 @@
         <div class="drawing-head">
           <h1 class="h-title mono" id="drawTitle">No drawing selected</h1>
           <p class="meta" id="drawMeta">Pick one from the library or upload your own.</p>
+          <p class="meta read-status" id="readStatus" role="status" aria-live="polite"></p>
         </div>
 
         <form class="ask" id="askForm" autocomplete="off">

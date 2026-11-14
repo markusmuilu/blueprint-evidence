@@ -65,6 +65,45 @@ Final evaluation uses unseen drawings and harder questions. Four changes, kept o
   (hitos "toilets on the ground floor": wrong before and after; after the last fix it reads storey u.etg and
   counts 11 WC spaces, gold 12, the RWC room is not typed as a WC). Paraphrase benchmark unchanged (tune 98.2%,
   held-out 98.4%), with fewer model calls.
+## 2026-11-14 evening: QA fixes, branch `qa-fixes-evening`
+
+Before and after, one line each (live questions, same drawings):
+
+| # | Question | Before | After |
+|---|---|---|---|
+| 1 | 10372 "Paljonko lattiamateriaalia tarvitaan makuuhuoneisiin 10 % hukalla?" | 33.3 (no waste) | 36.63 (33.30 + 10% waste) |
+| 2 | FZK "Paljonko seinälaattaa kylpyhuoneeseen 1,2 metrin korkeuteen?" | 15.13, text "waste 10% = 1.51" | 16.64 order quantity, text and value agree |
+| 3 | colorful-11196 "total floor area" / "how many rooms in the flat" | Nemotron estimate / no answer | 73.5 m2 and 3 rooms, proven, from the printed "3H+KT+S 73,50 m2" |
+| 4 | 10372 "Mikä on suurin huone?" | Nemotron estimate 43.8 | 43.8 m2 (OH) from the printed areas, estimate with the reason |
+| 5 | rwth digital hub ventilation "How long are the ducts?" | "no property matching 'long'" | 794.72 m of duct, 595 segments, by system and size |
+
+- **Waste in every takeoff total** (`takeoff.settle`, called once in `router._solve`). The language-model reading keeps a
+  stated waste under `inputs`, where `takeoff.summary` never looked, so the raster route (and every other route) dropped
+  it. `settle` copies it to `waste_pct`, or reads it from the question text with the same rule the rule parser uses
+  (`waste_from_question`); the default 10% still applies only to order/buy wording for a material.
+- **Value and explanation agree** (`walls.py`). An order quantity is asked by order/buy wording, a stated waste, or a
+  material word (tiles, flooring, Finnish compounds like "seinälaattaa"); "need" or "tarvitaan" alone is a net area. When
+  the value is net the explanation and the answer line state no waste figure (`totals.waste_in_value`); the UI no longer
+  takes waste off a removed room when the value had none. `tests/test_waste_consistency.py` asserts the first number of
+  the explanation equals the value in both modes.
+- **Apartment summary on scans** (`routes/raster_summary.py`). "3H+KT+S 73,50 m2" is parsed as its own source: rooms,
+  kitchen type, other spaces, area (in the same text box or the one next to it, and larger than every printed room). It was
+  read as a room "KT" of 73.5 m2 in the scale and sums; `read_rooms` now leaves it out. Proven when the printed room areas
+  do not add up to more than the flat's (calibration cell `printed-summary`), else an estimate. Misreads like "4.2H" and
+  "B34H" are rejected, not guessed. Dataset: no area or room questions on CubiCasa in questions.jsonl (counts only), so
+  there is no gold for this; more than 50 plans in the OCR cache print such a line.
+- **Largest room on scans** (`raster_summary.largest_room`): the biggest printed room area, balconies not counted. Proven
+  only when the flat's printed area confirms no room's area was missed; an estimate otherwise.
+- **Ducts** (`piping.py`): IfcDuctSegment and IfcDuctFitting (IFC2x3: flow segments of a duct type), length from the Qto
+  Length, else a Length property, else geometry; by system and by size (width x height); counts. A question naming pipes
+  and ducts together stays with the property route.
+- **UI:** tour text mentions the 3D view and that scans are the hardest; Export saves a pending correction first and says so
+  when nothing is saved (it downloaded a header-only file); the CSV column is `cost_eur` (converted like the cost
+  meter); the order-sheet CSV keeps the assumed-height mark; the Ask several selection box has a fixed height so the
+  library no longer shifts while ticking.
+- Dataset parses unchanged: `query.parse` and `parse_piping` over the 6,789 distinct dataset questions, before and after,
+  identical. Dev eval on swiss_dwellings, ifc_models and ifc_bench (28,839 questions): every answer and tier identical before and after (Swiss 99.3%, IFC models 75.8%, IFC bench 33.5% accuracy).
+
 
 ## 2026-11-14: rooms on generic drawings, preview, plain reasons, branch `generic-rooms`
 

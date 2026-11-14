@@ -355,7 +355,7 @@ drop.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.fi
 $("#fileInput").addEventListener("change", (e) => { if (e.target.files.length) upload(e.target.files); e.target.value = ""; });
 
 /* Files that share a stem (plan.pdf + plan.dxf) are twins of one drawing and go in one request; every other
-   file is its own drawing. One request per drawing keeps each under the 30 MB request limit. */
+   file is its own drawing. One request per drawing keeps each under the 200 MB request limit. */
 const UPLOAD_TYPES = "PDF, DXF, IFC, PNG, JPEG, TIFF or SVG";
 const UPLOADS_KEY = "bpe-uploads", UPLOAD_KEEP_MS = 24 * 60 * 60 * 1000 - 60 * 1000;   // the server deletes an upload after 24 hours
 const stemOf = (n) => { const i = n.lastIndexOf("."); return (i > 0 ? n.slice(0, i) : n).toLowerCase(); };
@@ -429,25 +429,22 @@ async function upload(fileList) {
 /* the background reading started at upload (app/precompute.py): a status line under the drawing title */
 let readT = null;
 function showReading(st) {
-  let el = $("#readStatus");
-  if (!el) {
-    el = document.createElement("p");
-    el.id = "readStatus";
-    el.className = "meta read-status";
-    el.setAttribute("role", "status");
-    $("#drawMeta").after(el);
-  }
+  const el = $("#readStatus");        // always in the page, so the line coming and going never shifts the layout
   el.textContent = st ? st.message : "";
-  el.hidden = !st;
+  el.title = st ? st.message : "";
 }
 function watchReading(path, first) {
   clearTimeout(readT);
+  let misses = 0;
   const tick = (st) => {
     if (state.drawing?.path !== path) { showReading(null); return; }   // another drawing was opened
     showReading(st);
     if (st.state === "queued" || st.state === "running") {
       readT = setTimeout(async () => {
-        try { tick(await api("/api/precompute?path=" + encodeURIComponent(path))); } catch { showReading(null); }
+        // a failed poll keeps the last line and tries again; only repeated failures drop it
+        let next = null;
+        try { next = await api("/api/precompute?path=" + encodeURIComponent(path)); misses = 0; } catch { misses++; }
+        if (next) tick(next); else if (misses > 5) showReading(null); else tick(st);
       }, 2000);
     } else {
       readT = setTimeout(() => showReading(null), st.state === "done" ? 6000 : 12000);
@@ -718,9 +715,18 @@ const viewer = (() => {
     if (map[e.key]) { e.preventDefault(); map[e.key](); }
   });
   /* orientation shortcuts work anywhere on the Ask view except while typing: R, Shift+R, M, O */
+  /* ... nor for 2.5 s after the question field was typed in or left, or the bar above the viewer changed size: a
+     layout shift can put the click on the viewer while the person is already typing */
+  const qf = $("#question");
+  let qLeftAt = 0;
+  qf.addEventListener("blur", () => { qLeftAt = Date.now(); });
+  qf.addEventListener("input", () => { qLeftAt = Date.now(); });
+  document.querySelector("#askForm")?.addEventListener("pointerdown", () => { qLeftAt = Date.now(); });
+  new ResizeObserver(() => { qLeftAt = Date.now(); }).observe(document.querySelector(".workbar"));   // the field moved
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+    if (document.activeElement === qf || Date.now() - qLeftAt < 2500) return;
     if ($("#view-ask").hidden || vp.classList.contains("mode-3d") || !img.naturalWidth) return;
     const key = e.key.toLowerCase();
     if (key === "r") turn(e.shiftKey ? -1 : 1);
@@ -1312,7 +1318,7 @@ function correctedValue(a) {
   // a removed room takes out its own floor and wall area plus the waste on them (QA 14 Nov: a tiling total did
   // not change after "Not this one" because the value includes walls and waste, not just the floor area)
   const tot = (a.items || []).find((it) => it && it.totals)?.totals || null;
-  const w = tot && tot.waste_pct ? tot.waste_pct / 100 : 0;
+  const w = tot && tot.waste_pct && tot.waste_in_value !== false ? tot.waste_pct / 100 : 0;
   const floorCounts = !tot || tot.floor_m2 == null || tot.floor_m2 > 0;
   let v = a.value;
   for (const r of checkItems(a)) {
@@ -1347,7 +1353,7 @@ function renderStrip() {
     ${own ? `<span class="corr" id="corrLine">${esc(corrLine(a))}</span>
       ${isCount(a) ? `<button class="btn btn-quiet" type="button" id="addMode" aria-pressed="${state.addMode}">${icon("plus")}Add missed item</button>` : ""}
       <button class="btn" type="button" id="saveCorr" ${corrected() ? "" : "disabled"}>Save correction</button>
-      <a class="btn btn-quiet" href="/api/corrections.csv" download>${icon("download")}Export</a>`
+      <a class="btn btn-quiet" id="exportCorr" href="/api/corrections.csv" download>${icon("download")}Export</a>`
       : `<span class="meta">${esc(a.format)} witness. Corrections apply to the answer.</span>
       <button class="btn btn-quiet" type="button" id="backToAnswer">Back to the answer</button>`}`;
   const img = viewer.img;
@@ -1388,6 +1394,7 @@ function renderStrip() {
   }));
   $("#addMode")?.addEventListener("click", () => setAddMode(!state.addMode));
   $("#saveCorr")?.addEventListener("click", saveCorrection);
+  $("#exportCorr")?.addEventListener("click", exportCorrections);
   $("#backToAnswer")?.addEventListener("click", () => showEvidence(state.answer, false));
 }
 function drawThumb(cv, img, r, dim, poly) {
@@ -1469,6 +1476,20 @@ async function saveCorrection() {
     });
     toast(`Correction saved, ${r.n} on record. Export downloads them as CSV.`);
   } catch (e) { toast("Could not save: " + e.message, true); }
+}
+
+/* Export: an unsaved correction is saved first, and an empty record says so instead of downloading a header-only file */
+async function exportCorrections(e) {
+  const link = e.currentTarget;
+  if (link.dataset.go) { delete link.dataset.go; return; }
+  e.preventDefault();
+  try {
+    if (corrected()) await saveCorrection();
+    const r = await api("/api/corrections");
+    if (!(r.corrections || []).length) { toast("No corrections saved yet. Remove or add items, then Save correction.", true); return; }
+    link.dataset.go = "1";
+    link.click();
+  } catch (err) { toast("Could not export: " + err.message, true); }
 }
 
 /* ================================================================ ask */
@@ -1843,14 +1864,14 @@ async function loadWitnessSummary() {
 }
 
 /* ---------------------------------------------------------------- CSV */
-const CSV_COLS = ["drawing", "question", "value", "unit", "status", "route", "confidence", "checks_passed", "checks_failed", "cost_usd", "response_ms", "evidence", "scale_assumption"];
+const CSV_COLS = ["drawing", "question", "value", "unit", "status", "route", "confidence", "checks_passed", "checks_failed", "cost_eur", "response_ms", "evidence", "scale_assumption"];
 function csvRow(a) {
   const checks = a.checks || [];
   const vals = {
     drawing: a.path, question: a.question, value: a.status === "cannot" ? "" : a.value, unit: a.unit,
     status: a.status === "cannot" ? "cannot prove: " + (a.abstain || "") : a.status, route: a.route,
     confidence: a.confidence, checks_passed: checks.filter((c) => c.status === "pass").length,
-    checks_failed: checks.filter((c) => c.status === "fail").length, cost_usd: Number(a.cost_usd || 0).toFixed(4),
+    checks_failed: checks.filter((c) => c.status === "fail").length, cost_eur: (Number(a.cost_usd || 0) / USD_PER_EUR).toFixed(4),
     response_ms: Math.round(a.time_ms), evidence: a.evidence_id ? location.origin + "/api/evidence/" + a.evidence_id + ".png" : "",
     scale_assumption: assumeLabel(a),     // scale-assumption block: the size an approximation used, if not the default
   };
@@ -2686,9 +2707,9 @@ async function compareOpen(x) {
     return t && t.offsetParent ? t.closest(".try") : $("#exampleChips");
   };
   const STEPS = [
-    { el: () => $("#drawList"), side: ["right", "left"], text: "Drawings are grouped by type. Open a group to see its drawings." },
+    { el: () => $("#drawList"), side: ["right", "left"], text: "Drawings are grouped by type. Open a group to see its drawings. Building models also open in a 3D view." },
     { el: () => $("#drop"), side: ["right", "left"], text: "Add your own drawing here. Uploads are deleted after 24 hours." },
-    { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language." },
+    { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language. Scanned plans are the hardest. Try those too." },
     { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
     { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
     { el: () => $('.rail-btn[data-view="compare"]'), side: ["right", "bottom"], text: "Compare shows prepared questions answered by a large vision model alone and by this app, with totals." },   // compare-tab

@@ -27,7 +27,7 @@ DEMO = Path(os.environ.get("STOA_DATA") or HERE / "demo_data")
 os.environ["STOA_DATA"] = str(DEMO)
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
-MAX_BYTES = int(os.environ.get("BPE_MAX_UPLOAD_MB", "30")) * 1024 * 1024
+MAX_BYTES = int(os.environ.get("BPE_MAX_UPLOAD_MB", "200")) * 1024 * 1024
 UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff", "svg", "dwg"}   # tif/svg become PNG; dwg needs dwg2dxf, else refused
 UPLOAD_TTL = int(os.environ.get("BPE_UPLOAD_TTL", "900"))      # seconds an upload is kept
 
@@ -239,6 +239,16 @@ CREDIT_JS = r"""
   };
 })();
 """
+
+
+@app.middleware("http")
+async def _container_header(request, call_next):
+    """Which Modal container answered, for telling apart requests that landed on different containers."""
+    resp = await call_next(request)
+    tid = os.environ.get("MODAL_TASK_ID")
+    if tid:
+        resp.headers["X-Container"] = tid[-8:]
+    return resp
 
 
 @app.get("/deploy/credits.js", include_in_schema=False)

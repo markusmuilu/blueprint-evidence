@@ -470,7 +470,7 @@ async function showCard(guid, hit) {
   card.innerHTML = `<div class="v3d-card-head"><span class="mono v3d-cls">${esc(cls)}</span>
       <button class="tool" type="button" id="v3dCardClose" aria-label="Close the element details"><svg class="ico"><use href="#i-close"/></svg></button></div>
     <p class="v3d-name">${esc(hit.row[2] || "(no name)")}</p>
-    <dl class="v3d-dl"><dt>GlobalId</dt><dd class="mono">${esc(guid)}</dd><dt>Storey</dt><dd>${esc(hit.floor.name)}</dd><dt>Role</dt><dd>${esc(role)}</dd></dl>
+    <dl class="v3d-dl"><dt>GlobalId</dt><dd class="mono">${esc(guid)}</dd><dt>Storey</dt><dd>${esc(storeyLabel(hit.floor.name))}</dd><dt>Role</dt><dd>${esc(role)}</dd></dl>
     <div id="v3dProps" class="meta">Reading properties</div>`;
   card.hidden = false;
   $("#v3dCardClose").addEventListener("click", () => select(null));
@@ -512,7 +512,7 @@ function renderPanel() {
     <ul class="v3d-floors" aria-label="Storeys">${V.floors.slice().reverse().map((fl) => {
       const n = (fl.entry.solid?.elements.length || 0);
       const hot = V.hiFloors?.has(fl);
-      return `<li><label class="check${hot ? " hot" : ""}"><input type="checkbox" data-f="${fl.i}" ${fl.visible ? "checked" : ""}> <span>${esc(fl.name)}</span></label>
+      return `<li><label class="check${hot ? " hot" : ""}"><input type="checkbox" data-f="${fl.i}" ${fl.visible ? "checked" : ""}> <span>${esc(storeyLabel(fl.name))}</span></label>
         <button class="v3d-only" type="button" data-only="${fl.i}" title="Show only this storey">only</button><span class="mono meta">${n}</span></li>`;
     }).join("")}</ul>
     <button class="btn btn-quiet" type="button" id="v3dHome">Reset view</button>`;
@@ -568,3 +568,21 @@ window.Viewer3D = {
   resize,
 };
 window.dispatchEvent(new Event("v3d-ready"));
+
+/* Storey names in English with the model's own name kept: "5th floor (5.korrus)", "Basement (Kælder)" (his request, 14 Nov) */
+function ordinal(n) { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+function storeyLabel(name) {
+  const raw = String(name || "").trim();
+  const low = raw.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+  let en = null;
+  const num = low.match(/^(-?\d+)\s*[.]?\s*(korrus|kerros|sal|etage|etg|floor|og|stock|plan|vaning|krs)\b/) || low.match(/^(korrus|kerros|floor|level|etage)\s*(-?\d+)/);
+  if (num) { const n = parseInt(num[1].match(/-?\d+/) ? num[1] : num[2], 10); en = n === 0 ? "Ground floor" : n < 0 ? `Basement ${-n}` : `${ordinal(n)} floor`; }
+  else if (/kaelder|kælder|kelder|keller|kellari|basement|untergeschoss|souterrain|kjeller/.test(low)) en = "Basement";
+  else if (/vundament|fundament|foundation|perustus/.test(low)) en = "Foundation";
+  else if (/^tag\b|katus|katto|roof|dach(?!geschoss)|vesikatto/.test(low)) en = "Roof";
+  else if (/erdgeschoss|grundplan|stueplan|maantasokerros|ground|^eg\b|bottenvaning/.test(low)) en = "Ground floor";
+  else if (/dachgeschoss|ullakko|attic|loft/.test(low)) en = "Attic";
+  else if (/obergeschoss|^og\b/.test(low)) en = "Upper floor";
+  if (!en || en.toLowerCase() === low) return raw;
+  return `${en} (${raw})`;
+}

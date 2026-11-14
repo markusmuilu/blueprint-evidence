@@ -292,7 +292,8 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .workbar { display: grid; gap: var(--s3); padding: var(--s3) var(--s5); border-bottom: 1px solid var(--rule); background: var(--bg); }
 .drawing-head { display: grid; gap: 0; }
 .drawing-head .meta { font-size: var(--fs-xs); }
-.drawing-head .read-status { color: var(--accent); }
+/* a fixed slot (two lines): the progress line appearing or going away must not move the question field */
+.drawing-head .read-status { color: var(--accent); height: 2.7em; line-height: 1.35; margin: 0; overflow: hidden; }
 .ask-row { display: flex; gap: var(--s2); }
 .ask-row input { min-height: 36px; font-size: var(--fs-base); }
 .ask-row .btn { min-height: 36px; }
@@ -932,8 +933,8 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .multi-line { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); color: var(--fg); }
 .multi-acts { display: inline-flex; gap: var(--s1); }
 .multi-acts .btn { min-height: 24px; padding: 0 var(--s1); }
-.multi-list { list-style: none; margin: 0; padding: 0; max-height: 112px; overflow-y: auto; }
-.multi-list:empty { display: none; }
+.multi-list { list-style: none; margin: 0; padding: 0; height: 112px; overflow-y: auto; }
+.multi-list:empty::before { content: "Selected drawings appear here"; display: block; padding: var(--s1) 0; color: var(--muted); font-size: var(--fs-xs); }  /* a fixed-height box: the library below must not shift while ticking */
 .multi-list li { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); border-top: 1px solid var(--rule); }
 .multi-list .nm { font-family: var(--mono); font-size: var(--fs-xs); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .multi-list .x { flex: none; width: 24px; height: 24px; border: 0; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
@@ -951,7 +952,7 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .picker.multi .draw-item[aria-selected="true"] .nm { color: inherit; }
 .picker.multi .draw-item.picked .nm { color: var(--accent); }
 
-.multi-note { margin: 0; font-size: var(--fs-sm); color: var(--fg-2); }
+.multi-note { margin: 0; min-height: 2.6em; font-size: var(--fs-sm); color: var(--fg-2); }
 .multi-note[hidden] { display: none; }
 .ask-opts { display: grid; gap: var(--s1); }
 #askBtn { min-width: 72px; white-space: nowrap; }
