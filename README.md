@@ -595,6 +595,18 @@ Room-label questions on CubiCasa (bathrooms, kitchens, saunas, bedrooms) are mos
 balconies and WC rooms are mostly wrong. Those answers are `tier: "estimate"` and the evidence image shows the
 boxes the model gave.
 
+## Reproduce the results
+
+What you need:
+- **This repository** and Python 3.11: `pip install -r requirements.txt` (CPU is enough; a CUDA build of torch only speeds up the scan detectors).
+- **The model weights** (`models/`, about 45 MB: the scan detectors and the room-type model, trained here on CubiCasa5K). They are attached to the GitHub release `models-v1` as `blueprint-evidence-models.zip`; unzip it in the repository root so the files land in `models/`. Licence: the weights are derived from CubiCasa5K (CC BY-NC-SA 4.0) and trained with Ultralytics YOLO (AGPL-3.0), so they are for non-commercial use under those terms, not MIT.
+- **The Stoa challenge dataset** (`junction-dataset`, with `questions.jsonl` and the drawings). It is not in this repository; it belongs to the challenge. Point `--data` at it or set `STOA_DATA`.
+- **No API key is needed** for the published numbers: they were measured with the language-model question reader off (`eval.py` default). An NVIDIA Build key (`python set_nvidia_key.py`, stored in a git-ignored `.env`) only enables the reader for unusual phrasings in the app.
+
+Two ways to check the numbers:
+1. **Re-score our published answers** (minutes): `python tools/score_results.py <path to junction-dataset> results` joins `results/*.csv` with the dataset's gold by question id and re-scores with `eval.py`'s own rule. Expected: 84.8% right overall, Proven 17,497 answers at 98.7% right.
+2. **Re-run the system** (hours): `python eval.py --data <path to junction-dataset> --split test`. On a 16-core PC with the OCR and detector caches warm it took about 1.5 hours run as six shards (`--shard K/6`, then `--merge`); from a cold start most of the extra time is OCR of the scans. The measured commit for the published numbers is 8d5f0bb.
+
 ## Run it
 
 Windows, Python 3.11:
