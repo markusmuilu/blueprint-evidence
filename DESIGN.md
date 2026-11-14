@@ -1,7 +1,9 @@
 # DESIGN.md - Blueprint Evidence
 
 The design system for the demo app in `app/static/`. Tokens live at the top of `app/static/app.css`;
-if the CSS and this file disagree, this file wins.
+if the CSS and this file disagree, this file wins. Version 2 (2026-11-14) replaces the first build's
+pills, chips and tinted boxes with ruled tables and plain coloured text; the audit that drove it is
+at the end.
 
 ## Context
 
@@ -12,124 +14,138 @@ if the CSS and this file disagree, this file wins.
   drawing and check the answer against the drawing.
 - Adjectives: exact, calm, accountable, dense.
 - Visual translations: exact -> mono tabular figures for every number, no rounding in the UI that
-  the route did not do; calm -> one accent, no motion except state changes; accountable -> every
-  claim in the answer panel is a numbered line, and counted items can be located on the drawing;
-  dense -> 13 to 14 px body, tight rows, no decorative cards.
-- Aesthetic essence: night drafting table.
-- References: admire the layout of construction platforms seen at the event booth (icon rail, main
-  drawing view, right-hand detail panel with "where" and "why"), Linear and Sentry for density with
-  restraint; avoid generic AI dashboards (gradient hero metrics, card grids, glass).
+  the route did not do; calm -> one accent, hairline rules instead of boxes, no motion except state
+  changes; accountable -> every claim in the answer panel is a numbered line, and counted items can
+  be located on the drawing; dense -> 13 to 14 px body, 5px row padding, no decorative containers.
+- Aesthetic essence: drawing office register.
+- References: construction platforms seen at the event booth (a dense professional tool: icon rail,
+  main drawing view, right-hand detail panel with plain text labels such as "Where" and "Why", thin
+  rules, very little decoration). We take the feel, not the brand. Also Linear and Sentry for density
+  with restraint. Avoid generic AI dashboards: pill chips, tinted status badges, card grids, gradient
+  hero metrics, glass.
 - Mode: dark only. Chosen from the use scene (a dim exhibition hall and site offices in the evening;
   the drawings themselves are white and should be the brightest thing on screen), not by category.
-- Density: dense. Constraints: plain HTML, CSS and JS, no build step, served by FastAPI.
+- Constraints: plain HTML, CSS and JS, no build step, served by FastAPI.
 
 ## Aesthetic
 
-- Direction: bespoke, "drafting table": slate blue-black surfaces, white drawings as the light
-  source, one blueprint-blue accent for interaction and citations.
-- Defining trait: the drawing is the hero; chrome stays below it in lightness and saturation.
-- Signature move: numbered evidence citations. The "Why" list is numbered like footnotes in mono
-  boxed numerals; counted items carry the same `#n` as the boxes drawn on the overlay, and selecting
-  one puts a reticle on that item in the viewer and dims everything else.
+- Direction: an engineering register. Slate blue-black surfaces, white drawings as the light source,
+  structure from type and 1px hairlines, one blueprint-blue accent.
+- Defining trait: the drawing is the hero; chrome stays below it in lightness and saturation, and
+  nothing in the chrome is a rounded box unless it floats over the drawing.
+- Signature move: numbered evidence citations. The "Why" list is numbered like footnotes in square
+  mono numerals; counted items carry the same `#n` as the boxes drawn on the overlay and the crops in
+  the verification strip, and selecting one puts a reticle on that item in the viewer.
 
 ## Typography
 
 - UI: IBM Plex Sans (Google Fonts, OFL), 400/500/600.
-- Figures, file names, codes, citations: IBM Plex Mono (Google Fonts, OFL), 400/500. Mono is used
-  for data and measurement only, never as decoration.
+- Figures, file names, codes, citations: IBM Plex Mono (Google Fonts, OFL), 400/500. Mono is for data
+  and measurement only, never decoration. Table header labels stay in Sans even over numeric columns.
 - One superfamily on purpose: Operate surfaces read better with one voice.
-- Scale: ratio about 1.2, fixed px (product UI, not fluid).
+- Scale: ratio about 1.2, fixed px. Hierarchy comes from size and weight: section headings are fg
+  600, labels are muted 500 at 12px, values are fg 400.
 
 | step | size | use |
 |---|---|---|
-| xs | 12px | labels, table headers, meta |
-| sm | 13px | panel text, lists, table cells |
-| base | 14px | body, inputs |
-| md | 17px | drawing title, headline sentence |
-| lg | 20px | unit next to the answer |
+| xs | 12px | labels, table headers, meta, notes |
+| sm | 13px | panel text, ruled rows, section headings |
+| base | 14px | body, inputs, a text answer |
+| md | 16px | drawing title, Results section headings, headline sentence |
+| lg | 20px | unit next to the answer, order quantity |
 | xl | 24px | page title |
-| display | 44px | the answer value (mono) |
+| display | 40px | the numeric answer (mono) |
+
+- Sentence case everywhere; no uppercase labels. Check results read "Pass" and "Fail".
 
 ## Color
 
-- Strategy: blueprint blue fits the product name and the trade; hue 235 sits outside the
-  indigo/violet band (250 to 320) that marks generic AI UI. Status colors are reserved for answer
-  tiers and checks and always come with an icon and words.
+- Strategy: blueprint blue fits the product and the trade; hue 235 sits outside the indigo/violet band
+  (250 to 320). Two hues only in the answer: blue means proven or selected, amber means check this.
+  "Cannot prove" is neutral text with its icon: it is an honest abstention, not an error. Red exists
+  only for failures of the tool itself (a request that failed). Status never relies on colour alone:
+  every tier has an icon and words.
 - Distribution: about 85 neutral, 10 drawing white, 5 accent.
 
 | role | value |
 |---|---|
 | bg | oklch(0.165 0.012 245) |
-| well (viewer, rail) | oklch(0.135 0.010 245) |
-| surface (panels) | oklch(0.198 0.014 245) |
-| raised (hover, rows) | oklch(0.232 0.016 245) |
-| overlay (popover, tooltip) | oklch(0.268 0.018 245) |
-| border / strong | oklch(0.315 0.016 245) / oklch(0.42 0.018 245) |
-| fg / fg-2 / muted | oklch(0.930 0.008 245) / oklch(0.780 0.014 245) / oklch(0.690 0.016 245) |
-| accent / hi / fg-on-accent | oklch(0.760 0.105 235) / oklch(0.820 0.090 235) / oklch(0.180 0.030 240) |
-| proven (success) | oklch(0.790 0.130 155) |
-| estimate (warning) | oklch(0.830 0.130 80) |
-| cannot prove (error) | oklch(0.730 0.140 25) |
+| well (viewer, rail, inputs) | oklch(0.135 0.010 245) |
+| surface (picker, answer panel, dialogs) | oklch(0.190 0.013 245) |
+| raised (hover, selected row) | oklch(0.228 0.015 245) |
+| overlay (popover, tooltip, 3D card) | oklch(0.262 0.017 245) |
+| rule (hairlines between rows and sections) | oklch(0.268 0.014 245) |
+| border / strong (control edges) | oklch(0.330 0.016 245) / oklch(0.430 0.018 245) |
+| fg / fg-2 / muted | oklch(0.930 0.008 245) / oklch(0.790 0.014 245) / oklch(0.680 0.016 245) |
+| accent / hi / fg-on-accent | oklch(0.760 0.105 235) / oklch(0.830 0.085 235) / oklch(0.180 0.030 240) |
+| warn (estimate, check, disagreement) | oklch(0.820 0.125 78) |
+| err (tool failure only) | oklch(0.720 0.130 25) |
 
-Contrast, computed from the OKLCH values (WCAG ratio on surface / on the viewer well): fg 14.8 / 16.3,
-fg-2 9.1 / 10.0, muted 6.6 / 7.2, accent 8.6 / 9.5, proven 9.9, estimate 10.6, cannot prove 7.2,
-placeholder 4.6 / 5.1, text on the accent button 8.9.
+Contrast, computed from the OKLCH values (WCAG ratio on surface / on the viewer well): fg 15.0 / 16.3,
+fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 7.6, placeholder
+4.7 / 5.1, text on the accent button 8.9.
 
 ## Spacing, radius, shadow
 
-- Base 4px; scale 4, 8, 12, 16, 20, 24, 32. Tight inside groups (4 to 8), 16 to 20 between sections.
-- Radius: 4px for panels and controls, pill for chips and badges. Nothing larger.
-- Shadow: none. Elevation is lightness (well < bg < surface < raised < overlay) plus 1px borders.
-  The only shadow is the reticle's dimming spread, which is functional.
+- Base 4px; scale 4, 8, 12, 16, 20, 24, 32. Rows 4 to 6px vertical padding; 12px between a heading and
+  its rows; sections separated by a rule and 12 to 16px.
+- Radius: 3px for controls (inputs, buttons, the floating toolbar and 3D panels, dialogs). 0 for rows,
+  list items, thumbnails, citation numerals and status markers. No pills anywhere except the circles
+  that mirror circles drawn on the plan (disagreement key).
+- Shadow: none. Elevation is lightness (well < bg < surface < raised < overlay). The only shadow is
+  the reticle's dimming spread, which is functional.
 
 ## Layout
 
-- Ask view: rail 56px | drawing library 300px | work area (question bar over the viewer) | answer
-  panel 380px. The library collapses from the rail; under 1080px it floats over the work area; under
-  760px everything stacks.
-- Results view: one headline sentence instead of hero metrics, then the source table (grouped rows)
-  beside a single-series bar chart, the baseline placeholder below the chart, then the per-object
-  table. Max width 1320px.
-- Signature layout move: the viewer is a recessed well with a faint 24px drafting grid (it is a
-  measurement surface), and the drawing is the only white area on screen.
+- Ask view: rail 52px | drawing library 300px | work area (question bar over the viewer, verification
+  strip under it) | answer panel 384px. The library collapses from the rail; under 1080px it floats
+  over the work area; under 760px everything stacks and the rail becomes a top bar.
+- Results view: unboxed sections, each a 16px heading over a full-width ruled table; one headline
+  sentence instead of hero metrics; source table beside a single-series bar chart. Max width 1320px.
+- The viewer is a plain recessed well (no grid texture). Empty and busy states sit at its top left like
+  a status line; the busy state is a 2px accent bar across the top edge plus elapsed seconds.
 
 ## Components and states
 
-- Buttons: one primary (Ask, filled accent), secondary (outlined surface), quiet (text). Hover
-  lightens, active nudges 1px, disabled 50% opacity, busy sets aria-busy and a progress bar in the
-  viewer with elapsed seconds.
-- Inputs: visible labels above, never placeholder-as-label; focus ring is a 2px accent box-shadow.
-- Tables: text left, numbers right in mono tabular figures, 1px separators, group rows on raised.
-- Chips: examples carry a language tag (EN, FI) and show the full question as a tooltip.
-- Status badge: icon + words + color: "Proven", "Estimate, check highlighted items", "Cannot
-  prove" with the reason underneath.
-- Empty states teach: the viewer explains what will be drawn; the answer panel explains what the
-  answer will contain; the library explains how to point at a dataset.
-- Errors: toast with the server's message; the previous answer stays.
-- Verification strip (under the viewer): one 104 x 78 crop per counted item or measured room, cut from the
-  evidence image, numbered like the overlay; border in accent for proven items and estimate amber (with
-  the estimate icon) for items to check. Measured rooms are outlined in the overlay's paper blue on the
-  crop. "Not this one" dims and dashes a crop; added items are dashed circles on the drawing. The live
-  count sits in mono at the strip's right, with Save correction (secondary) and Export (quiet).
-- Pins: proven items use the overlay's paper blue oklch(0.50 0.13 240), items to check the paper amber
-  already used for estimate pins, so pins hold on the white drawing; a selected pin takes the accent.
-- Witnesses (answer panel): one row per format, value in mono; a value that disagrees is circled with a
-  1.5px estimate-amber pill. Items where two page-aligned formats disagree are circled on the drawing
-  (solid: counted only here; dashed: counted by the other format, missed here).
-- 3D view (IFC): Plan / 3D segmented switch in the viewer toolbar. The model sits in the viewer well
-  with neutral slate tones per class (slabs lightest, so storeys read as layers). With an answer: used
-  elements in the accent, rooms as accent volumes at 50% opacity, deducted openings in estimate amber,
-  the answer's storey as a 22% shell, other storeys at 3.5%, storeys above cut away; the selected
-  element in fg. Storey panel (surface, top left): separate-storeys slider, rooms toggle, legend with
-  counts, one checkbox and an "only" button per storey. Element card (overlay, bottom right): class in
-  accent mono, GlobalId, storey, role in the answer, property sets as disclosures.
-- Order section and order sheet: the order quantity in mono with its parts; the sheet is a dialog on
-  surface with an inputs band (well-coloured fields, mono), the per-room table (numbers right, mono,
-  deducted m2 in amber), totals with the order quantity at lg size, and the order check beside it. Order
-  check verdict: icon + words + colour (proven green within 2%, amber over, red short). The printable
-  page is light, A4 landscape, Plex Sans and Plex Mono.
-- Cost meter (answer panel): two log-scale bars, this answer in accent and the model baseline in muted,
-  with the assumed prices written under them.
+- Ruled key/value table (`.kv`): dt muted at 104px, dd fg; every row has a 1px rule on top. Used for
+  the answer facts, Where, the order check comparison, the order sheet totals and the empty answer
+  panel (which shows what an answer will contain, row by row).
+- Buttons: one primary per view (Ask, Print), filled accent. Secondary: transparent with a 1px border.
+  Quiet: text only, underline on hover. Hover lightens, active nudges 1px, disabled 45% opacity, busy
+  sets aria-busy and the viewer progress bar.
+- Inputs: visible labels above, never placeholder-as-label; focus is a 1px accent border plus 1px ring.
+- Focus elsewhere: 2px accent ring offset by 2px of bg; inside lists and rows an inset 2px accent ring.
+- Library sources: plain text filters with mono counts; the current one has a 2px accent underline.
+- Library rows: ruled, no radius; selected row is raised with the file name in accent.
+- Examples: a run of accent text commands after an "Examples" label; Finnish ones carry a muted mono
+  "fi". The dataset's own questions sit in a disclosure under them.
+- Status (answer panel): icon + words in the tier colour, no box: "Proven" (blue), "Estimate, check
+  highlighted items" (amber), "Cannot prove" (fg-2) with the reason under it. Dataset answer:
+  "matches" (blue, check icon) or "differs" (amber, warning icon).
+- Text answers render at body size, clamped to six lines, not at display size.
+- Verification strip (under the viewer): one 104 x 78 crop per counted item or measured room, square
+  corners, 2px border in accent for proven and amber (with the estimate icon) for items to check,
+  numbered like the overlay. "Not this one" is a text command under the crop (amber once pressed);
+  a removed crop is dashed and dimmed. Live count in mono, Save correction (secondary), Export (quiet).
+- Pins: proven items use the overlay's paper blue oklch(0.50 0.13 240), items to check the paper amber,
+  so pins hold on the white drawing; a selected pin takes the accent. Number tags are square.
+- Witnesses: one ruled row per format (format code in accent mono, route name, value in mono, tier
+  icon). A value that disagrees, or stands uncorroborated, is boxed in a 1.5px amber rectangle and set
+  in amber. Items where two page-aligned formats disagree are circled on the drawing (solid: counted
+  only here; dashed: counted by the other format, missed here); the legend repeats that circle.
+- Items list and "Why" list: ruled rows, no outer box, no fill.
+- 3D view (IFC): Plan / 3D segmented switch in the viewer toolbar. Model in neutral slate per class;
+  with an answer, used elements in the accent, rooms as accent volumes at 50%, deducted openings in
+  amber. The storey panel and element card float over the canvas, so they keep a surface, a 1px border
+  and 3px radius; inside them everything is ruled rows and text commands ("only", "Reset view").
+- Order section and order sheet: order quantity in mono at lg size with its parts; the sheet is a
+  dialog with an inputs band between two rules, the per-room ruled table, totals as a ruled list with
+  the order quantity under a strong rule, and the order check beside it. Order check verdict: icon +
+  words + colour (blue within 2%, amber over or short). Close is a plain X. The printable page is
+  light, A4 landscape.
+- Cost meter: two 4px log-scale bars, this answer in accent and the model baseline in muted, with the
+  assumed prices written under them.
+- Errors: toast with the server's message, red border; the previous answer stays.
 
 ## Motion
 
@@ -140,7 +156,7 @@ placeholder 4.6 / 5.1, text on the accent button 8.9.
 ## Iconography
 
 - Hand-authored inline SVG set on a 16px grid, 1.5px stroke, round caps and joins, currentColor.
-  No emoji, no icon font.
+  No emoji, no icon font. Icons never sit in a filled tile or circle; the rail mark is a bare glyph.
 
 ## Imagery
 
@@ -150,19 +166,61 @@ placeholder 4.6 / 5.1, text on the accent button 8.9.
 
 - All controls are buttons or links with names; icon-only buttons carry aria-label.
 - Viewer is focusable: arrows pan, plus and minus zoom, 0 fits.
-- Status is never color alone (icon and text); check results say PASS or FAIL.
-- Targets at least 24px; most controls 30 to 40px.
+- Status is never colour alone (icon and words); check results say Pass or Fail.
+- Targets at least 24px (text filters 26px, text commands 24px); most controls 30 to 44px.
 - aria-live on the answer panel and the busy state.
+- Known gap: control borders (border on well, about 1.6:1) are below the 3:1 non-text contrast
+  guideline; inputs are still identified by their visible labels and the darker well fill.
 
-## Slop audit (2026-11-14, first build)
+## Audit before v2 (2026-11-14)
 
-Checked against the deslop checklist and the impeccable craft floor:
+AI tells found in the first build (file and line at commit 75a61f9):
 
-- Pass: no purple or indigo, no gradient text, no glass, no glow, no card grid, no hero-metric
-  triptych, no eyebrow labels, no emoji icons, no bounce easing, radius 4px, tabular figures in
-  tables, one primary button per view, labelled inputs, designed empty and busy states.
-- Watch: the viewer grid background is decorative-adjacent; kept because the viewer is a
-  measurement surface, at 6% opacity.
+1. Pill source filters, `.src` with `border-radius: 999px`: `app/static/app.css:185-193`.
+2. Pill example chips with an uppercase EN/FI tag: `app.css:220-228`, `app.js:216`.
+3. Pill status badge with tinted fill and border: `app.css:361-368`, `app.js:804`.
+4. Pill "matches / differs" tag on the dataset answer: `app.css:376-378`, `app.js:791`.
+5. Pill ring around a disagreeing witness value: `app.css:442-443`.
+6. Icon in a filled accent tile as the logo: `app.css:99-103`, `index.html:40`.
+7. Tinted accent squares for selected states (rail, library rows with an inset ring, segmented
+   controls): `app.css:111`, `202`, `299`, `495`.
+8. Boxed lists with filled rows (items, witnesses, order evidence, dataset questions):
+   `app.css:400-404`, `432-436`, `582-583`, `233`.
+9. Rounded-card soup on Results: every section a bordered surface box, plus a dashed box for the
+   baseline: `app.css:461-463`.
+10. Decorative drafting grid behind the viewer: `app.css:240-246`.
+11. Centred empty and busy states in the viewer and a generic paragraph as the empty answer panel:
+    `app.css:278-287`, `index.html:110-113`, `154-157`.
+12. Too many colours in one panel: green, amber, red and blue all used for status: `app.css:25-30`.
+13. Answer facts as a four-column label-over-value strip (a small hero-metric row): `app.css:371-373`.
+14. A second bordered box under every crop in the strip ("Not this one"): `app.css:341-346`.
+15. Filled inputs band in the order sheet and a circled X as the close icon: `app.css:597`,
+    `ordersheet.js:231`; pill status tag on the printed sheet: `ordersheet.js:357`.
+16. Long text answers set at display weight and size: `app.css:359`; a long witness value overflowed
+    the answer panel: `app.css:442`.
+17. Phone width: the viewer toolbar was clipped at the left edge: `app.css:289-291`.
+
+Not present before or after: gradients, glow, glass, emoji, eyebrow labels, centred hero copy.
+
+## Slop audit and self-critique (v2, 2026-11-14)
+
+Checked against frontend-design-deslop's slop checklist, impeccable's craft floor and product-mode
+rules, and taste-redesign's audit list. The impeccable critique ran in one context without its
+detector (its launcher downloads a binary), so it is a degraded run: a design review only.
+
+- Pass: no pills, no tinted badges, no card grid, no nested boxes, no hero-metric strip, no eyebrows,
+  no gradient, glass, glow or grid texture, radius 3px or 0, one accent plus amber, tabular mono
+  figures with numbers right-aligned, one primary button per view, labelled inputs, designed empty and
+  busy states, sentence case, no em dashes in UI copy, phone layout at 390px without horizontal
+  page scroll.
+- Kept on purpose: floating boxes over the drawing and the 3D canvas (toolbar, storey panel, element
+  card, dialog), because they must separate from busy content; filled number tags on pins and crops,
+  because they repeat the evidence overlay drawn by the routes; square citation numerals, which are
+  the signature; a dashed upload zone, because it is a drop target; a centred bottom toast; the
+  amber box on an uncorroborated witness value, which follows the existing witness logic.
+- Weak spots: the answer panel is long when witnesses, order and items are all present; the "Cannot
+  prove" reason is cramped in the 280px value column; the Results tables carry long file paths that
+  push the source column off screen; control borders are low contrast (see Accessibility).
 - Deliberate deviation: one type superfamily (Plex Sans + Plex Mono) instead of a display and body
   pairing, because this is an Operate surface.
 - Not done: light mode; a keyboard shortcut list; a full screen-reader pass.
