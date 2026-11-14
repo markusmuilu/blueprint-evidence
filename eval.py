@@ -86,6 +86,10 @@ def main(argv=None):
                     help="ignore DXF/IFC twins of PDFs: answer from the PDF itself (pdf-text, pdf-vector, raster)")
     ap.add_argument("--nemo", action="store_true", help="turn the Nemotron fallbacks on (parse fallback and last-resort route); off by default so routine evals stay fast and free")
     ap.add_argument("--out", default=str(REPO / "out"))
+    ap.add_argument("--shard", default="", help="K/N: run only the drawings whose index (in sorted path order) is K mod N, "
+                    "so a long split can run in N processes; merge the parts with --merge")
+    ap.add_argument("--merge", default="", help="comma-separated out/ folders of --shard runs: no solving, rebuild the "
+                    "summary from their answers.jsonl (same tag as the shard runs)")
     args = ap.parse_args(argv)
 
     root = data_root(args.data)
@@ -109,6 +113,11 @@ def main(argv=None):
         qs = [q for q in qs if parse(q.question).obj in keep_o]
     # group by file so per-drawing caches stay warm
     qs.sort(key=lambda q: (q.path, q.qid))
+    if args.shard:
+        k, n = (int(x) for x in args.shard.split("/"))
+        paths = sorted({q.path for q in qs})
+        keep_p = {p for i, p in enumerate(paths) if i % n == k}
+        qs = [q for q in qs if q.path in keep_p]
     if args.limit:
         qs = qs[: args.limit]
 
@@ -127,33 +136,51 @@ def main(argv=None):
     stats = defaultdict(new)
     routes = defaultdict(int)
     by_obj = defaultdict(new)
+    merged = None
+    if args.merge:
+        merged = {}
+        for d in args.merge.split(","):
+            for line in (Path(d) / tag / "answers.jsonl").read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    r = json.loads(line)
+                    merged[r["qid"]] = r
+        missing = [q.qid for q in qs if q.qid not in merged]
+        if missing:
+            sys.exit(f"merge: {len(missing)} of {len(qs)} questions missing from the shard runs (first: {missing[0]})")
     t0 = time.time()
     with open(run_dir / "answers.jsonl", "w", encoding="utf-8") as f:
         for i, q in enumerate(qs):
-            ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence,
-                          checks=not args.no_checks, pdf_only=args.pdf_only, nemotron=args.nemo)
-            query, a = solve(ctx)
-            if args.no_tiers and a.answered and a.tier == "estimate":
-                a.items = [{"would_answer": a.value}] + a.items
-                a.abstain, a.value = f"estimate withdrawn (--no-tiers): {a.tier_reason}", None
-            ok = score(q, a)
-            tier = a.tier if a.answered else None
-            o = by_obj[(q.source, query.obj or "?")]
+            if merged is not None:
+                r = merged[q.qid]
+                answered_, tier_, cost_, route_ = r["abstain"] is None and r["value"] is not None, r["tier"], r["cost_usd"], r["route"]
+                obj_, ok = r["query"].get("obj"), r["correct"]
+                rec = r
+            else:
+                ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence,
+                              checks=not args.no_checks, pdf_only=args.pdf_only, nemotron=args.nemo)
+                query, a = solve(ctx)
+                if args.no_tiers and a.answered and a.tier == "estimate":
+                    a.items = [{"would_answer": a.value}] + a.items
+                    a.abstain, a.value = f"estimate withdrawn (--no-tiers): {a.tier_reason}", None
+                ok = score(q, a)
+                answered_, tier_, cost_, route_, obj_ = a.answered, a.tier, a.cost_usd, a.route, query.obj
+                rec = {"qid": q.qid, "path": q.path, "question": q.question, "gold": q.answer, "type": q.type,
+                       "split": args.split, "correct": ok, "query": query.as_dict(), **a.as_dict()}
+            tier = tier_ if answered_ else None
+            o = by_obj[(q.source, obj_ or "?")]
             for s in [stats[(q.source, q.type)], stats[(q.source, "ALL")], stats[("ALL", "ALL")], o]:
                 s["n"] += 1
-                s["answered"] += a.answered
+                s["answered"] += answered_
                 s["correct"] += bool(ok)
-                s["cost"] += a.cost_usd
+                s["cost"] += cost_
                 if tier in ("proven", "estimate"):
                     s[tier] += 1
                     s[tier + "_ok"] += bool(ok)
-            routes[a.route if a.answered else f"abstain:{a.route}"] += 1
-            pv = priors.get(f"{q.source}/{query.obj}") if q.type == "count" else None
+            routes[route_ if answered_ else f"abstain:{route_}"] += 1
+            pv = priors.get(f"{q.source}/{obj_}") if q.type == "count" else None
             if pv is not None and q.ext in RASTER:
                 o["prior_n"] += 1
                 o["prior_ok"] += str(pv["value"]) == str(q.answer)
-            rec = {"qid": q.qid, "path": q.path, "question": q.question, "gold": q.answer, "type": q.type,
-                   "split": args.split, "correct": ok, "query": query.as_dict(), **a.as_dict()}
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
             if (i + 1) % 500 == 0:
                 print(f"  {i + 1}/{len(qs)}  {time.time() - t0:.0f}s", file=sys.stderr)

@@ -849,26 +849,41 @@ GPU price instead. A question that every route abstained on is booked under the 
 the 14 `pdf-text` rows are IFC-plan and OpeningDesign questions that abstained). The answer panel shows the same numbers as a small cost meter next to the baseline.
 
 Preview set, dev split, 89 questions (up to 10 drawings per source, file type and question type, two
-questions per drawing), evidence rendering on, Nemotron off, 16-thread CPU
-(`.venv\Scripts\python tools/cost_eval.py --split dev --drawings 10 --per 2`, `out/cost/cost_by_route.json`):
+questions per drawing), evidence rendering on, Nemotron off, caches for these drawings cleared, 16 logical cores
+shared with other jobs, GPU visible
+(`CUDA_VISIBLE_DEVICES=0 .venv\Scripts\python tools/cost_eval.py --data ../data/stoa-preview/junction-dataset-preview --split dev --drawings 10 --per 2`; the tool's own label "CPU only" is wrong for this run;
+`out/cost/cost_by_route.json`). The CPU columns book process CPU seconds at the assumed vCPU price; the last column books wall time on the assumed GPU price instead.
+Euros use the app's rate, 1 EUR = 1.1052 USD.
 
-| route | questions | answered | median wall | p90 wall | cold median | CPU s, mean | $ per 1,000, CPU | $ per 1,000, detector on a GPU |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `dxf-geometry` | 40 | 40 | 65 ms | 260 ms | 129 ms | 0.09 | $0.0013 | - |
-| `ifc` | 15 | 15 | 231 ms | 2.4 s | 161 ms | 0.73 | $0.0101 | - |
-| `pdf-text` | 14 | 1 | 1 ms | 610 ms | 1 ms | 0.13 | $0.0018 | - |
-| `raster-detector` | 13 | 13 | 1.6 s | 7.6 s | 6.1 s | 30.28 | $0.42 | $1.13 |
-| `raster-ocr-labels` | 5 | 5 | 93 ms | 3.5 s | 3.2 s | 10.03 | $0.14 | - |
-| `raster-cv` | 2 | 2 | 4.3 s | 6.5 s | 4.3 s | 34.00 | $0.47 | - |
-| all sampled questions | 89 | 76 | 82 ms | 2.8 s | 175 ms | 5.93 | $0.0824 | - |
-| Nemotron, plain prompt (baseline) | 150 | - | 24.8 s | - | - | - | $101.04 at measured tokens | |
+| route | questions | answered | median wall | p90 wall | cold median | warm median | CPU s, mean | $ per 1,000, CPU | EUR per 1,000, CPU | $ per 1,000, if booked on a GPU |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `dxf-geometry` | 40 | 40 | 60 ms | 202 ms | 107 ms | 42 ms | 0.09 | $0.0012 | EUR 0.0011 | $0.025 |
+| `ifc` | 15 | 15 | 194 ms | 1.8 s | 141 ms | 194 ms | 0.59 | $0.0082 | EUR 0.0074 | $0.17 |
+| `pdf-text` | 14 | 4 | 1 ms | 279 ms | 13 ms | 1 ms | 0.13 | $0.0018 | EUR 0.0016 | $0.036 |
+| `raster-detector` | 13 | 13 | 1.25 s | 9.4 s | 4.0 s | 96 ms | 13.62 | $0.189 | EUR 0.171 | $0.77 |
+| `raster-rooms` | 5 | 5 | 0.54 s | 4.3 s | 3.7 s | 55 ms | 11.86 | $0.165 | EUR 0.149 | $0.45 |
+| `raster-cv` | 2 | 2 | 3.5 s | 5.4 s | 3.5 s | - | 28.52 | $0.396 | EUR 0.358 | $0.97 |
+| all sampled questions | 89 | 79 | 87 ms | 2.4 s | 155 ms | 55 ms | 3.46 | $0.048 | EUR 0.043 | $0.20 |
+| Nemotron, plain prompt (baseline) | 150 | - | 24.8 s | - | - | - | - | $101.04 at measured tokens | EUR 91.42 | |
+
+Rules read the question for 99.3% of the full test split (39,512 of 39,807); the other 295 (0.74%) are the questions the
+rule parser flags as weak, which the app would send to the language-model reader (`bpqa.phrasing.weak`, counted with the reader off). On free-form
+phrasing the share is much higher: 158 of 648 benchmark paraphrases (24.4%) and 28 of 92 complex questions (30.4%). One reader call
+costs $0.0039 on average (mean of 1,011 recorded calls, 1.0 s each). Weighting the route costs above by the route mix of the full test split gives $0.139 per 1,000
+questions (EUR 0.126) for the rules and models on the drawing; the reader adds $0.029 (EUR 0.026) per 1,000 at the dataset's 0.74%, so the blended cost is $0.168 (EUR 0.152) per 1,000 questions.
+At the free-form 24.4% share the reader would add $0.94 (EUR 0.85) per 1,000.
+A first run of the same sample with `CUDA_VISIBLE_DEVICES` empty on this CUDA build of torch failed on 13 of 20 scan questions with "Invalid device id" raised from ultralytics device selection (answers 66 of 89);
+see the CHANGELOG.
+
+First question on Stoa's big sample (`data/stoa_sample`, a 1 MB school plan, uploaded through `/api/upload` on `deploy.web`, CPU only, background reading on, caches cleared): the first question
+(area of the hall) is answered in 22.4 s, the second (doors) 10.8 s after it; the whole background reading (text, rooms, doors) is finished 33 s after upload; after that every question takes 0.25 to 0.32 s.
 
 The Nemotron baseline row uses the tokens measured on 150 preview test questions
 (`out/baseline_nemotron.json`: 1,596 input and 6,417 output tokens per question on average, most of them
 reasoning) at an assumed $3 / $15 per million input / output tokens: about $101 per 1,000 questions,
-against $0.08 per 1,000 for the routes on this sample at the assumed CPU price. The detector's CPU mean is
+against $0.05 per 1,000 for the routes on this sample at the assumed CPU price ($0.17 blended on the test mix, above). The detector's CPU mean is
 dominated by the first question on each drawing (model load, detection and the OCR the checks read);
-later questions on the same drawing take a median 0.08 s because detections are cached per drawing.
+later questions on the same drawing take a median 0.06 s because detections are cached per drawing.
 
 ### Split
 
@@ -887,21 +902,21 @@ Cost is $0 per question on every line (no model calls; Nemotron fallback off).
 
 | test set | questions | accuracy | precision when answered | proven: n / precision | estimate: n / precision | source |
 |---|---|---|---|---|---|---|
-| Stoa full set, test split | 39,807 | **81.2%** | 81.5% | 15,441 / 98.4% | 24,218 / 70.7% | `eval.py --data ../data/stoa-full/junction-dataset --split test` (1,026 s with warm OCR and detector caches), `out/test-junction-dataset/summary.txt` |
-| Stoa preview set, test split | 2,701 | **86.8%** | 87.0% | 1,459 / 99.5% | 1,237 / 72.2% | `eval.py --split test`, `out/test/summary.txt` |
-| Stoa preview set, dev split (rules developed here) | 5,289 | 83.1% | 84.1% | 2,557 / 98.5% | 2,665 / 70.4% | `eval.py --split dev`, `out/dev/summary.txt` |
-| Naive AI baseline sample: 150 preview test questions | 150 | router **94.0%** (141), Nemotron with a plain prompt 39.3% (59) | Nemotron 51.3% (answers 115) | - | - | `out/baseline_nemotron.json`; router side re-scored from `out/test/answers.jsonl` (82.0% when the baseline was recorded, before tiers) |
+| Stoa full set, test split | 39,807 | **84.8%** (33,754) | 85.2% | 17,497 / 98.7% | 22,136 / 74.5% | `eval.py --data ../data/stoa-full/junction-dataset --split test` on commit 8d5f0bb, run as six `--shard` parts and merged with `--merge` (about 36 min on a shared CPU, caches warm), `out/test-junction-dataset/summary.txt` |
+| Stoa preview set, test split | 2,701 | **89.5%** (2,418) | 89.7% | 1,565 / 99.6% | 1,131 / 76.0% | `eval.py --data ../data/stoa-preview/junction-dataset-preview --split test` on commit 8d5f0bb (86 s), `out/test/summary.txt` |
+| Stoa preview set, dev split (rules developed here) | 5,289 | 83.1% | 84.1% | 2,557 / 98.5% | 2,665 / 70.4% | `eval.py --split dev`, an earlier run, not re-measured on 8d5f0bb (a re-run was stopped for time) |
+| Naive AI baseline sample: 150 preview test questions | 150 | router **94.7%** (142), Nemotron with a plain prompt 39.3% (59) | Nemotron 51.3% (answers 115) | - | - | `out/baseline_nemotron.json`; router side re-scored from `out/test/answers.jsonl` (82.0% when the baseline was recorded, before tiers; 94.0% in the morning) |
 | Unseen public drawings (12 drawings not in Stoa's data) | 50 | **82.0%** (41 correct, 3 wrong, 4 abstained, 2 correctly abstained) | 93.2% (41 of 44) | 0 proven answers wrong | the 3 wrong answers are estimates | `tools/unseen_run.py --data ../data/unseen`, detector on, `out/unseen/results.jsonl` |
 
-Proven on the full test split is 98.4% precise after the scan calibration (90.1% before, 31,997 answers): on CubiCasa scans 3,192 proven at 97.8% (before 19,748 at 84.8%), the other sources unchanged (12,249 at 98.6%). Accuracy is the same before and after; 16,556 answers moved from proven to estimate (CHANGELOG.md).
+Proven on the full test split is 98.7% precise (17,497 answers; 98.4% over 15,441 in the morning run of 14 Nov): on CubiCasa scans 5,248 proven at 98.1% (morning 3,192 at 97.8%), the other sources 12,249 at 98.9% (12,117 correct). The scan calibration that sets which scan answers may be proven is described in CHANGELOG.md.
 
-Full set, test split, by source: CubiCasa scans 74.2% (27,160 questions), Swiss dwellings 99.0% (11,408; counts
-100.0%, areas 97.0%), IFC models 87.9% (838; 96.8% precise), IFC-Bench 27.8% (381 free-text questions; 1.3% before the
-`ifc-props` route), OpeningDesign 70.0% (20; 0% before the generic schedule reader). With those two sources
-the full test split is 80.7% (32,127 of 39,807; computed from the per-source change, the other sources not
-re-run). Per CubiCasa question type: storeys 90.5%, toilets 88.3%,
-bathrooms 87.9%, balconies 85.8%, WC rooms 81.2%, sinks 78.7%, showers/baths 76.0%, bedrooms 75.1%, kitchens
-64.0%, saunas 63.6%, doors 59.6%, windows 49.2%.
+Full set, test split, by source (measured on commit 8d5f0bb): CubiCasa scans 79.4% (27,160 questions; 74.2% in the morning),
+Swiss dwellings 99.4% (11,408; counts 100.0%, areas 98.1%), IFC models 87.9% (838; 96.8% precise), IFC-Bench 28.6%
+(381 free-text questions), OpeningDesign 70.0% (20). Per CubiCasa question type: storeys 90.4%, toilets 88.2%,
+bathrooms 86.5%, balconies 85.8%, WC rooms 90.3%, kitchens 91.3%, saunas 93.9%, sinks 78.6%, showers/baths 75.6%,
+bedrooms 79.6%, doors 59.6%, windows 49.1%. Against the morning run the gains are in the scan room types
+(kitchens +27.3 points, saunas +30.3, WC rooms +9.1, bedrooms +4.5) and Swiss apartments (+1.6); bathrooms fell 1.4 points; the other scan
+objects moved by 0.4 points or less.
 
 Unseen drawings by format (50 distinct questions; the three DXF questions asked again on the PDF rendered from
 the DXF are left out):
