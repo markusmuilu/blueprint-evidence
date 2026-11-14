@@ -32,6 +32,7 @@ NAMES = {"toilet": "WC seat counts", "sink": "sink counts", "shower_or_bath": "s
          "balcony": "balcony counts", "storey": "storey counts"}
 ROUTE_WORDS = {"raster-detector": ("detector", "check the numbered boxes"),
                "raster-ocr-labels": ("room-label", "check the numbered labels"),
+               "raster-rooms": ("room detector and label", "check the numbered rooms and labels"),
                "raster-cv": ("panel", "check the numbered panels"),
                "raster-area": ("printed-area", "check the printed areas"),
                "raster-cv-fixtures": ("outline", "check the numbered outlines")}

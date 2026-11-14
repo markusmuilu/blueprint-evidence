@@ -34,6 +34,7 @@ import numpy as np
 from PIL import Image
 
 from ..answer import Answer, estimate
+from .. import calibration
 from ..evidence import AMBER, BLUE, GREY, ImageCanvas, evidence_path, finish
 from .. import tiling
 from . import raster
@@ -136,7 +137,7 @@ def answer(ctx, q) -> Answer:
     keep_ev = ctx.evidence
     ctx.evidence = False                      # the OCR reading is drawn below, with the rooms
     try:
-        ocr = raster.room_labels(ctx, q, img)
+        ocr = raster.room_labels(ctx, q, img, calibrate=False)   # the OCR route's own tier, as tuned
     finally:
         ctx.evidence = keep_ev
     views = detect_views(ctx.file, cfg.get("imgsz", 640), cfg.get("tta", False)) if cfg else None
@@ -157,8 +158,18 @@ def answer(ctx, q) -> Answer:
         expl = (f"{value} {name}(s), from the {'room detector' if which == 'det' else 'room labels'}; "
                 f"the two readings disagree ({readings})")
     ans = Answer(value=value, unit="count", route=ROUTE, confidence=0.85 if proven else 0.4,
-                 tier="proven" if proven else "estimate", items=det_items + lab_items, explanation=expl)
-    if not proven:
+                 tier="proven" if proven else "estimate", items=det_items + lab_items, explanation=expl,
+                 tier_cell="ocr-proven" if which == "both" and o_proven else "")
+    cal = calibration.reason(ROUTE, q.obj, value, cell=ans.tier_cell) if proven else None
+    if cal:                                   # the route's rule held, but dev does not support proven here
+        proven = False
+        ans.confidence = round(calibration.precision(ROUTE, q.obj) or 0.4, 2)
+    if cal:
+        estimate(ans, cal)
+        ans.uncertain = [{"reading": "drawn room", "score": k["conf"], "xyxy": [round(v) for v in k["xyxy"]]}
+                         for k in kept] + [{"reading": "label", "label": it.get("label"), "xyxy": it.get("xyxy")}
+                                           for it in ocr.items]
+    elif not proven:
         if which == "both":
             estimate(ans, f"both readings give {value}, but the proof rule for {name} counts "
                           f"({cfg.get('proven_rule')}) does not hold on this plan")
