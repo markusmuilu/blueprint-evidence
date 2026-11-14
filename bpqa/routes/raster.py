@@ -26,7 +26,7 @@ from PIL import Image
 
 from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
-from .labels import ROOM_PATTERNS, dedupe, find_rooms, is_word, quad_box
+from .labels import ROOM_PATTERNS, dedupe, find_rooms, fuzzy_reads, is_word, quad_box
 from .ocr import ocr_image
 from . import detector
 from . import fixtures as fx
@@ -87,8 +87,9 @@ def answer(ctx, q) -> Answer:
 
 
 LABEL_ROUTE = "raster-ocr-labels"
-NAMES = {"bedroom": "bedroom (MH)", "kitchen": "kitchen (K, KK, KEITTIO, AVOK, TUPAK)", "sauna": "sauna (S, SAUNA, LH)",
-         "wc_room": "WC room (WC)", "bathroom": "bathroom (KH, KPH, PH, PESUH, SH)", "balcony": "balcony (PARVEKE)"}
+NAMES = {"bedroom": "bedroom (MH, BEDROOM, SCHLAFZIMMER)", "kitchen": "kitchen (K, KK, KEITTIO, AVOK, TUPAK, KITCHEN, KUCHE)",
+         "sauna": "sauna (S, SAUNA, LH)", "wc_room": "WC room (WC, TOILET)",
+         "bathroom": "bathroom (KH, KPH, PH, PESUH, SH, BATHROOM, BADEZIMMER)", "balcony": "balcony (PARVEKE, BALCONY, BALKON)"}
 MIN_WORDS_FOR_ZERO = 3      # a zero answer needs proof that the plan's labels were readable
 # Which label counts are answered, per room type (set on the dev split, see CHANGELOG.md). Elsewhere
 # the route abstains: kitchens and bathrooms are often unlabelled (an open kitchen inside "OH"), so a
@@ -114,6 +115,17 @@ def room_labels(ctx, q, img) -> Answer:
     elif not (rule == "all" or (rule == "positive" and n > 0) or (isinstance(rule, set) and n in rule)):
         estimate(ans, f"{n} {q.obj} label(s) read; on dev this count is often wrong for {q.obj} "
                       f"(unlabelled rooms, or labels of a neighbouring flat in the scan)")
+    # labels the OCR read with one error (English/German words only): the plan's text is misread, so a
+    # count that needs such a read, or a zero (another label may be misread beyond recognition), is not proof
+    fz = [h for h in hits if h.get("fuzzy")]
+    if fz:
+        estimate(ans, f"{len(fz)} label(s) read with one OCR error: "
+                      + ", ".join(f"{h['text']} as {h['fuzzy']}" for h in fz))
+    elif not hits:
+        misread = fuzzy_reads(toks)
+        if misread:
+            estimate(ans, f"the OCR misreads room labels on this plan ({', '.join(f'{t} as {w}' for t, w in misread[:4])}), "
+                          f"so a zero is not proof of absence")
     if ans.tier == "estimate":
         ans.confidence = 0.3
         ans.uncertain = [{"label": h["text"], "xyxy": [round(v) for v in h["box"]]} for h in hits]
