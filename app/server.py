@@ -32,6 +32,9 @@ from pydantic import BaseModel
 from bpqa.data import Question
 from bpqa.router import Context, solve
 
+from bpqa.evidence import marks_path
+
+from . import costs
 from . import results as results_mod
 from .catalog import SOURCE_NAMES, Catalog, find_data_root
 
@@ -317,14 +320,15 @@ def ask(body: AskBody):
 
     q = Question(qid=-1, path=rel, question=question)
     ctx = Context(root=root, q=q, out_dir=RENDER_DIR, evidence=True, pdf_only=body.pdf_only)
-    t0 = time.perf_counter()
     with SOLVE_LOCK:
+        t0, c0 = time.perf_counter(), time.process_time()
         query, ans = solve(ctx)
-    ms = (time.perf_counter() - t0) * 1000
+        ms = (time.perf_counter() - t0) * 1000
+        cpu_s = time.process_time() - c0
     a = ans.as_dict()
     qd = query.as_dict()
 
-    ev_id, geo = None, None
+    ev_id, geo, marks = None, None, None
     if a.get("evidence"):
         drawn = Path(a["evidence"])
         if drawn.exists() and RENDER_DIR.resolve() in drawn.resolve().parents:
@@ -333,8 +337,18 @@ def ask(body: AskBody):
             ev_id = f"{drawn.stem[:60]}__{key[:10]}"
             evp = EVIDENCE_DIR / f"{ev_id}.png"
             shutil.copyfile(drawn, evp)
+            marks = None
+            mk = marks_path(drawn)
+            if mk.exists():
+                shutil.copyfile(mk, marks_path(evp))
+                try:
+                    marks = json.loads(mk.read_text(encoding="utf-8"))
+                except ValueError:
+                    marks = None
             try:
                 geo = _evidence_geometry(evp, root / rel)
+                if marks:
+                    geo["header"] = marks["header"]
             except Exception:
                 geo = None
     status, rule = tier(a)
@@ -347,7 +361,8 @@ def ask(body: AskBody):
         "evidence_id": ev_id, "evidence_geometry": geo, "tried": list(ctx.tried),
         "status": status, "status_rule": rule,
         "where": where(a, qd, rel), "why": why(a, qd, rel.rsplit(".", 1)[-1].lower()),
-        "time_ms": round(ms, 1), "cached": False, "gold": gold,
+        "time_ms": round(ms, 1), "cached": False, "gold": gold, "marks": marks,
+        "compute": costs.compute_record(ms / 1000, cpu_s, a.get("route"), a.get("cost_usd") or 0.0),
         "no_overlay_reason": None if ev_id or a.get("abstain") else
             "No overlay for this file (its licence does not allow derivatives, or the route draws none). "
             "The numbered items are the evidence.",

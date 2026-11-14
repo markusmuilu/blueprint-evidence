@@ -7,6 +7,7 @@ image can be checked on its own.
 from __future__ import annotations
 
 import hashlib
+import json
 import textwrap
 from pathlib import Path
 
@@ -30,6 +31,60 @@ def _ink_on(color) -> tuple:
     """Number-tab text colour: white on dark tabs, ink on light ones (amber)."""
     r, g, b = color[:3]
     return INK if 0.299 * r + 0.587 * g + 0.114 * b > 150 else (255, 255, 255)
+
+
+# ---------------------------------------------------------------- marks sidecar
+# Every numbered box and every filled room polygon a route draws is also recorded, in the pixel frame of the
+# image it is drawn on, and saved next to the PNG as `<stem>.marks.json` by finish(). The app pins, crops
+# and numbers items from this file, so every route (raster, PDF linework, DXF world coordinates, IFC
+# geometry) gets pins without each route converting its own coordinates.
+
+def _tone(color) -> str:
+    rgb = tuple(color[:3]) if color is not None else None
+    if rgb == AMBER or rgb == (170, 100, 0):
+        return "amber"
+    if rgb == GREY:
+        return "grey"
+    return "blue"
+
+
+def _marks(img: Image.Image) -> list:
+    return img.info.setdefault("bp_marks", [])
+
+
+def _record_box(img, rect, n, color):
+    if n is None or (color is not None and _tone(color) == "grey"):
+        return
+    x0, y0, x1, y1 = (float(v) for v in rect)
+    _marks(img).append({"kind": "box", "n": n, "tone": _tone(color),
+                        "rect": [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]})
+
+
+def _record_poly(img, pts, fill):
+    """Filled, translucent polygons are the measured rooms (context outlines are opaque or unfilled)."""
+    if fill is None or len(fill) < 4 or fill[3] >= 255 or len(pts) < 3:
+        return
+    pts = [(float(x), float(y)) for x, y in pts]
+    step = max(1, len(pts) // 64)
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    polys = [m for m in _marks(img) if m["kind"] == "poly"]
+    _marks(img).append({"kind": "poly", "i": len(polys), "tone": _tone(fill),
+                        "pts": [[round(x, 1), round(y, 1)] for x, y in pts[::step]],
+                        "rect": [min(xs), min(ys), max(xs), max(ys)]})
+
+
+class _RecordingDraw:
+    """ImageDraw wrapper: routes that draw polygons straight on `cv.d` are recorded too."""
+
+    def __init__(self, img, d):
+        self._img, self._d = img, d
+
+    def polygon(self, xy, fill=None, outline=None, width=1):
+        _record_poly(self._img, list(xy), fill)
+        return self._d.polygon(xy, fill=fill, outline=outline, width=width)
+
+    def __getattr__(self, name):
+        return getattr(self._d, name)
 
 
 def font(size: int):
@@ -56,6 +111,9 @@ class VectorCanvas:
         h = int((y1 - y0) * self.s + 2 * margin)
         self.img = Image.new("RGB", (width, max(h, 200)), "white")
         self.d = ImageDraw.Draw(self.img, "RGBA")
+        self.img.info["bp_marks"] = []
+        # world (x right, y up) -> image pixels: px = m + (x - x0) * s, py = m + (y1 - y) * s
+        self.img.info["bp_frame"] = {"kind": "world", "x0": x0, "y1": y1, "s": self.s, "m": margin}
 
     def px(self, x, y):
         return (self.m + (x - self.x0) * self.s, self.m + (self.y1 - y) * self.s)
@@ -66,6 +124,7 @@ class VectorCanvas:
 
     def poly(self, pts, fill=None, outline=None, width=2):
         if len(pts) >= 3:
+            _record_poly(self.img, [self.px(*p) for p in pts], fill)
             self.d.polygon([self.px(*p) for p in pts], fill=fill, outline=outline, width=width)
 
     def circle(self, c, r, color=(150, 150, 150)):
@@ -85,6 +144,7 @@ class VectorCanvas:
         x0, y0, x1, y1 = bounds
         a, b = self.px(x0 - pad, y1 + pad), self.px(x1 + pad, y0 - pad)
         self.d.rectangle([a, b], outline=color, width=3)
+        _record_box(self.img, (a[0], a[1], b[0], b[1]), n, color)
         if n is not None:
             f = font(14)
             self.d.rectangle([a[0], a[1] - 18, a[0] + 9 * len(str(n)) + 8, a[1]], fill=color)
@@ -96,7 +156,9 @@ class ImageCanvas:
 
     def __init__(self, img: Image.Image):
         self.img = img.convert("RGB")
-        self.d = ImageDraw.Draw(self.img, "RGBA")
+        self.img.info["bp_marks"] = []
+        self.img.info["bp_frame"] = {"kind": "pixel"}
+        self.d = _RecordingDraw(self.img, ImageDraw.Draw(self.img, "RGBA"))
         # evidence images are shown at most ~1600 px wide: scale strokes and numbers so they stay readable
         self.k = max(1.0, max(self.img.size) / 1600)
 
@@ -104,6 +166,7 @@ class ImageCanvas:
         x0, y0, x1, y1 = bounds
         w = max(1, round(width * self.k)) if width > 1 else max(1, round(self.k))
         self.d.rectangle([x0, y0, x1, y1], outline=color, width=w)
+        _record_box(self.img, bounds, n, color)
         if n is not None:
             fs = round(14 * self.k)
             f = font(fs)
@@ -128,6 +191,8 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     if len(_STASH) > 8:
         _STASH.clear()
     _STASH[str(out)] = (img, question, answer_line, note)
+    marks, frame = list(img.info.get("bp_marks") or []), img.info.get("bp_frame")
+    src_w = img.width
     if img.width > max_w:
         img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
     f, fb = font(15), font(19)
@@ -162,7 +227,35 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
     canvas.paste(img, (0, head_h))
     out.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(out)
+    write_marks(out, marks, frame, img.width / src_w, head_h, img.width, img.height)
     return str(out)
+
+
+def marks_path(png: Path) -> Path:
+    return png.with_name(png.stem + ".marks.json")
+
+
+def write_marks(out: Path, marks: list, frame: dict | None, k: float, head_h: int, w: int, h: int) -> None:
+    """Sidecar for the app: marks in body pixels of the saved PNG (below the header strip)."""
+    def sc(v):
+        return round(v * k, 1)
+    rows = []
+    for m in marks:
+        r = dict(m)
+        r["rect"] = [sc(v) for v in m["rect"]]
+        if "pts" in m:
+            r["pts"] = [[sc(x), sc(y)] for x, y in m["pts"]]
+        rows.append(r)
+    fr = dict(frame) if frame else None
+    if fr and fr.get("kind") == "world":
+        fr.update(s=fr["s"] * k, m=fr["m"] * k)
+    elif fr:
+        fr["scale"] = k                 # source pixel -> body pixel
+    try:
+        marks_path(out).write_text(json.dumps({"v": 1, "w": w, "h": h, "header": head_h, "frame": fr, "marks": rows}),
+                                   encoding="utf-8")
+    except OSError:
+        pass
 
 
 def add_checks(path: str, checks, abstained: bool = False, value=None, estimate: bool = False) -> str:
