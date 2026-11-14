@@ -191,46 +191,53 @@ def build(ifc: Path, out: Path, progress=None) -> dict:
     return meta
 
 
-def _start(ifc: Path, key: str) -> dict:
+def _start(ifc: Path, key: str, out: Path) -> dict:
     with _jobs_lock:
-        job = _jobs.get(key)
+        job = _jobs.get(str(out))
         if job and job["state"] in ("building", "failed"):
             return job
         job = {"state": "building", "t0": time.time(), "stage": "queued", "error": None}
-        _jobs[key] = job
+        _jobs[str(out)] = job
 
     def work():
         with _build_lock:
             try:
                 job["stage"] = "reading the model"
-                build(ifc, CACHE / key, progress=lambda s: job.__setitem__("stage", s))
+                build(ifc, out, progress=lambda s: job.__setitem__("stage", s))
                 job["state"] = "done"
             except Exception as e:                     # the view falls back to the plan
                 job["state"] = "failed"
                 job["error"] = f"{type(e).__name__}: {e}"[:300]
+            finally:
+                import gc
+                gc.collect()                           # the parsed model (about 0.7 GB for Molio) goes now
     threading.Thread(target=work, daemon=True, name=f"ifc3d-{key}").start()
     return job
 
 
 # ---------------------------------------------------------------- endpoints
 
-def _locate(path: str) -> tuple[Path, str]:
+def _locate(path: str) -> tuple[Path, str, Path]:
+    """(model, cache key, cache folder). An upload's geometry lives inside its upload folder, so deleting
+    the upload (the public demo does after 15 minutes) deletes its geometry too."""
     from . import server                               # late: server imports this module
     root, rel = server.resolve(path)
     ifc = model_for(root, rel)
     if ifc is None:
         raise HTTPException(404, "no IFC model behind this drawing")
-    return ifc, cache_key(ifc)
+    key = cache_key(ifc)
+    out = (root / "ifc3d" / key) if path.startswith("upload:") else CACHE / key
+    return ifc, key, out
 
 
 @router.get("/api/ifc3d")
 def ifc3d_meta(path: str):
-    ifc, key = _locate(path)
-    meta = CACHE / key / "meta.json"
+    ifc, key, out = _locate(path)
+    meta = out / "meta.json"
     if meta.exists():
         return Response(meta.read_bytes(), media_type="application/json",
                         headers={"Cache-Control": "private, max-age=3600"})
-    job = _start(ifc, key)
+    job = _start(ifc, key, out)
     if job["state"] == "failed":
         return JSONResponse({"state": "failed", "error": job["error"]}, status_code=500)
     return JSONResponse({"state": "building", "stage": job["stage"], "elapsed_s": round(time.time() - job["t0"], 1),
@@ -241,8 +248,8 @@ def ifc3d_meta(path: str):
 def ifc3d_geom(path: str, s: int, k: str = "solid"):
     if k not in ("solid", "space"):
         raise HTTPException(400, "k is solid or space")
-    _, key = _locate(path)
-    f = CACHE / key / f"s{int(s)}_{k}.bin.gz"
+    _, _, out = _locate(path)
+    f = out / f"s{int(s)}_{k}.bin.gz"
     if not f.exists():
         raise HTTPException(404, "no geometry for this storey")
     return Response(f.read_bytes(), media_type="application/octet-stream",
@@ -261,7 +268,7 @@ def _val(v):
 def ifc3d_element(path: str, guid: str):
     if not re.fullmatch(r"[0-9A-Za-z_$]{22}", guid):
         raise HTTPException(400, "not an IFC GlobalId")
-    ifc, _ = _locate(path)
+    ifc, _, _ = _locate(path)
     import ifcopenshell.util.element as E
     from bpqa.routes import ifc_route                  # shares the router's loaded-model cache
     M = ifc_route.load(str(ifc))
