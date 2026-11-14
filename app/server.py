@@ -2,7 +2,9 @@
 
 POST /api/ask           {path, question, pdf_only?} -> answer JSON from bpqa.router.solve, plus timing,
                          status tier, "where" and numbered "why" lines, evidence id
-POST /api/upload        multipart files -> {path: "upload:<id>/<name>"}; stored in the OS temp folder
+POST /api/upload        multipart files -> {path: "upload:<id>/<name>", precompute}; stored in the OS temp folder;
+                         a raster drawing starts being read in the background at once (app/precompute.py)
+GET  /api/precompute    ?path= -> progress of that background reading
 GET  /api/drawings      browse the dataset: ?source=&q=&ext=&offset=&limit=
 GET  /api/drawing       ?path= -> one drawing with its dataset questions
 GET  /api/preview       ?path= -> PNG of the drawing (PNG/JPG as is, PDF page 1 rendered)
@@ -36,6 +38,7 @@ from bpqa.router import Context, solve
 from bpqa.evidence import marks_path
 
 from . import costs
+from . import precompute
 from . import ifc3d
 from . import results as results_mod
 from .catalog import SOURCE_NAMES, Catalog, find_data_root
@@ -120,7 +123,31 @@ async def upload(files: list[UploadFile] = File(...)):
     # the drawing to ask about: a PDF or image over its DXF/IFC twin
     order = {"pdf": 0, "png": 1, "jpg": 1, "jpeg": 1, "tif": 1, "tiff": 1, "ifc": 2, "dxf": 3}
     main = sorted(saved, key=lambda s: order.get(s["ext"], 9))[0]
-    return {"path": f"upload:{uid}/{main['stored']}", "name": main["name"], "ext": main["ext"], "files": saved}
+    path = f"upload:{uid}/{main['stored']}"
+    # start reading a raster drawing in the background now, so the first question waits only for what is left
+    pre = None
+    try:
+        pre = precompute.start(path, folder / main["stored"], SOLVE_LOCK, _precompute_scan)
+    except Exception as ex:          # never fail an upload over the background reading
+        print(f"[precompute] {path}: {type(ex).__name__}: {ex}", flush=True)
+    return {"path": path, "name": main["name"], "ext": main["ext"], "files": saved, "precompute": pre}
+
+
+def _precompute_scan(path: str):
+    """The upload precompute of a scan: one solve of a window question fills the detector, OCR and room caches.
+    Called by app/precompute.py with SOLVE_LOCK held."""
+    root, rel = resolve(path)
+    solve(Context(root=root, q=Question(qid=-1, path=rel, question="How many windows are shown on this floor plan?"),
+                  out_dir=RENDER_DIR, evidence=False))
+
+
+@app.get("/api/precompute")
+def precompute_status(path: str):
+    """Progress of the background reading started at upload: {state, kind, stage, done_stages, message, ...}."""
+    st = precompute.status(path)
+    if st is None:
+        raise HTTPException(404, "no background reading for this drawing")
+    return st
 
 
 @app.get("/api/drawings")
@@ -334,6 +361,8 @@ def ask(body: AskBody):
 
     q = Question(qid=-1, path=rel, question=question)
     ctx = Context(root=root, q=q, out_dir=RENDER_DIR, evidence=True, pdf_only=body.pdf_only)
+    # an upload still being read in the background: wait, outside the solve lock, for the part this question needs
+    waited_s = precompute.wait_for(body.path, question) if body.path.startswith("upload:") else 0.0
     with SOLVE_LOCK:
         t0, c0 = time.perf_counter(), time.process_time()
         query, ans = solve(ctx)
@@ -378,7 +407,7 @@ def ask(body: AskBody):
         "evidence_id": ev_id, "evidence_geometry": geo, "tried": list(ctx.tried),
         "status": status, "status_rule": rule,
         "where": where(a, qd, rel), "why": why(a, qd, rel.rsplit(".", 1)[-1].lower()),
-        "time_ms": round(ms, 1), "cached": False, "gold": gold, "marks": marks,
+        "time_ms": round(ms, 1), "waited_for_background_s": waited_s, "cached": False, "gold": gold, "marks": marks,
         "compute": costs.compute_record(ms / 1000, cpu_s, a.get("route"), a.get("cost_usd") or 0.0, parse_usd=parse_usd,
                                         parse_orig_usd=float(qx.get("parse_cost_orig_usd") or 0.0),
                                         parse_cached=bool(qx.get("parse_cached"))),

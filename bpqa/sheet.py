@@ -116,7 +116,7 @@ def _area(b):
     return max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
 
 
-def ocr_pass(im: np.ndarray, rot: int, engine) -> list[dict]:
+def ocr_pass(im: np.ndarray, rot: int, engine, progress=None) -> list[dict]:
     """Tokens of one pass over `im` (grey) in tiles; quads in `im` pixels. rot 90: the image is turned
     clockwise first (text running bottom-to-top reads upright) and the quads mapped back."""
     H0, W0 = im.shape[:2]
@@ -125,6 +125,9 @@ def ocr_pass(im: np.ndarray, rot: int, engine) -> list[dict]:
     dark = work < 170
     jobs = [(x0, y0) for x0, y0 in _tiles(w, h, OCR_TILE, OCR_OVERLAP)
             if dark[y0:y0 + OCR_TILE, x0:x0 + OCR_TILE].mean() >= BLANK_DARK_FRAC]
+
+    done = [0]
+    lock = threading.Lock()
 
     def one(xy):
         x0, y0 = xy
@@ -138,6 +141,10 @@ def ocr_pass(im: np.ndarray, rot: int, engine) -> list[dict]:
                     x, y = y, H0 - 1 - x
                 pts.append([float(x), float(y)])
             out.append({"text": txt, "conf": round(float(conf), 3), "quad": pts, "rot": rot, "mirror": False})
+        if progress:
+            with lock:
+                done[0] += 1
+                progress("text", done[0], len(jobs))
         return out
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(OCR_THREADS) as ex:
@@ -157,7 +164,7 @@ def text_height(t: dict) -> float:
     return min(b[3] - b[1], b[2] - b[0])
 
 
-def read_text(g: np.ndarray) -> tuple[list[dict], float]:
+def read_text(g: np.ndarray, progress=None) -> tuple[list[dict], float]:
     """(tokens in original pixels, OCR scale used). One upright pass: the OCR turns a text box that is clearly
     taller than wide by 90 degrees before reading it, and its classifier flips upside-down text, so labels written
     along a wall are read too (a separate 90-degree pass read nothing more on a test sheet and cost 30 s)."""
@@ -166,12 +173,12 @@ def read_text(g: np.ndarray) -> tuple[list[dict], float]:
     H, W = g.shape[:2]
     s = min(1.0, OCR_SIDE / max(H, W))
     im = scaled(g, s)
-    up = ocr_pass(im, 0, eng)
+    up = ocr_pass(im, 0, eng, progress)
     hs = sorted(text_height(t) for t in up if t["conf"] >= 0.8 and len(t["text"]) >= 3)
     if hs and hs[len(hs) // 2] < TEXT_MIN_PX and s < 1.0:
         s = min(1.0, s * (TEXT_MIN_PX * 1.5) / hs[len(hs) // 2])
         im = scaled(g, s)
-        up = ocr_pass(im, 0, eng)
+        up = ocr_pass(im, 0, eng, progress)
     for t in up:
         t["quad"] = [[round(x / s, 1), round(y / s, 1)] for x, y in t["quad"]]
     return up, s
@@ -599,11 +606,15 @@ def cache_file(file: Path) -> Path:
     return CACHE / f"{Path(file).stem}.v{VERSION}.{st.st_size}.json"
 
 
-def analyse(file: Path, regions: bool = True) -> dict:
+def analyse(file: Path, regions: bool = True, progress=None) -> dict:
     """The sheet's text, labels, scale and (with `regions`) wall-bounded regions; cached on disk and in memory.
-    One drawing is analysed by one thread at a time (a second question waits for the first's reading)."""
+    One drawing is analysed by one thread at a time (a second question waits for the first's reading).
+    `progress(stage, done, total)`, when given, is called as OCR tiles finish (app/precompute.py shows it)."""
     file = Path(file)
     key = str(cache_file(file))
+    d = _MEM.get(key)
+    if d is not None and (d["regions"] or not regions or not d["scale"]["ppm"]):
+        return d                 # already read: no lock, so a text question never waits behind a wall tracing
     lock = _LOCKS.setdefault(key, threading.Lock())
     with lock:
         d = _MEM.get(key)
@@ -611,12 +622,14 @@ def analyse(file: Path, regions: bool = True) -> dict:
             d = json.loads(Path(key).read_text(encoding="utf-8"))
         if d is None:
             g = gray(file)
-            toks, s = read_text(g)
+            toks, s = read_text(g, progress)
             labels = join_lines(toks, g)
             sc = find_scale(toks, g)
             d = {"size": [int(g.shape[1]), int(g.shape[0])], "ocr_scale": s, "tokens": toks, "labels": labels,
                  "scale": sc.as_dict(), "regions": False}
         if regions and not d["regions"] and d["scale"]["ppm"]:
+            # traced on a copy and swapped in when done: readers of the text-only reading never see half-traced labels
+            d = {**d, "labels": [dict(l) for l in d["labels"]]}
             _, extra = trace_regions(gray(file), d["tokens"], d["labels"], d["scale"]["ppm"])
             d.update(extra)
             d["regions"] = True

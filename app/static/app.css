@@ -288,6 +288,7 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .workbar { display: grid; gap: var(--s3); padding: var(--s3) var(--s5); border-bottom: 1px solid var(--rule); background: var(--bg); }
 .drawing-head { display: grid; gap: 0; }
 .drawing-head .meta { font-size: var(--fs-xs); }
+.drawing-head .read-status { color: var(--accent); }
 .ask-row { display: flex; gap: var(--s2); }
 .ask-row input { min-height: 36px; font-size: var(--fs-base); }
 .ask-row .btn { min-height: 36px; }

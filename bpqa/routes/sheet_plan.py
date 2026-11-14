@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from pathlib import Path
 
 import cv2
@@ -154,9 +155,19 @@ def match_phrase(question: str, labels: list[dict]) -> tuple[list[str], list[dic
 
 # ---------------------------------------------------------------- detector on the sheet
 
-def detect(file: Path, ppm: float | None) -> tuple[list[dict], float]:
+_DET_LOCKS: dict[str, threading.Lock] = {}
+
+
+def detect(file: Path, ppm: float | None, progress=None) -> tuple[list[dict], float]:
     """Boxes (original px) of the scan detector on tiles of a copy at DET_PPM px per m, blank tiles skipped;
-    cached per drawing. Returns (boxes, factor)."""
+    cached per drawing. Returns (boxes, factor). One run per drawing at a time: a second caller (a question
+    asked while the upload precompute runs the detector) waits for the first and reads its cache.
+    `progress("doors", done, total)` is called per batch of tiles."""
+    with _DET_LOCKS.setdefault(str(Path(file).resolve()), threading.Lock()):
+        return _detect(file, ppm, progress)
+
+
+def _detect(file: Path, ppm: float | None, progress=None) -> tuple[list[dict], float]:
     from . import detector as D
     c = D.config("door") or {}
     model = D.REPO / "models" / c.get("model", "detector.pt")
@@ -177,7 +188,11 @@ def detect(file: Path, ppm: float | None) -> tuple[list[dict], float]:
         pad = np.full((DET_TILE, DET_TILE), 255, np.uint8)
         pad[:crop.shape[0], :crop.shape[1]] = crop
         jobs.append((x0, y0, crop.shape[1], crop.shape[0], cv2.cvtColor(pad, cv2.COLOR_GRAY2BGR)))
-    preds = D._predict_batch(str(model), [j[4] for j in jobs], DET_TILE, "cpu", chunk=4) if jobs else []
+    preds = []
+    for i in range(0, len(jobs), 8):
+        preds += D._predict_batch(str(model), [j[4] for j in jobs[i:i + 8]], DET_TILE, "cpu", chunk=4)
+        if progress:
+            progress("doors", min(i + 8, len(jobs)), len(jobs))
     boxes = []
     for (x0, y0, cw, ch, _), ds in zip(jobs, preds):
         for b in ds:
