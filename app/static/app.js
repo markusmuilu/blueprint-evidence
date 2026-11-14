@@ -45,7 +45,7 @@ function toast(msg, err = false) {
   t.className = "toast" + (err ? " err" : "");
   t.hidden = false;
   clearTimeout(toastT);
-  toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 2600);
+  toastT = setTimeout(() => (t.hidden = true), Math.max(err ? 6000 : 2600, Math.min(msg.length * 70, 14000)));
 }
 
 const UPLOAD_EXPIRED = "This upload has expired (uploads are deleted after 15 minutes). Please upload it again.";
@@ -359,22 +359,79 @@ $("#search").addEventListener("input", (e) => {
 
 /* ---------------------------------------------------------------- upload */
 const drop = $("#drop");
+renderUploads();
 ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove("over")));
 drop.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); });
 $("#fileInput").addEventListener("change", (e) => { if (e.target.files.length) upload(e.target.files); e.target.value = ""; });
 
-async function upload(files) {
-  const fd = new FormData();
-  for (const f of files) fd.append("files", f);
+/* Files that share a stem (plan.pdf + plan.dxf) are twins of one drawing and go in one request; every other
+   file is its own drawing. One request per drawing keeps each under the 30 MB request limit. */
+const UPLOAD_TYPES = "PDF, DXF, IFC, PNG, JPEG, TIFF or SVG";
+const UPLOADS_KEY = "bpe-uploads", UPLOAD_KEEP_MS = 14 * 60 * 1000;   // the server deletes an upload after 15 minutes
+const stemOf = (n) => { const i = n.lastIndexOf("."); return (i > 0 ? n.slice(0, i) : n).toLowerCase(); };
+const uploadStore = {
+  read() {
+    try {
+      const a = JSON.parse(sessionStorage.getItem(UPLOADS_KEY));
+      return Array.isArray(a) ? a.filter((u) => Date.now() - u.t < UPLOAD_KEEP_MS) : [];
+    } catch (_) { return []; }
+  },
+  write(a) { try { sessionStorage.setItem(UPLOADS_KEY, JSON.stringify(a)); } catch (_) { /* storage blocked */ } },
+};
+function renderUploads() {
+  const box = $("#uploadList");
+  const items = uploadStore.read();
+  box.hidden = !items.length;
+  if (!items.length) { box.innerHTML = ""; return; }
+  box.innerHTML = '<h3 class="h-group">Your uploads</h3><ul></ul>';
+  const ul = box.querySelector("ul");
+  for (const d of items) {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.className = "draw-item";
+    b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
+    b.innerHTML = `<span class="nm" title="${esc(d.path)}">${esc(d.name)}</span>
+      <span class="sub"><span>${esc(d.ext.toUpperCase())}</span><span>Deleted 15 minutes after upload</span></span>`;
+    b.addEventListener("click", () => selectDrawing(d.path));
+    li.appendChild(b);
+    ul.appendChild(li);
+  }
+}
+
+async function upload(fileList) {
+  const files = [...fileList];
+  const groups = new Map();
+  for (const f of files) {
+    const k = stemOf(f.name);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(f);
+  }
   toast(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}`);
-  try {
-    const res = await api("/api/upload", { method: "POST", body: fd });
-    toast(`Uploaded ${res.name}`);
-    batchAddUploaded(res);                     // ask-several block: with the toggle on, uploads join the selection
-    selectDrawing(res.path);
-  } catch (e) {
-    toast("Upload failed: " + e.message, true);
+  const added = [], errors = [], notes = [];
+  for (const group of groups.values()) {
+    const fd = new FormData();
+    for (const f of group) fd.append("files", f);
+    try {
+      const res = await api("/api/upload", { method: "POST", body: fd });
+      added.push(...res.drawings);
+      errors.push(...(res.errors || []));
+      notes.push(...(res.notes || []));
+    } catch (e) {
+      errors.push(e.message);
+    }
+  }
+  if (added.length) {
+    const t = Date.now();
+    uploadStore.write([...added.map((d) => ({ path: d.path, name: d.name, ext: d.ext, t })), ...uploadStore.read()]);
+    renderUploads();
+    batchAddUploaded({ drawings: added, path: added[0].path, name: added[0].name });   // ask-several: uploads join the selection
+    await selectDrawing(added[0].path);
+    renderUploads();
+    const msg = added.length === 1 ? `Uploaded ${added[0].name}` : `Uploaded ${added.length} drawings. The first one is open; the others are under Your uploads.`;
+    toast([msg, ...notes, ...errors].join(" "), errors.length > 0);
+  } else {
+    toast("Upload failed: " + errors.join(" "), true);
   }
 }
 
@@ -389,6 +446,7 @@ async function selectDrawing(path, keepAnswer = false) {
     $("#drawTitle").textContent = d.name;
     const bits = [SOURCE_NAMES[d.source] || d.source, d.ext.toUpperCase()];
     if (d.twins?.length) bits.push("twins: " + d.twins.join(", "));
+    if (d.note) bits.push(d.note);
     if (d.split) bits.push(d.split + " split");
     $("#drawMeta").textContent = bits.join("  ·  ");
     $("#pdfOnly").closest(".check").hidden = !(d.ext === "pdf" && d.twins?.length);
@@ -432,7 +490,7 @@ const TRY = [
     path: "data/ifc_models/kit-fzk-haus_ac20-fzk-haus_plan-01-erdgeschoss.pdf", q: "What is the net floor area of the room 'K\u00fcche (6)' on 'Erdgeschoss', in m\u00b2?", mode: "3d" },
   { label: "Count windows on a scan", note: "Pixels, not vectors: comes back as an estimate with items to check.",
     path: "data/cubicasa5k/high_quality_architectural-10372.png", q: "How many windows are shown on this floor plan?" },
-  { label: "Bring your own drawing", note: "PDF, DXF, IFC or an image. Drop a PDF with its DXF twin to use both.", upload: true },
+  { label: "Bring your own drawing", note: "PDF, DXF, IFC, an image or an SVG. Drop several files at once; a PDF and a DXF with the same name are used together.", upload: true },
 ];
 async function renderTry() {
   const ul = $("#tryList");

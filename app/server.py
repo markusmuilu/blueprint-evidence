@@ -27,6 +27,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -38,6 +39,7 @@ from bpqa.evidence import marks_path
 from . import costs
 from . import ifc3d
 from . import results as results_mod
+from . import uploads
 from .catalog import SOURCE_NAMES, Catalog, find_data_root
 
 REPO = Path(__file__).resolve().parent.parent
@@ -48,7 +50,7 @@ RENDER_DIR = APP_OUT / "render"         # where the routes draw; copied to EVIDE
 ANSWER_CACHE = APP_OUT / "answers"
 PREVIEW_CACHE = APP_OUT / "preview"
 UPLOADS = Path(tempfile.gettempdir()) / "blueprint-evidence" / "uploads"
-UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff"}
+UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff", "svg", "dwg"}
 MAX_UPLOAD = 200 * 1024 * 1024
 CACHE_VERSION = "5"       # 5: approximations on scans without printed areas (approx field); 4: wall openings z0_m / z1_m
 
@@ -87,40 +89,28 @@ def display_name(stored: str) -> str:
     return re.sub(r"^u[0-9a-f]{12}-", "", stored)
 
 
-def _safe_name(name: str) -> str:
-    name = Path(name.replace("\\", "/")).name
-    name = re.sub(r"[^\w.\- ]+", "_", name).strip(" .")
-    return name[:120] or "drawing"
+def drawing_label(ref: str, root: Path, rel: str) -> str:
+    """The name shown for a drawing: an upload's own label ("file.pdf, page 2"), else its file name."""
+    if ref.startswith("upload:"):
+        n = uploads.read_label(UPLOADS, root.name).get("name")
+        if n:
+            return n
+    return display_name(rel.rsplit("/", 1)[-1])
 
 
 @app.post("/api/upload")
 async def upload(files: list[UploadFile] = File(...)):
-    """Store one drawing, optionally with twins of the same name (a PDF and its DXF), in one folder."""
-    uid = uuid.uuid4().hex[:12]
-    folder = UPLOADS / uid / "data" / "upload"
-    folder.mkdir(parents=True, exist_ok=True)
-    saved = []
+    """Store uploaded files as drawings (see app/uploads.py): unrelated files become separate drawings, files
+    sharing a stem are twins of one, a multi-page PDF becomes one drawing per page, TIFF and SVG become PNG."""
+    blobs = []
     for uf in files:
-        name = _safe_name(uf.filename or "drawing")
-        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-        if ext not in UPLOAD_EXT:
-            shutil.rmtree(UPLOADS / uid, ignore_errors=True)
-            raise HTTPException(400, f"{name}: use PDF, DXF, IFC, PNG or JPG")
-        data = await uf.read()
-        if len(data) > MAX_UPLOAD:
-            shutil.rmtree(UPLOADS / uid, ignore_errors=True)
-            raise HTTPException(413, f"{name}: larger than 200 MB")
-        # the OCR and detector caches are keyed by file stem, so every upload gets a unique stem;
-        # twins uploaded together keep a shared stem
-        stored = f"u{uid}-{name}"
-        (folder / stored).write_bytes(data)
-        saved.append({"name": name, "stored": stored, "ext": ext, "bytes": len(data)})
-    if not saved:
-        raise HTTPException(400, "no file")
-    # the drawing to ask about: a PDF or image over its DXF/IFC twin
-    order = {"pdf": 0, "png": 1, "jpg": 1, "jpeg": 1, "tif": 1, "tiff": 1, "ifc": 2, "dxf": 3}
-    main = sorted(saved, key=lambda s: order.get(s["ext"], 9))[0]
-    return {"path": f"upload:{uid}/{main['stored']}", "name": main["name"], "ext": main["ext"], "files": saved}
+        blobs.append((uf.filename or "drawing", await uf.read()))
+    try:
+        res = await run_in_threadpool(uploads.ingest, blobs, UPLOADS, UPLOAD_EXT, MAX_UPLOAD)
+    except uploads.UploadError as ex:
+        raise HTTPException(ex.status, ex.message)
+    first = res["drawings"][0]
+    return {"path": first["path"], "name": first["name"], "ext": first["ext"], "files": first["files"], **res}
 
 
 @app.get("/api/drawings")
@@ -136,7 +126,9 @@ def drawing(path: str):
         root, rel = resolve(path)
         name = rel.rsplit("/", 1)[-1]
         twins = sorted(p.suffix[1:] for p in (root / rel).parent.iterdir() if p.name != name)
-        return {"path": path, "name": display_name(name), "source": "upload", "ext": name.rsplit(".", 1)[-1].lower(),
+        lab = uploads.read_label(UPLOADS, root.name)
+        return {"path": path, "name": lab.get("name") or display_name(name), "source": "upload",
+                "ext": name.rsplit(".", 1)[-1].lower(), "note": lab.get("note"),
                 "split": None, "n_questions": 0, "types": [], "twins": twins, "questions": []}
     d = CATALOG.detail(path)
     if d is None:
@@ -230,8 +222,8 @@ def scale_source(a: dict, query: dict, ext: str) -> str | None:
     return None
 
 
-def where(a: dict, query: dict, rel: str) -> list[dict]:
-    rows = [{"k": "Drawing", "v": display_name(rel.rsplit("/", 1)[-1])}]
+def where(a: dict, query: dict, rel: str, label: str | None = None) -> list[dict]:
+    rows = [{"k": "Drawing", "v": label or display_name(rel.rsplit("/", 1)[-1])}]
     route = a.get("route") or ""
     rows.append({"k": "Route", "v": ROUTES.get(route, (route,))[0], "code": route})
     scope = []
@@ -370,14 +362,14 @@ def ask(body: AskBody):
     parse_usd = float(qx.get("parse_cost_usd") or 0.0)      # question reading by the language model (0 when cached)
     gold = CATALOG.gold(rel, question) if not body.path.startswith("upload:") else None
     rec = {
-        "path": body.path, "drawing": display_name(rel.rsplit("/", 1)[-1]), "question": question, "query": qd,
+        "path": body.path, "drawing": drawing_label(body.path, root, rel), "question": question, "query": qd,
         "value": a.get("value"), "unit": a.get("unit") or "", "route": a.get("route"),
         "confidence": a.get("confidence"), "abstain": a.get("abstain"), "explanation": a.get("explanation"),
         "approx": a.get("approx"),
         "checks": a.get("checks") or [], "items": a.get("items") or [], "cost_usd": (a.get("cost_usd") or 0.0) + parse_usd,
         "evidence_id": ev_id, "evidence_geometry": geo, "tried": list(ctx.tried),
         "status": status, "status_rule": rule,
-        "where": where(a, qd, rel), "why": why(a, qd, rel.rsplit(".", 1)[-1].lower()),
+        "where": where(a, qd, rel, drawing_label(body.path, root, rel)), "why": why(a, qd, rel.rsplit(".", 1)[-1].lower()),
         "time_ms": round(ms, 1), "cached": False, "gold": gold, "marks": marks,
         "compute": costs.compute_record(ms / 1000, cpu_s, a.get("route"), a.get("cost_usd") or 0.0, parse_usd=parse_usd,
                                         parse_orig_usd=float(qx.get("parse_cost_orig_usd") or 0.0),

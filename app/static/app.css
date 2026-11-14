@@ -241,6 +241,10 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .draw-list li { border-bottom: 1px solid var(--rule); }
 .draw-list ul { list-style: none; margin: 0; padding: 0; }
 .dgroup + .dgroup { margin-top: var(--s3); }
+.uploads[hidden] { display: none; }
+.uploads ul { list-style: none; margin: 0; padding: 0; }
+.uploads li { border-bottom: 1px solid var(--rule); }
+.uploads .h-group { padding: var(--s1) 0; }
 .h-group { font-size: var(--fs-sm); font-weight: 600; color: var(--fg); }
 .dgroup-body[hidden] { display: none; }
 .dgroup-toggle {

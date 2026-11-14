@@ -665,7 +665,9 @@ eval outputs), `--gpu` (by default the detector runs on the CPU).
   filled from `out/baseline_nemotron.json`, with our side re-scored from the newest preview test run.
 - Counted items on scans are listed with the numbers drawn on the overlay; selecting one marks it in
   the viewer. If the question is a dataset question, the dataset answer is shown beside the result.
-- Uploads (PDF, DXF, IFC, PNG, JPG; a PDF with its DXF twin can go in one upload) are stored in the OS
+- Uploads (PDF, DXF, IFC, PNG, JPEG, TIFF, SVG; several files at once become several drawings, files with the
+  same name such as a PDF and its DXF twin stay together, a multi-page PDF becomes one drawing per page, TIFF and
+  SVG are converted to PNG, DWG is refused with a message; see `app/uploads.py`) are stored in the OS
   temp folder (`%TEMP%\blueprint-evidence\uploads`), never in the repo. Answers and evidence are
   cached in `out/app/`.
 - Without `ultralytics` and `torch` the symbol detector is unavailable and those counts abstain
