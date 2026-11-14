@@ -368,6 +368,7 @@ function drawItem(d) {
   b.className = "draw-item";
   b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
   b.dataset.path = d.path; b.dataset.name = d.name; b.dataset.ext = d.ext;
+  if (d.title && d.title !== d.name) b.dataset.title = d.title;      // ask-several: the readable name in chips and the table
   b.innerHTML = `<span class="box" aria-hidden="true"></span>${nameHtml(d)}
     <span class="sub"><span>${esc(SOURCE_NAMES[d.source] || d.source)}</span><span>${esc(d.ext.toUpperCase())}</span><span>${d.n_questions} questions</span>${splitTag(d.split)}</span>`;
   b.addEventListener("click", (e) => pickOrOpen(b, e));       // ask-several block: select, or open
@@ -408,22 +409,26 @@ function renderUploads() {
   const items = uploadStore.read();
   box.hidden = !items.length;
   if (!items.length) { box.innerHTML = ""; return; }
-  box.innerHTML = '<h3 class="h-group">Your uploads</h3><ul></ul>';
+  /* compact (BM, 14 Nov): a fold with a capped, scrolling list, so at 1280x800 the search results below stay visible */
+  const open = box.querySelector("details")?.open ?? true;
+  box.innerHTML = `<details class="uploads-fold"${open ? " open" : ""}><summary class="h-group"><span class="up-t">Your uploads (${items.length})</span><span class="meta">kept 24 h</span></summary><ul></ul></details>`;
   const ul = box.querySelector("ul");
   for (const d of items) {
     const li = document.createElement("li");
     const b = document.createElement("button");
     b.className = "draw-item";
-    b.dataset.path = d.path;
+    b.dataset.path = d.path; b.dataset.name = d.name || d.path.split("/").pop(); b.dataset.ext = d.ext || "";
     b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
-    b.innerHTML = `<span class="nm nm-file mono" title="${esc(d.name)}">${esc(d.name)}</span>
-      <span class="sub"><span>${esc(d.ext.toUpperCase())}</span><span>Deleted 24 hours after upload</span></span>`;
-    b.addEventListener("click", () => selectDrawing(d.path));
+    b.innerHTML = `<span class="box" aria-hidden="true"></span><span class="nm nm-file mono" title="${esc(b.dataset.name)}">${esc(b.dataset.name)}</span>
+      <span class="sub"><span>${esc(b.dataset.ext.toUpperCase())}</span><span>Upload</span></span>`;
+    b.addEventListener("click", (e) => pickOrOpen(b, e));       // ask-several block: select, or open
+    b.addEventListener("dblclick", () => { if (batch.on) selectDrawing(d.path); });
+    paintPick(b);
     li.appendChild(b);
     ul.appendChild(li);
   }
 }
-renderUploads();      // after uploadStore exists (a call above it stopped the whole script, 14 Nov)
+queueMicrotask(renderUploads);      // after the whole script has run: it needs uploadStore and the ask-several state (a call above either stopped the script, 14 Nov)
 
 async function upload(fileList) {
   const files = [...fileList];
@@ -2292,6 +2297,10 @@ const batchActive = () => batch.on && batch.sel.size >= 2;
 const plural = (n, w) => !w || n === 1 ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : /(s|x|ch|sh)$/.test(w) ? w + "es" : w + "s";
 const nDrawings = (n) => `${n} drawing${n === 1 ? "" : "s"}`;
 
+/* the selection keeps the file name, its readable title if it has one, and never an empty name (upload chips were blank) */
+const baseName = (p) => String(p || "").split(/[\/]/).pop();
+function pickInfo(x) { return { name: x.dataset.name || baseName(x.dataset.path), ext: x.dataset.ext || "", title: x.dataset.title || "" }; }
+const pickLabel = (path, d) => (d && (d.title || d.name)) || baseName(path);
 function paintPick(b) {
   const on = batch.on && batch.sel.has(b.dataset.path);
   if (batch.on) { b.setAttribute("role", "checkbox"); b.setAttribute("aria-checked", String(on)); }
@@ -2306,7 +2315,7 @@ function batchChanged() {
   const n = batch.sel.size;
   $("#multiCount").textContent = n ? `${n} selected` : "None selected";
   $("#multiList").innerHTML = [...batch.sel].map(([p, d]) =>
-    `<li><span class="nm" title="${esc(p)}">${esc(d.name)}</span><button type="button" class="x" data-path="${esc(p)}" aria-label="Remove ${esc(d.name)} from the selection">×</button></li>`).join("");
+    `<li><span class="nm${d.title ? " titled" : ""}" title="${esc(d.name || baseName(p))}${d.title ? "" : "\n" + esc(p)}">${esc(pickLabel(p, d))}</span><button type="button" class="x" data-path="${esc(p)}" aria-label="Remove ${esc(pickLabel(p, d))} from the selection">×</button></li>`).join("");
   const note = $("#multiNote");
   note.hidden = !batch.on;
   note.textContent = n >= 2 ? `Asks all ${n} selected drawings, one after another.` : n === 1 ? "One drawing selected. Select another to ask across several." : "No drawings selected. Tick two or more in the library.";
@@ -2323,7 +2332,8 @@ function setMulti(on) {
   if (on === batch.on) return;
   batch.on = on;
   if (on) {
-    if (state.drawing) batchPick(state.drawing.path, { name: state.drawing.name, ext: state.drawing.ext }, true);
+    if (state.drawing) batchPick(state.drawing.path, { name: state.drawing.name || baseName(state.drawing.path), ext: state.drawing.ext,
+      title: state.drawing.title && state.drawing.title !== state.drawing.name ? state.drawing.title : "" }, true);
     batch.anchor = state.drawing ? state.drawing.path : null;
   } else {
     if (batch.results) batch.results.stop = true;
@@ -2335,14 +2345,14 @@ function setMulti(on) {
   batchChanged();
 }
 function pickOrOpen(b, e) {
-  const path = b.dataset.path, info = { name: b.dataset.name, ext: b.dataset.ext };
+  const path = b.dataset.path, info = pickInfo(b);
   const withKey = e.ctrlKey || e.metaKey || e.shiftKey;
   if (!batch.on && !withKey) { selectDrawing(path); return; }
   if (!batch.on) setMulti(true);
   const items = [...document.querySelectorAll(".draw-item")].filter((x) => x.offsetParent !== null);
   const from = items.findIndex((x) => x.dataset.path === batch.anchor), to = items.indexOf(b);
   if (e.shiftKey && from >= 0 && to >= 0) {
-    for (const x of items.slice(Math.min(from, to), Math.max(from, to) + 1)) if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
+    for (const x of items.slice(Math.min(from, to), Math.max(from, to) + 1)) if (!batchPick(x.dataset.path, pickInfo(x), true)) break;
   } else {
     batchPick(path, info, !batch.sel.has(path));
   }
@@ -2352,7 +2362,7 @@ function pickOrOpen(b, e) {
 function batchAddUploaded(res) {
   if (!batch.on) return;
   const list = Array.isArray(res.drawings) && res.drawings.length ? res.drawings : [{ path: res.path, name: res.name, ext: res.ext }];
-  for (const d of list) if (!batchPick(d.path, { name: d.name, ext: d.ext }, true)) break;
+  for (const d of list) if (!batchPick(d.path, { name: d.name || baseName(d.path), ext: d.ext, title: "" }, true)) break;
   batchChanged();
 }
 $("#multiToggle").addEventListener("click", () => setMulti(!batch.on));
@@ -2361,7 +2371,7 @@ $("#multiShown").addEventListener("click", () => {
   const shown = [...document.querySelectorAll(".draw-item")].filter((x) => x.offsetParent !== null);
   /* every group folded (the first visit starts so): say what to do instead of silently selecting nothing (QA 14 Nov) */
   if (!shown.length) { toast("No drawings are listed yet. Open a group or search, then Select shown picks the listed ones.", true); return; }
-  for (const x of shown) if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
+  for (const x of shown) if (!batchPick(x.dataset.path, pickInfo(x), true)) break;
   batchChanged();
 });
 $("#multiList").addEventListener("click", (e) => {
@@ -2374,7 +2384,7 @@ async function askMany() {
   const q = $("#question").value.trim();
   if (!q) { $("#question").focus(); return; }
   const run = { question: q, pdf_only: $("#pdfOnly").checked, stop: false, seq: ++batchSeq,
-    rows: [...batch.sel].map(([path, d]) => ({ path, name: d.name, st: "wait" })) };
+    rows: [...batch.sel].map(([path, d]) => ({ path, name: d.name || baseName(path), title: d.title || "", st: "wait" })) };
   batch.results = run;
   showBatchView();
   const btn = $("#askBtn");
@@ -2456,7 +2466,7 @@ function renderBatch() {
   const cur = run.rows.find((r) => r.st === "run");
   const s = batchSummary(run);
   const rows = run.rows.map((r) => {
-    const link = `<button type="button" class="rowlink mono" data-path="${esc(r.path)}" title="Open ${esc(r.path)} with its evidence">${esc(r.name)}</button>`;
+    const link = `<button type="button" class="rowlink${r.title ? "" : " mono"}" data-path="${esc(r.path)}" title="${esc(r.name)}\nOpen with its evidence">${esc(r.title || r.name)}</button>`;
     if (r.st === "wait") return `<tr class="dimrow"><td>${link}</td><td class="num">-</td><td></td><td class="dim">Waiting</td></tr>`;
     if (r.st === "run") return `<tr><td>${link}</td><td class="num">-</td><td></td><td class="dim">Reading...</td></tr>`;
     if (r.st === "skip") return `<tr class="dimrow"><td>${link}</td><td class="num">-</td><td></td><td class="dim">Not run</td></tr>`;
@@ -2471,7 +2481,7 @@ function renderBatch() {
   const totalRow = s.total == null ? "" :
     `<tr class="total"><td>${run.finished ? "Total" : "Total so far"}, ${s.used.length} of ${n} drawings</td><td class="num">${s.about ? '<span class="about">about </span>' : ""}${esc(fmtValue(s.total))}</td><td class="unit">${esc(s.unit === "count" ? "count" : fmtUnit(s.unit))}</td><td class="status ${s.est ? "estimate" : "proven"}">${s.est ? "Includes estimates" : "All proven"}</td></tr>`;
   const sentence = s.pending && !run.finished ? "" : batchSentence(run, s);
-  const prog = `${finished} of ${n} done` + (run.finished ? (run.stop ? ", stopped" : "") : cur ? `, reading ${esc(cur.name)}` : "");
+  const prog = `${finished} of ${n} done` + (run.finished ? (run.stop ? ", stopped" : "") : cur ? `, reading ${esc(cur.title || cur.name)}` : "");
   box.innerHTML = `
     <div class="ans-head">
       <h2 class="h-panel">Answers across ${esc(nDrawings(n))}</h2>
