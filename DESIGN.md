@@ -3,7 +3,8 @@
 The design system for the demo app in `app/static/`. Tokens live at the top of `app/static/app.css`;
 if the CSS and this file disagree, this file wins. Version 2 (2026-11-14) replaces the first build's
 pills, chips and tinted boxes with ruled tables and plain coloured text; the audit that drove it is
-at the end.
+at the end. Version 2.1 (2026-11-14) is a type pass: no display numeral, no small mono labels, a
+library grouped by what the system can do, and a "Try these" list in the empty answer panel.
 
 ## Context
 
@@ -40,23 +41,35 @@ at the end.
 ## Typography
 
 - UI: IBM Plex Sans (Google Fonts, OFL), 400/500/600.
-- Figures, file names, codes, citations: IBM Plex Mono (Google Fonts, OFL), 400/500. Mono is for data
-  and measurement only, never decoration. Table header labels stay in Sans even over numeric columns.
+- Figures inside tables, file names, codes, citations: IBM Plex Mono (Google Fonts, OFL), 400/500. Mono
+  is for data and measurement only, never decoration and never for words: toolbar labels, status
+  lines, busy text and format codes (PDF, IFC, DXF) are Sans. Table header labels stay in Sans.
+- The answer value is Sans, not mono and not a display size: 26px, weight 500, tabular lining
+  figures, letter-spacing 0, with the unit right after it at the same size in weight 400 and fg-2.
+  The same applies to the order quantity (20px, Sans 500). Reason: a 40px mono numeral read as a
+  marketing hero stat, which the product should not be; the answer is a quantity to check, so it
+  sits at the size of a heading.
+- Fonts load from Google Fonts with `display=swap`; the fallback is Segoe UI, so on a machine with
+  no network the layout holds but the numerals lose Plex's shapes. Checked 2026-11-14 in Chromium:
+  Plex Sans 400/500/600 and Plex Mono 400/500 (latin subset) report `loaded`.
+- No letter-spacing anywhere except 0, no weights under 400, no text under 12px (the 12px steps are
+  citation numerals and chart ticks).
 - One superfamily on purpose: Operate surfaces read better with one voice.
 - Scale: ratio about 1.2, fixed px. Hierarchy comes from size and weight: section headings are fg
-  600, labels are muted 500 at 12px, values are fg 400.
+  600, labels are muted 500 at 13px, values are fg 400.
 
 | step | size | use |
 |---|---|---|
-| xs | 12px | labels, table headers, meta, notes |
+| xs | 13px | labels, table headers, meta, notes |
 | sm | 13px | panel text, ruled rows, section headings |
 | base | 14px | body, inputs, a text answer |
 | md | 16px | drawing title, Results section headings, headline sentence |
-| lg | 20px | unit next to the answer, order quantity |
+| lg | 20px | order quantity |
 | xl | 24px | page title |
-| display | 40px | the numeric answer (mono) |
+| answer | 26px | the numeric answer and its unit (Sans 500) |
 
-- Sentence case everywhere; no uppercase labels. Check results read "Pass" and "Fail".
+- Sentence case everywhere; no uppercase labels and no text-transform. Check results read "Pass"
+  and "Fail". Acronyms (PDF, IFC, DXF, OCR) keep their capitals because that is how they are written.
 
 ## Color
 
@@ -116,13 +129,24 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
 - Inputs: visible labels above, never placeholder-as-label; focus is a 1px accent border plus 1px ring.
 - Focus elsewhere: 2px accent ring offset by 2px of bg; inside lists and rows an inset 2px accent ring.
 - Library sources: plain text filters with mono counts; the current one has a 2px accent underline.
+- Library groups: under the filters the list is grouped by what the system can do with the file, as
+  plain text headings with a count and one sentence each: "BIM model (3D, proven)" (IFC), "CAD
+  drawing (vector, proven)" (DXF; none are listed on their own in the dataset, so the group says
+  so), "PDF plan (vector, proven; scale found on the sheet)" and "Scanned plan (pixels; estimates to
+  check)" (PNG). Eight rows per group, then "Show more (n left)". Grouping uses the catalog's `ext`
+  filter, no backend change. Source filter and search narrow every group; empty groups are hidden
+  while filtering.
+- Try these: the empty answer panel opens with four one-click examples (tiling on a Swiss plan, room
+  area from an IFC model with the 3D view, a window count on a scan, and an upload hint), each a text
+  command with one muted sentence, followed by the "each answer reads like this" table. A row is
+  hidden when its drawing is not in the library (the Modal demo set is a subset).
 - Library rows: ruled, no radius; selected row is raised with the file name in accent.
 - Examples: a run of accent text commands after an "Examples" label; Finnish ones carry a muted mono
   "fi". The dataset's own questions sit in a disclosure under them.
 - Status (answer panel): icon + words in the tier colour, no box: "Proven" (blue), "Estimate, check
   highlighted items" (amber), "Cannot prove" (fg-2) with the reason under it. Dataset answer:
   "matches" (blue, check icon) or "differs" (amber, warning icon).
-- Text answers render at body size, clamped to six lines, not at display size.
+- Text answers render at body size, clamped to six lines. Numeric answers are 26px (see Typography).
 - Verification strip (under the viewer): one 104 x 78 crop per counted item or measured room, square
   corners, 2px border in accent for proven and amber (with the estimate icon) for items to check,
   numbered like the overlay. "Not this one" is a text command under the crop (amber once pressed);
@@ -224,3 +248,22 @@ detector (its launcher downloads a binary), so it is a degraded run: a design re
 - Deliberate deviation: one type superfamily (Plex Sans + Plex Mono) instead of a display and body
   pairing, because this is an Operate surface.
 - Not done: light mode; a keyboard shortcut list; a full screen-reader pass.
+
+## Type pass (v2.1, 2026-11-14)
+
+Markus's review of v2: the small all-caps-looking text in the top right of the viewer was hard to
+read, and the large 47.68 read as an AI dashboard. Findings in the rendered app (computed styles,
+Chromium, 1440 and 390 px): there was no `text-transform` or letter-spacing on labels; the top-right
+viewer toolbar labels ("Drawing", "Evidence", the zoom level) were set in 12px Plex Mono, which
+reads as terminal capitals on a dark ground. The answer was 40px Plex Mono with -0.02em tracking.
+
+Changed: toolbar label and zoom to Sans at 13px; every sentence that was mono (busy text, 3D status,
+scale and correction lines, "baseline", "Not measured yet", results sub-heading, format codes) to
+Sans; --fs-xs 12px to 13px; the 11px mono items (citation numerals, tags, chart ticks) to 12px; the
+answer to 26px Sans 500 with the unit at the same size; the order quantity to Sans; letter-spacing
+removed from the page heading. Audit script: every visible text node on the Ask, status and Results
+views was checked for text-transform, tracking, weight under 400, size under 12px and size over 26px;
+the only hits left are the acronym codes and the 26px answer.
+
+Not changed on purpose: file names, table numerals, citation numerals and the dataset answer in
+mono (data); the Results tables; the printable order sheet.

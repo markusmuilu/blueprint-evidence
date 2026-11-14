@@ -108,28 +108,71 @@ document.addEventListener("click", (e) => { if (!$("#statusPop").contains(e.targ
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#statusPop").hidden = true; });
 
 /* ================================================================ drawing library */
-let searchT;
-async function loadDrawings(append = false) {
+/* The library is grouped by what the system can do with each kind of file, not by dataset. */
+const GROUPS = [
+  { id: "bim", ext: "ifc", title: "BIM model (3D, proven)",
+    note: "IFC. Quantities come from the model's own elements, with a 3D view." },
+  { id: "cad", ext: "dxf", title: "CAD drawing (vector, proven)",
+    note: "DXF. Read from the drawing's own geometry.",
+    none: "None listed on their own: Swiss PDFs come with a DXF twin, and you can upload a DXF." },
+  { id: "pdf", ext: "pdf", title: "PDF plan (vector, proven; scale found on the sheet)",
+    note: "Vector PDFs with a text layer. The scale is read off the sheet." },
+  { id: "scan", ext: "png", title: "Scanned plan (pixels; estimates to check)",
+    note: "PNG scans. A detector counts the items, so answers are estimates and each counted item is shown to check." },
+];
+const GROUP_FIRST = 8, GROUP_MORE = 30;
+
+let searchT, loadSeq = 0;
+function groupQuery(g, offset, limit) {
+  return api("/api/drawings?" + new URLSearchParams({ source: state.source, q: state.query, ext: g.ext, offset, limit }));
+}
+
+async function loadDrawings() {
   const list = $("#drawList");
-  if (!append) {
-    state.offset = 0;
-    list.innerHTML = '<li class="skel"></li><li class="skel"></li><li class="skel"></li>';
-  }
-  const p = new URLSearchParams({ source: state.source, q: state.query, offset: state.offset, limit: 60 });
+  const seq = ++loadSeq;
+  list.innerHTML = '<ul><li class="skel"></li><li class="skel"></li><li class="skel"></li></ul>';
   try {
-    const res = await api("/api/drawings?" + p);
-    state.total = res.total;
-    renderSources(res.sources);
-    if (!append) list.innerHTML = "";
-    if (!res.total) {
-      list.innerHTML = `<li class="list-note">${res.sources.length ? "No drawing matches. Try part of a file name." : "No dataset found. Set STOA_DATA, or upload a drawing above."}</li>`;
+    const res = await Promise.all(GROUPS.map((g) => groupQuery(g, 0, GROUP_FIRST)));
+    if (seq !== loadSeq) return;
+    renderSources(res[0].sources);
+    const total = res.reduce((a, r) => a + r.total, 0);
+    $("#drawCount").textContent = num(total);
+    list.innerHTML = "";
+    if (!total) {
+      list.innerHTML = `<p class="list-note">${res[0].sources.length ? "No drawing matches. Try part of a file name." : "No dataset found. Set STOA_DATA, or upload a drawing above."}</p>`;
+      return;
     }
-    for (const d of res.items) list.appendChild(drawItem(d));
-    state.offset += res.items.length;
-    $("#moreBtn").hidden = state.offset >= res.total;
-    $("#drawCount").textContent = num(res.total);
+    GROUPS.forEach((g, i) => {
+      const r = res[i];
+      const filtered = state.source || state.query;
+      if (!r.total && (filtered || !g.none)) return;
+      const sec = document.createElement("section");
+      sec.className = "dgroup";
+      sec.innerHTML = `<header class="dgroup-head"><h3 class="h-group">${esc(g.title)}<span class="n mono">${num(r.total)}</span></h3>
+        <p class="meta">${esc(r.total ? g.note : g.none)}</p></header>`;
+      if (r.total) {
+        const ul = document.createElement("ul");
+        r.items.forEach((d) => ul.appendChild(drawItem(d)));
+        sec.appendChild(ul);
+        let off = r.items.length;
+        if (off < r.total) {
+          const more = document.createElement("button");
+          more.type = "button"; more.className = "btn btn-quiet btn-block";
+          const label = () => `Show more (${num(r.total - off)} left)`;
+          more.textContent = label();
+          more.addEventListener("click", async () => {
+            const next = await groupQuery(g, off, GROUP_MORE);
+            next.items.forEach((d) => ul.appendChild(drawItem(d)));
+            off += next.items.length;
+            if (off >= r.total) more.remove(); else more.textContent = label();
+          });
+          sec.appendChild(more);
+        }
+      }
+      list.appendChild(sec);
+    });
   } catch (e) {
-    list.innerHTML = `<li class="list-note">Could not load the library: ${esc(e.message)}</li>`;
+    list.innerHTML = `<p class="list-note">Could not load the library: ${esc(e.message)}</p>`;
   }
 }
 
@@ -139,7 +182,7 @@ function drawItem(d) {
   b.className = "draw-item";
   b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
   b.innerHTML = `<span class="nm" title="${esc(d.path)}">${esc(d.name)}</span>
-    <span class="sub"><span>${esc(SOURCE_NAMES[d.source] || d.source)}</span><span class="mono">${esc(d.ext.toUpperCase())}</span><span>${d.n_questions} questions</span><span>${esc(d.split)}</span></span>`;
+    <span class="sub"><span>${esc(SOURCE_NAMES[d.source] || d.source)}</span><span>${esc(d.ext.toUpperCase())}</span><span>${d.n_questions} questions</span><span>${esc(d.split)}</span></span>`;
   b.addEventListener("click", () => selectDrawing(d.path));
   li.appendChild(b);
   return li;
@@ -161,7 +204,6 @@ $("#search").addEventListener("input", (e) => {
   clearTimeout(searchT);
   searchT = setTimeout(() => { state.query = e.target.value.trim(); loadDrawings(); }, 180);
 });
-$("#moreBtn").addEventListener("click", () => loadDrawings(true));
 
 /* ---------------------------------------------------------------- upload */
 const drop = $("#drop");
@@ -217,6 +259,31 @@ function renderExamples() {
   el.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => {
     $("#question").value = EXAMPLES[+c.dataset.i].q;
     $("#question").focus();
+  }));
+}
+
+/* "Try these": one-click examples in the empty answer panel. A row is hidden when its drawing is not in this library. */
+const TRY = [
+  { label: "Tiling to order on a Swiss plan", note: "Floor and walls of the bathrooms, summed from the drawing's geometry.",
+    path: "data/swiss_dwellings/site3387_bldg5238_floor23498.pdf", q: "How many square metres of tiling should I order for the bathrooms?" },
+  { label: "Room area from an IFC model", note: "Reads the model, then opens the 3D view with the room marked.",
+    path: "data/ifc_models/kit-fzk-haus_ac20-fzk-haus_plan-01-erdgeschoss.pdf", q: "What is the net floor area of the room 'K\u00fcche (6)' on 'Erdgeschoss', in m\u00b2?", mode: "3d" },
+  { label: "Count windows on a scan", note: "Pixels, not vectors: comes back as an estimate with items to check.",
+    path: "data/cubicasa5k/high_quality_architectural-10372.png", q: "How many windows are shown on this floor plan?" },
+  { label: "Bring your own drawing", note: "PDF, DXF, IFC or an image. Drop a PDF with its DXF twin to use both.", upload: true },
+];
+async function renderTry() {
+  const ul = $("#tryList");
+  const ok = await Promise.all(TRY.map((t) => t.upload ? true : api("/api/drawing?path=" + encodeURIComponent(t.path)).then(() => true, () => false)));
+  ul.innerHTML = TRY.map((t, i) => ok[i]
+    ? `<li><button type="button" class="try" data-i="${i}">${esc(t.label)}</button><p class="meta">${esc(t.note)}</p></li>` : "").join("");
+  ul.querySelectorAll(".try").forEach((b) => b.addEventListener("click", async () => {
+    const t = TRY[+b.dataset.i];
+    if (t.upload) { $("#fileInput").click(); return; }
+    await selectDrawing(t.path);
+    if (t.mode) setMode(t.mode);
+    $("#question").value = t.q;
+    ask();
   }));
 }
 
@@ -582,7 +649,7 @@ function renderStrip() {
     <span class="legend meta"><span class="key blue" aria-hidden="true"></span>${nBlue} proven${nAmber ? `<span class="key amber" aria-hidden="true"></span>${nAmber} to check` : ""}</span>
     ${scale ? `<span class="meta scale-src" title="${esc(scale.text)}">Scale from ${esc(scale.text.split(" (")[0].replace(/^Scale found on the sheet$/, "the sheet"))}</span>` : ""}
     <span class="strip-gap"></span>
-    ${own ? `<span class="corr mono" id="corrLine">${esc(corrLine(a))}</span>
+    ${own ? `<span class="corr" id="corrLine">${esc(corrLine(a))}</span>
       ${isCount(a) ? `<button class="btn btn-quiet" type="button" id="addMode" aria-pressed="${state.addMode}">${icon("plus")}Add missed item</button>` : ""}
       <button class="btn" type="button" id="saveCorr" ${corrected() ? "" : "disabled"}>Save correction</button>
       <a class="btn btn-quiet" href="/api/corrections.csv" download>${icon("download")}Export</a>`
@@ -964,7 +1031,7 @@ function renderWitnesses(a, w) {
     const tip = r.value == null ? (r.abstain || "") : `${r.route_name || r.route}, ${r.n_items} items, ${fmtSec(r.wall_s)}`;
     const can = !!r.evidence_id;
     return `<li><button type="button" class="wit-row" data-f="${esc(r.format)}" ${can ? "" : "disabled"} aria-pressed="false" title="${esc(tip)}">
-      <span class="wf mono">${esc(r.format)}</span>
+      <span class="wf">${esc(r.format)}</span>
       <span class="wr"><span>${esc(FMT_NAME[r.format] || r.format)}</span><span class="meta">${esc(r.route_name || r.route || "")}</span></span>
       <span class="wv mono${ring}${r.value == null ? " na" : ""}">${esc(vtxt)}</span>
       <span class="wt ${st}" aria-label="${st === "none" ? "abstained" : st}">${st === "none" ? "" : icon(st === "proven" ? "proven" : "estimate")}</span>
@@ -999,7 +1066,7 @@ async function loadCosts() {
   let body = (c.routes || []).map((r) => line(r)).join("");
   if (c.all) body += line({ ...c.all, route: "all", label: "All sampled questions" }, "total");
   const b = c.baseline;
-  if (b) body += `<tr class="base"><td>Nemotron, plain prompt <span class="mono dim">baseline</span></td><td class="num">${num(b.n)}</td><td class="num">-</td><td class="num">${fmtSec(b.latency_median_s)}</td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num" colspan="2">${fmtUsd(b.usd_per_1000)} at measured tokens</td></tr>`;
+  if (b) body += `<tr class="base"><td>Nemotron, plain prompt <span class="dim">baseline</span></td><td class="num">${num(b.n)}</td><td class="num">-</td><td class="num">${fmtSec(b.latency_median_s)}</td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num" colspan="2">${fmtUsd(b.usd_per_1000)} at measured tokens</td></tr>`;
   el.innerHTML = head + "<tbody>" + (body || `<tr><td colspan="9" class="dim">${esc(c.missing || "No measurements yet.")}</td></tr>`) + "</tbody>";
   $("#costNote").textContent = `Assumed prices, not quotes: $${as.cpu_vcpu_hour_usd} per vCPU-hour, $${as.gpu_hour_usd} per GPU-hour (L4 or A10G class)${b ? `, and $${b.price_in_per_mtok} / $${b.price_out_per_mtok} per million input / output tokens for Nemotron, applied to its measured ${num(Math.round(b.prompt_tokens_mean))} input and ${num(Math.round(b.completion_tokens_mean))} output tokens per question (${b.source})` : ""}. `
     + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off (tools/cost_eval.py, out/cost/cost_by_route.json). CPU seconds count every thread; a cold question is the first one on its drawing; a question every route abstained on is booked under the first route tried.` : "");
@@ -1131,7 +1198,7 @@ async function loadBaseline() {
     <td class="num">${s.nemo_correct}</td><td class="num">${s.ours_correct}</td></tr>`).join("");
   const price = b.price_assumption ? `an assumed ${b.price_assumption[0]} / ${b.price_assumption[1]} USD per million input / output tokens` : "an assumed list price";
   $("#baselineBody").innerHTML = `
-    <p class="value-na mono">Nemotron ${pct(b.nemo_accuracy)} vs router ${pct(b.ours_accuracy)}</p>
+    <p class="value-na">Nemotron ${pct(b.nemo_accuracy)} vs router ${pct(b.ours_accuracy)}</p>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Questions</th><th class="num">n</th><th class="num">Nemotron</th><th class="num">Router</th></tr></thead>
     <tbody>${rows}<tr class="total"><td>All</td><td class="num">${b.n}</td><td class="num">${b.nemo_correct}</td><td class="num">${b.ours_correct}</td></tr></tbody></table></div>
     <p class="meta">Sample: Stoa preview set, test split, ${num(b.n)} questions (${esc(b.sample)}). Nemotron got the drawing as one image and was asked for just the number: no regions, no checks. Median latency ${esc(b.latency_median_s)} s; about $${Number(b.cost_per_q || 0).toFixed(3)} per question at ${esc(price)} (free on NVIDIA Build). Router: $0, ${esc(b.ours_source)}. Source: out/baseline_nemotron.json.</p>`;
@@ -1220,6 +1287,7 @@ function renderObjTable(d) {
     $("#pickerToggle").setAttribute("aria-expanded", "false");
   }
   renderExamples();
+  renderTry();
   loadStatus();
   loadCosts();
   await loadDrawings();

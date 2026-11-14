@@ -70,8 +70,7 @@
 
       <div class="sources" id="sources" role="radiogroup" aria-label="Source"></div>
 
-      <ul class="draw-list" id="drawList" aria-label="Dataset drawings"></ul>
-      <button class="btn btn-quiet btn-block" id="moreBtn" hidden>Show more</button>
+      <div class="draw-list" id="drawList" aria-label="Dataset drawings"></div>
     </aside>
 
     <main class="work">
@@ -115,17 +114,17 @@
 
         <div class="viewer-busy" id="viewerBusy" hidden role="status" aria-live="polite">
           <div class="busy-bar"><span></span></div>
-          <p class="mono meta" id="busyText">Reading the drawing</p>
+          <p class="meta" id="busyText">Reading the drawing</p>
         </div>
 
         <div class="v3d" id="view3d" hidden>
           <canvas id="v3dCanvas" aria-label="3D model. Drag to orbit, right-drag to pan, scroll to zoom, click an element for its details."></canvas>
           <aside class="v3d-panel" id="v3dPanel" aria-label="Storeys and highlights"></aside>
           <div class="v3d-card" id="v3dCard" hidden aria-live="polite"></div>
-          <p class="v3d-status mono" id="v3dStatus"></p>
+          <p class="v3d-status" id="v3dStatus"></p>
           <div class="viewer-busy v3d-busy" id="v3dBusy" hidden role="status" aria-live="polite">
             <div class="busy-bar"><span></span></div>
-            <p class="mono meta" id="v3dBusyText">Loading the model geometry</p>
+            <p class="meta" id="v3dBusyText">Loading the model geometry</p>
           </div>
           <div class="viewer-empty" id="v3dFail" hidden></div>
         </div>
@@ -135,9 +134,9 @@
             <button type="button" role="radio" aria-checked="true" data-mode="plan">Plan</button>
             <button type="button" role="radio" aria-checked="false" data-mode="3d">3D</button>
           </div>
-          <span class="layer-tag mono" id="layerTag">Drawing</span>
+          <span class="layer-tag" id="layerTag">Drawing</span>
           <button class="tool" id="zoomOut" aria-label="Zoom out"><svg class="ico"><use href="#i-minus"/></svg></button>
-          <output class="zoom mono" id="zoomLvl" aria-live="off">100%</output>
+          <output class="zoom" id="zoomLvl" aria-live="off">100%</output>
           <button class="tool" id="zoomIn" aria-label="Zoom in"><svg class="ico"><use href="#i-plus"/></svg></button>
           <button class="tool" id="zoomFit" aria-label="Fit to view"><svg class="ico"><use href="#i-fit"/></svg></button>
           <button class="tool" id="headerToggle" aria-pressed="false" aria-label="Show the evidence header strip" disabled><svg class="ico"><use href="#i-header"/></svg></button>
@@ -154,7 +153,12 @@
     <aside class="detail" id="detail" aria-label="Answer" aria-live="polite">
       <div class="detail-empty" id="detailEmpty">
         <h2 class="h-panel">Answer</h2>
-        <p class="meta">No question asked yet. Each answer reads like this:</p>
+        <p class="meta">No question asked yet.</p>
+        <section class="try" aria-labelledby="tryHead">
+          <h3 class="h-group" id="tryHead">Try these</h3>
+          <ul class="try-list" id="tryList"></ul>
+        </section>
+        <p class="meta">Each answer reads like this:</p>
         <dl class="kv">
           <dt>Value</dt><dd>the number and its unit</dd>
           <dt>Status</dt><dd>Proven, Estimate (check the amber items) or Cannot prove, with the reason</dd>
@@ -225,7 +229,7 @@
           <section class="panel panel-baseline" aria-labelledby="hBase">
             <h2 class="h-panel" id="hBase">Naive AI baseline</h2>
             <div id="baselineBody">
-              <p class="value-na mono">Not measured yet</p>
+              <p class="value-na">Not measured yet</p>
               <p class="meta">The same test questions sent straight to a general vision model with the drawing attached, scored the same way, with cost per question. It appears here when out/baseline_nemotron.json exists.</p>
             </div>
           </section>
