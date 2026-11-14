@@ -304,7 +304,8 @@ STOREY_NAMED = re.compile(
     r"\b(?P<n1>\d{1,2})(?:st|nd|rd|th)?\.? ?(?:floor|level|storey|story)\b"
     r"|\b(?P<w>first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth) (?:floor|level|storey|story)\b"
     r"|\b(?P<n2>\d{1,2})\. ?(?:korrus\w*|kerro\w*|sal\b|og\b|obergeschoss\w*|etage\w*|stock\w*|vaning\w*|plan\b)"
-    r"|\b(?:level|floor|storey|kerros|korrus|etage|geschoss) (?P<n3>\d{1,2})\b")
+    r"|\b(?:level|floor|storey|kerro\w*|korrus\w*|etage|geschoss|stock(?:werk)?|vaning\w*) (?P<n3>\d{1,2})\b(?!\s*(?:m\b|m2|%))")
+# "kerroksessa 3" (floor word, then the number) was dropped and the sheet's storey answered, marked proven (his hunt, 14 Nov)
 
 
 def named_storey(ctx: Context, query: Query) -> tuple[str, str, bool] | None:
