@@ -608,7 +608,7 @@ function setHash() {
   /* a new drawing or a new question is a history step, so Back returns to the previous one (Mac QA 14 Nov);
      other changes (3D toggle, the question appearing while it is asked) replace the current entry */
   const cur = new URLSearchParams(location.hash.slice(1));
-  const step = cur.get("path") && (cur.get("path") !== p.get("path") || (cur.get("q") && p.get("q") && cur.get("q") !== p.get("q")));
+  const step = cur.get("path") && (cur.get("path") !== p.get("path") || (p.get("q") && cur.get("q") !== p.get("q")));
   if (step) history.pushState(null, "", next);
   else history.replaceState(null, "", next);
 }
@@ -2980,7 +2980,7 @@ async function compareOpen(x) {
     { id: "group", el: () => [$("#drawList")], side: ["right", "left"],
       text: () => "Drawings are grouped by type. Press a group heading, for example Building models (IFC), to open it.",
       done: () => did.group || anyGroupOpen() || !!state.drawing },
-    { id: "pick", el: () => [$("#drawList"), $("#drop"), $("#search")], side: ["right", "left"],
+    { id: "pick", el: () => [$("#drawList"), $("#drop"), $("#search"), $("#uploadList")].filter((e) => e && e.offsetParent !== null), side: ["right", "left"],
       text: () => "Press a drawing to open it, or search by name. Building models also open in a 3D view. Your own drawing goes in Upload a drawing above; uploads are deleted after 24 hours.",
       done: () => !!state.drawing },
     { id: "ask", el: () => [$("#askForm"), $(".chips-block"), tryBox()], anchor: 2, side: ["bottom", "left"],
