@@ -82,13 +82,16 @@ class Catalog:
         return [{"id": s, "name": SOURCE_NAMES.get(s, s), "drawings": c[0], "questions": c[1]}
                 for s, c in sorted(counts.items(), key=lambda kv: -kv[1][1])]
 
-    def search(self, source: str = "", q: str = "", ext: str = "", offset: int = 0, limit: int = 60) -> dict:
+    def search(self, source: str = "", q: str = "", ext: str = "", offset: int = 0, limit: int = 60,
+               not_source: str = "") -> dict:
         if not self.root:
             return {"total": 0, "items": []}
         terms = [t for t in q.lower().split() if t]
         hits = []
         for d in self._sorted:
             if source and d.source != source:
+                continue
+            if not_source and d.source == not_source:      # library groups: IFC models and their plans are one group
                 continue
             if ext and d.ext != ext:
                 continue
