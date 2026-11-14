@@ -308,11 +308,11 @@ const OrderSheet = (() => {
     const n = (x) => (x == null || !isFinite(x) ? "" : x.toFixed(2));
     const lines = [];
     lines.push(["drawing", m.answer.drawing], ["question", m.answer.question], ["route", m.answer.route], ["status", m.answer.status],
-      ["surfaces", m.surfaces], ["room height m", m.ceiling ?? "per room"], ["tiled to m", m.tile ?? "full height"], ["waste %", m.waste], []);
+      ["surfaces", m.surfaces], ["room height m", m.ceiling ?? "per room"], ["tiled to m", m.tile ?? "full height"], ["waste %", m.waste], ...(m.assumedHeight ? [["note", "* Height assumed: a plan has no heights; enter the real room height"]] : []), []);
     lines.push(["n", "room", "type", "guid", "floor_m2", "perimeter_m", "height_m", "tiled_to_m", "gross_wall_m2", "openings", "deducted_m2", "net_wall_m2", "row_m2"]);
     for (const r of c.rows) {
       const rowTotal = (c.useFloor ? r.floor || 0 : 0) + (c.useWalls ? r.netC || 0 : 0);
-      lines.push([r.n, r.room, r.type, r.guid || "", n(r.floor), n(r.perimeter), n(r.hUsed), n(r.band), n(r.grossC),
+      lines.push([r.n, r.room, r.type, r.guid || "", n(r.floor), n(r.perimeter), n(r.hUsed) + (/ASSUMED/i.test(r.heightSrc || "") && m.ceiling == null ? " *" : ""), n(r.band), n(r.grossC),
         (r.ops || []).map((o) => `${o.kind} ${o.id || ""} ${n(o.width)}m ${n(o.d)}m2`).join(" | "), n(r.dedC), n(r.netC), n(rowTotal)]);
     }
     lines.push([], ["floor_m2", n(c.floor)], ["walls_m2", n(c.walls)], ["net_m2", n(c.net)], ["waste_m2", n(c.waste)], ["order_m2", n(c.order)]);

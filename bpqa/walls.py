@@ -80,13 +80,15 @@ def _parse_inputs(question: str) -> dict:
             re.search(rf"(?:waste|allowance|hukka|reserve|verschnitt|spill)\s*(?:of|=|:)?\s*{_NUM}\s*%", f)
         if m:
             out["waste_pct"] = _f(m.group(1))
-    out["order"] = bool(re.search(r"\b(order|buy|purchase|need|needed|get|tilata|tilaan|ostaa|tarvit|bestellen|kaufen|"
-                                  r"brauche|commander|acheter|ordinare|comprare)\w*", f))
-    # "tiles to 1.2 m for the bathroom" or "flooring ... with 10% waste" asks for material to get, not a net area
-    # (QA 14 Nov: the waste was listed but left out of the value). A question about the area itself stays net.
+    # The value is an order quantity (waste included) when the question says order/buy, states a waste, or asks
+    # for a material (tiles, flooring: material is something you order, also inside Finnish compounds like
+    # "seinalaattaa"). "need" / "tarvitaan" alone says nothing about waste and stays a net area, and so does a
+    # question about the area itself. The explanation states waste only when the value includes it.
+    out["order"] = bool(re.search(r"\b(order|buy|purchase|tilata|tilaan|ostaa|bestellen|kaufen|commander|acheter|"
+                                  r"ordinare|comprare)\w*", f))
     if not out["order"]:
-        material = re.search(r"\b(tiles?|tiling|flooring|parquet|laminate|vinyl|laatt\w*|laatoitu\w*|parket\w*|lattiamateriaal\w*|"
-                             r"fliesen|plattor|kakel)\b", f)
+        material = re.search(r"\b(tiles?|tiling|flooring|parquet|laminate|vinyl|\w*laatt\w*|\w*laatoi\w*|parket\w*|"
+                             r"lattiamateriaal\w*|\w*fliese\w*|plattor|kakel\w*|carrelage|piastrell\w*)\b", f)
         about_area = re.search(r"\b(area|net|how big|how large|pinta-?ala|flache|yta)\b", f)
         out["order"] = bool(out.get("waste_pct")) or bool(material and not about_area)
     return out
@@ -181,7 +183,8 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
     order_q = net * (1 + waste / 100.0)
     totals = {"floor_m2": round(floor_t, 2) if want_floor else None, "walls_m2": round(walls_t, 2) if want_walls else None,
               "net_m2": round(net, 2), "waste_pct": waste, "waste_m2": round(order_q - net, 2), "order_m2": round(order_q, 2),
-              "value_is": "order quantity incl. waste" if inp.get("order") else "net area (waste shown separately)",
+              "value_is": "order quantity incl. waste" if inp.get("order") else "net area, no waste added",
+              "waste_in_value": bool(inp.get("order")),
               "inputs": {"ceiling_m": inp.get("ceiling_m"), "tile_m": inp.get("tile_m"), "waste_pct": waste},
               "surfaces": how}
     value = round(order_q if inp.get("order") else net, 2)
@@ -190,7 +193,10 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
         lines.append(f"floor {floor_t:.2f} m2")
     if want_walls:
         lines.append(f"walls {walls_t:.2f} m2 (perimeter x height" + ("" if any(r.get("openings_unknown") for r in rooms) else " - openings") + ")")
-    lines.append(f"net {net:.2f} m2; waste {waste:g}% = {order_q - net:.2f} m2 ({waste_src}); order {order_q:.2f} m2")
+    if inp.get("order"):
+        lines.append(f"net {net:.2f} m2; waste {waste:g}% = {order_q - net:.2f} m2 ({waste_src}); order {order_q:.2f} m2")
+    else:       # the value is the net area: the explanation states no waste figure the value does not contain
+        lines.append(f"net {net:.2f} m2, no waste added (ask for tiles to order, or add 'with 10% waste', for an order quantity)")
     per = []
     for it in items[:12]:
         bits = []
@@ -231,7 +237,8 @@ def answer_line(value: float, totals: dict, route: str, estimate: str = "") -> s
         parts.append(f"floor {totals['floor_m2']:.2f}")
     if totals.get("walls_m2") is not None:
         parts.append(f"walls {totals['walls_m2']:.2f}")
-    parts.append(f"{totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}")
+    if totals.get("waste_in_value", True):
+        parts.append(f"{totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}")
     tag = f" [ESTIMATE: {estimate}]" if estimate else ""
     return f"Answer{tag}: {value:.2f} m2 ({' + '.join(parts)}; {totals['value_is']})   route: {route} (cost €0)"
 
