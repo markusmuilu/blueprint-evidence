@@ -233,6 +233,11 @@ Raster scans (`bpqa/routes/raster_area.py`, route `raster-area`):
 - scale (m2 per pixel) only when 2+ rooms with a printed area and a usable region agree within 4% and
   form the majority; the doorway width (1.0 m) is tried at 10 pixel-per-metre hypotheses and a
   hypothesis counts only if the scale it produces agrees with it within 20%
+- object scale (`bpqa/scale_objects.py`, OFF by default, `STOA_OBJECT_SCALE=1`): with no printed-area scale,
+  door openings (0.84 m), WC pans (0.73 m) and bathtubs (1.7 m) from the detector give a scale when 4+ agree
+  (IQR at most 25%). Always an estimate naming the objects, the scale and its own band. Validation (printed areas
+  hidden): rooms of 6 m2 and over 12.5% median error, but only 3 of 53 takeoff answers within 2%, so it is
+  kept off (CHANGELOG)
 - a takeoff answers a room with a printed area with that printed value (tier proven when every asked room
   is printed). A room without one is answered with its measured area (region x scale) as tier
   **estimate**, only when the scale is established; the answer names the printed rooms, the measured rooms

@@ -3,6 +3,71 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: object scale for scans without printed areas, branch `object-scale` (behind a flag, off)
+
+Problem: `raster_area.py` sets a pixel scale only from 2+ printed room areas that agree, so on a scan that prints
+no areas every measured room abstains. Tried: a second, weaker scale from standard-size objects the detector
+already finds (`bpqa/scale_objects.py`).
+
+- Objects: door openings (long side of the door box, 0.84 m), WC pans (0.73 m), bathtubs (1.7 m). The sizes are the
+  median box long side against the printed-area scale on a tuning half (door 0.843 m on 439 boxes, matching the
+  8M/9M modules; WC 0.73 m on 56; bathtub 1.69 m on only 4). The detector has no bed or kitchen counter class;
+  showers and sinks vary too much. Door boxes must be elongated (long/short at least 3), otherwise they hold the
+  swing or a double leaf.
+- Rule: each object is one metres-per-pixel candidate; the scale is their median, set only with at least 4
+  candidates whose interquartile range is at most 25% of the median. Otherwise no scale. The region set is the
+  walls hypothesis nearest to the object scale (the printed areas play no part).
+- Answers: always tier "estimate"; the explanation names the objects and counts, px per m, the IQR, and the object
+  scale's own leave-one-out band by room size; the objects are boxed amber with their assumed size on the evidence.
+- Hook: `raster_area.analyse` calls it only when the printed areas gave no scale and `scale_objects.ENABLED`;
+  `takeoff_answer` swaps in the object text and band (about 10 lines in `raster_area.py`).
+
+Data: CubiCasa scans of our dev split whose public plan is not in the CubiCasa5K test split (3,007 images; the
+upright OCR pass was filled for all of them, `tools/ocr_r0.py`), with 2+ printed areas: 370 plans, split by a hash
+of the file name into tuning (182) and validation (188). Stoa test questions and CubiCasa5K test plans were not used.
+Tools: `tools/objscale_regions.py` (regions and printed-area scale per plan), `tools/objscale_detect.py` (detector
+cache), `tools/objscale_eval.py calib | tune | loo`, `tools/objscale_e2e.py`.
+
+Leave-one-out on the validation half (printed areas hidden; each printed room with a usable region measured with
+the object scale and compared with its printed value; band by measured area):
+
+| | validation | tuning (for reference) |
+|---|---|---|
+| plans that abstain (objects missing or disagreeing) | 22 of 188 (11.7%) | 27 of 182 (14.8%) |
+| object scale vs printed-area scale, px per m, median abs (plans with both) | 3.7% (42 plans), 64% within 5%, 90% within 10% | 3.7% (31), 58% / 81% |
+| rooms 6 m2 and over: median abs error / within 5% / within 2% | 12.5% / 22% / 7.8% (258 rooms) | 10.6% / 27% / 14% (235) |
+| rooms 3 to 6 m2 | 20.7% / 12% / 3.9% (76) | 17.8% / 12% / 4.7% (86) |
+| rooms under 3 m2 (not answered, as before) | 41.4%, signed -37% (130) | 45.1% (144) |
+| all rooms | 18.3% (464 rooms, 129 plans) | 18.5% (465, 124) |
+
+By printed area instead of measured, validation: 6 m2 and over 13.8% (280), 3 to 6 m2 28.4% (104), under 3 m2
+25.9% (80). On plans where the printed areas also give a scale, rooms are 11.4% off (190 rooms), about what the
+printed-area scale itself gets (9.3% on dev, `area-route` entry): the scale is close, the regions are the error.
+The tuning grid (min candidates 3-6, IQR 8-35%, door score 0.4-0.7, door aspect 1.5-3, door only / door + WC / all)
+moved the 6 m2 and over median only between 9.5% and 13.7% over all 1,152 settings; a tighter IQR mostly
+abstained on more plans.
+
+End to end (`tools/objscale_e2e.py --half val`): one takeoff question per room type whose rooms all print an area
+("How many square meters of flooring do I need for the bedrooms?", bathrooms, toilets, sauna, kitchen), gold = sum
+of the printed areas, printed areas hidden from the route. 184 questions on 94 plans, all abstained before:
+
+| | before | after |
+|---|---|---|
+| answered (all tier estimate) | 0 | 53 |
+| right, within 2% (eval.py's rule) | 0 | 3 |
+| wrong | 0 | 50 (9 within 5%, 23 within 10%, 39 within 20%; median 12.1%) |
+| abstain | 184 | 131 |
+
+By type: bedrooms 31 answered, 3 right, median 10.1%; bathrooms 12, 0, 16.6%; kitchens 7, 0, 60.7% (open kitchens
+merge with the living room); WC 2, sauna 1.
+
+Decision (rule set before the run: on only if its estimates are right more often than wrong on dev and rooms of
+6 m2 and over have a median error of at most about 15%): the size test passes (12.5%), the right/wrong test fails
+(3 of 53 within 2%), so it stays OFF. In short: measured, 12.5% median error on rooms of 6 m2 and over,
+3 of 53 takeoff answers within 2%, kept off. `STOA_OBJECT_SCALE=1` switches it on for a run. With it off nothing
+changes: Stoa asks no area question on a scan, and the hook does not run. Tests: `tests/test_scale_objects.py`
+(new); the existing tests pass.
+
 ## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
 
 Problem: on a scan with some printed room areas a takeoff abstained for every room that prints none, and wall
