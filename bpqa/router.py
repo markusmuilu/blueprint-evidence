@@ -22,7 +22,7 @@ from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
-from .routes import dxf_swiss, ifc_route, nemotron, pdf_text, pdf_vector, raster
+from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -94,15 +94,43 @@ def candidate_routes(ctx: Context):
     return routes
 
 
+def text_routes(ctx: Context):
+    """Free-text / property routes, tried when the numeric routes cannot answer: typed lookups over
+    the IFC model (ifc-props) and over PDF schedules (pdf-text). Every value comes from the file."""
+    routes = []
+    twins = not ctx.pdf_only or ctx.q.ext != "pdf"
+    if ctx.q.ext == "pdf":
+        routes.append(pdf_text.answer)
+    if twins and ctx.model_ifc() is not None:
+        routes.append(ifc_props.answer)
+    return routes
+
+
+def _try_text(ctx: Context, query: Query, why: str) -> Answer:
+    reasons = [why]
+    for fn in text_routes(ctx):
+        try:
+            a = fn(ctx, query)
+        except Exception as ex:
+            a = abstain(getattr(fn, "__module__", "route").rsplit(".", 1)[-1], f"error: {type(ex).__name__}: {ex}")
+        ctx.tried.append(a.route)
+        if a.answered:
+            if a.tier is None:
+                a.tier = "proven"
+            return a
+        reasons.append(f"{a.route}: {a.abstain}")
+    return abstain("parser", "; ".join(reasons))
+
+
 def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     query = query or parse(ctx.q.question)
     use_nemo = ctx.nemotron and nemo_client.enabled()
     if not query.ok() and use_nemo:      # rule parser failed: ask Nemotron for the typed query (validated)
         query = parse(ctx.q.question, fallback=nemotron.NemotronParser())
     if not query.ok():
-        return query, abstain("parser", "question not understood by the rule parser (Nemotron parse fallback off or its output invalid)")
+        return query, _try_text(ctx, query, "question not understood by the rule parser (Nemotron parse fallback off or its output invalid)")
     if query.extra.get("compound") or query.extra.get("unresolved_scope"):
-        return query, abstain("parser", "compound question or unresolved scope; needs the text/LLM route")
+        return query, _try_text(ctx, query, "compound question or unresolved scope")
     tk = query.extra.get("takeoff")
     if tk is not None:
         from .takeoff import precheck
@@ -134,6 +162,10 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
                 return query, a
             held = a
         reasons.append(f"{a.route}: {a.abstain}")
+    if any(fn is ifc_props.answer for fn in text_routes(ctx)):   # property lookups before any estimate
+        a = _try_text(ctx, query, "")
+        if a.answered:
+            return query, a
     if use_nemo:                        # last resort: every route above abstained
         try:
             a = nemotron.answer(ctx, query)
