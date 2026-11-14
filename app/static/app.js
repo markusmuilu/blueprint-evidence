@@ -34,6 +34,7 @@ const state = {
   shown: null,                 // what the viewer shows: the answer, or one witness
   corr: { removed: new Set(), added: [] }, addMode: false,
   witnesses: null, costs: null,
+  mode: "plan", has3d: false,  // viewer mode; 3D only for IFC models and plans cut from one
 };
 
 /* ================================================================ toast */
@@ -195,6 +196,7 @@ async function selectDrawing(path, keepAnswer = false) {
     if (d.split) bits.push(d.split + " split");
     $("#drawMeta").textContent = bits.join("  ·  ");
     $("#pdfOnly").closest(".check").hidden = !(d.ext === "pdf" && d.twins?.length);
+    setup3d(d);
     renderDrawingQuestions(d);
     renderExamples();
     setHash();
@@ -240,6 +242,7 @@ function setHash() {
   if (state.drawing) p.set("path", state.drawing.path);
   const q = $("#question").value.trim();
   if (q && state.answer) p.set("q", q);
+  if (state.mode === "3d") p.set("mode", "3d");
   history.replaceState(null, "", "#" + p.toString());
 }
 
@@ -368,6 +371,10 @@ async function showDrawing() {
     const ok = await viewer.load(src);
     if (!ok) viewer.clear("No preview", "This file could not be rendered. Ask a question to draw its evidence.");
     else { $("#openImg").href = src; $("#openImg").hidden = false; }
+    if (state.mode === "3d" && state.has3d) setMode("3d");
+  } else if (state.has3d) {
+    viewer.clear(`${d.ext.toUpperCase()} model selected`, "Opening the 3D view. Ask a question to draw its evidence on a plan.");
+    setMode("3d");
   } else {
     viewer.clear(`${d.ext.toUpperCase()} file selected`, "There is no flat preview for this format. Ask a question: the evidence is drawn from the model or the DXF geometry.");
   }
@@ -477,6 +484,11 @@ function clearFocus() {
   if (ret) ret.hidden = true;
 }
 function focusRect(r, i, focus) {
+  if (state.mode === "3d") {                    // in 3D the strip and item list select the element in the model
+    const it = state.answer ? answerItems(state.answer)[+i] : null;
+    if (focus && it && it.guid && window.Viewer3D) Viewer3D.select(it.guid);
+    return;
+  }
   if (!r || state.layer !== "evidence") return;
   clearFocus();
   if (i != null) document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"], #marks .pin[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
@@ -489,8 +501,56 @@ function focusRect(r, i, focus) {
   if (focus) viewer.focusRect(...r);
 }
 function markItem(btn, it, a, n, focus) {
+  if (state.mode === "3d" && it && it.guid && window.Viewer3D) {
+    if (focus) { document.querySelectorAll("#itemList .item.on").forEach((b) => b.classList.remove("on")); btn.classList.add("on"); Viewer3D.select(it.guid); }
+    return;
+  }
   focusRect(itemRect(it, a, +btn.dataset.i), btn.dataset.i, focus);
 }
+
+/* ---------------------------------------------------------------- 3D view (IFC models) */
+function has3dFor(d) { return !!d && (d.ext === "ifc" || (d.twins || []).includes("ifc model")); }
+function setup3d(d) {
+  state.has3d = has3dFor(d);
+  $("#modeSeg").hidden = !state.has3d;
+  if (!state.has3d && state.mode === "3d") setMode("plan");
+}
+function setMode(mode) {
+  if (mode === "3d" && !state.has3d) mode = "plan";
+  state.mode = mode;
+  $("#viewer").classList.toggle("mode-3d", mode === "3d");
+  $("#view3d").hidden = mode !== "3d";
+  $("#modeSeg").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === mode)));
+  if (mode === "3d") {
+    $("#v3dFail").hidden = true;
+    const go = () => window.Viewer3D.open(state.drawing.path, $("#view3d")).then(() => update3d());
+    if (window.Viewer3D) go(); else window.addEventListener("v3d-ready", go, { once: true });
+  }
+  setHash();
+}
+/* the IFC GlobalIds an answer rests on: cited elements, and openings deducted from wall areas */
+function highlightFor(a) {
+  const cited = new Set(), deducted = new Set();
+  const GID = /^[0-9A-Za-z_$]{22}$/;
+  const walk = (v, ded) => {
+    if (typeof v === "string") { if (GID.test(v)) (ded ? deducted : cited).add(v); return; }
+    if (Array.isArray(v)) { v.forEach((x) => walk(x, ded)); return; }
+    if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, ded || k === "openings");
+  };
+  if (a && a.status !== "cannot") {
+    walk(a.items || [], false);
+    for (const m of String(a.explanation || "").matchAll(/(?<![\w$])[0-9A-Za-z_$]{22}(?![\w$])/g)) if (/[0-9_$]/.test(m[0])) cited.add(m[0]);
+  }
+  return { cited: [...cited], deducted: [...deducted] };
+}
+function update3d() {
+  if (state.mode !== "3d" || !window.Viewer3D) return;
+  Viewer3D.setHighlight(highlightFor(state.answer));
+}
+$("#modeSeg").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+["pointerdown", "pointermove", "pointerup", "wheel", "dblclick", "keydown"].forEach((ev) =>
+  $("#view3d").addEventListener(ev, (e) => e.stopPropagation()));
+window.addEventListener("v3d-failed", () => { /* the plan stays one click away; the 3D panel explains why */ });
 
 /* ---------------------------------------------------------------- verification strip */
 function isCount(a) { return a.unit === "count"; }
@@ -667,6 +727,7 @@ async function ask(refresh = false) {
     renderAnswer(a);
     if (a.evidence_id) await showEvidence(a);
     else await showDrawing();
+    update3d();
     setHash();
     loadWitnesses(a, refresh);
   } catch (e) {
@@ -753,6 +814,8 @@ function renderAnswer(a) {
       ${a.cached ? `<p class="note">Served from the answer cache. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
     </div>
 
+    <section class="sec" id="orderSec" aria-labelledby="hOrder" hidden></section>
+
     <section class="sec" id="witSec" aria-labelledby="hWit" hidden>
       <div class="sec-head"><h3 class="h-panel" id="hWit">Witnesses</h3><span class="meta" id="witMeta"></span></div>
       <div id="witBody"></div>
@@ -782,7 +845,7 @@ function renderAnswer(a) {
         ${items.map((it, i) => {
           const [l, x] = itemLabel(it, a.query && a.query.obj, a.route);
           const n = (it && it.n) || i + 1;
-          const can = !!itemRect(it, a, i);
+          const can = !!itemRect(it, a, i) || (state.has3d && !!(it && it.guid));
           const tag = can ? "button" : "div";
           return `<li><${tag} class="item" ${can ? `type="button" data-i="${i}"` : ""}><span class="n">#${esc(n)}</span><span class="l" title="${esc(l)}">${esc(l)}</span><span class="x">${esc(x)}</span></${tag}></li>`;
         }).join("")}
@@ -806,6 +869,11 @@ function renderAnswer(a) {
   $("#copyCsv").addEventListener("click", () => copyCsv(a));
   $("#dlCsv").addEventListener("click", () => downloadCsv(a));
   $("#reask").addEventListener("click", () => ask(true));
+  const orderHooks = {
+    show3d: state.has3d ? () => { setMode("3d"); } : null,
+    changed: () => OrderSheet.mountPanel(a, $("#orderSec"), orderHooks),
+  };
+  if (window.OrderSheet) OrderSheet.mountPanel(a, $("#orderSec"), orderHooks);
 }
 
 function shortReason(a) {
@@ -1159,6 +1227,7 @@ function renderObjTable(d) {
   const p = new URLSearchParams(location.hash.slice(1));
   if (p.get("path")) {
     await selectDrawing(p.get("path"));
+    if (p.get("mode") === "3d") setMode("3d");
     if (p.get("q")) { $("#question").value = p.get("q"); ask(); }
   }
   if (p.get("view") === "results") showView("results");

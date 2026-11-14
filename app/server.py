@@ -9,6 +9,7 @@ GET  /api/preview       ?path= -> PNG of the drawing (PNG/JPG as is, PDF page 1 
 GET  /api/evidence/<id>.png[?body=1]  evidence overlay (body=1 drops the text header strip)
 GET  /api/results       eval runs; /api/results/<run> one run's tables
 GET  /api/status        data root, detector and OCR availability
+GET  /api/ifc3d...      3D view of an IFC model per storey (app/ifc3d.py)
 """
 from __future__ import annotations
 
@@ -35,6 +36,7 @@ from bpqa.router import Context, solve
 from bpqa.evidence import marks_path
 
 from . import costs
+from . import ifc3d
 from . import results as results_mod
 from .catalog import SOURCE_NAMES, Catalog, find_data_root
 
@@ -48,7 +50,7 @@ PREVIEW_CACHE = APP_OUT / "preview"
 UPLOADS = Path(tempfile.gettempdir()) / "blueprint-evidence" / "uploads"
 UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff"}
 MAX_UPLOAD = 200 * 1024 * 1024
-CACHE_VERSION = "3"
+CACHE_VERSION = "4"       # 4: wall-takeoff openings carry z0_m / z1_m for the order sheet
 
 for d in (EVIDENCE_DIR, RENDER_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
     d.mkdir(parents=True, exist_ok=True)
@@ -569,5 +571,7 @@ def status():
         "uploads": str(UPLOADS),
     }
 
+
+app.include_router(ifc3d.router)      # 3D view of IFC models: /api/ifc3d, /api/ifc3d/geom, /api/ifc3d/element
 
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

@@ -524,7 +524,7 @@ eval outputs), `--gpu` (by default the detector runs on the CPU).
   `GET /api/drawing`, `GET /api/preview`, `GET /api/evidence/<id>.png`, `GET /api/results[/<run>]`,
   `GET /api/overview`, `GET /api/baseline`, `POST /api/witnesses {path, question}`,
   `POST /api/corrections`, `GET /api/corrections[.csv]`, `GET /api/costs`, `GET /api/witness_summary`,
-  `GET /api/status`; docs at `/api/docs`. The design system is in `DESIGN.md`.
+  `GET /api/status`, `GET /api/ifc3d[?path=]`, `GET /api/ifc3d/geom`, `GET /api/ifc3d/element`; docs at `/api/docs`. The design system is in `DESIGN.md`.
 
 Tests: `python tests/test_cubicasa_svg.py` (converter, hand-made SVG) and
 Test-time augmentation and the tiled pretrained detector (each policy is tuned on the same 624 held-out
@@ -578,6 +578,56 @@ viewer; "with the strip" means capturing the strip, one capture per screenful of
 These times are the app's render and capture time under automation, not a person's looking time, which
 was not measured. What the strip changes is the number of views: one screenful shows about seven items
 side by side instead of one item per zoom. The script is `tools/verify_timing.js`.
+
+### 3D view of IFC models, order sheet and order check
+
+For an IFC model, or a plan sheet cut from one, the viewer has a Plan / 3D switch (`app/ifc3d.py`,
+`app/static/viewer3d.js`). The geometry comes from IfcOpenShell's own geometry iterator, the kernel the
+IFC route already uses for footprints, built once per model in a background thread and cached in
+`out/app/ifc3d/` by file name and size (an upload's geometry stays in its upload folder and goes with
+it). Each storey is its own gzip-compressed mesh, loaded four at a time, so the first storey is on screen
+before the rest arrive. Storeys stack at their own heights and "Separate storeys" pulls them apart, as in
+Stoa's layered view; each storey can be hidden or shown alone. After a question, the elements the answer
+used are drawn in blue (doors counted, rooms in a sum, as see-through room volumes), openings deducted
+from a wall area in amber, the rest of the answer's storey as a faint shell, storeys above it are cut
+away and the camera frames the elements. Clicking an element shows its class, name, GlobalId, storey,
+its role in the answer and its property sets (`GET /api/ifc3d/element`). If the kernel cannot read a
+model the 3D panel says why and the plan view and answer are unaffected. three.js 0.170.0 is loaded from
+jsDelivr by an import map; nothing is vendored. Fill the cache ahead of time with
+`.venv\Scripts\python -m app.ifc3d <model.ifc> ...`.
+
+Measured on this PC (8 threads, RTX 5070; server build inside the running app, first request for the
+model; browser times from opening the 3D view to the first storey drawn and to all storeys drawn, fresh
+browser profile, local server, model cache built, three runs each):
+
+| model | IFC size | elements | triangles | geometry gz | server build | browser: first storey / all storeys |
+|---|---|---|---|---|---|---|
+| FZK-Haus | 2.6 MB | 83 | 22k | 0.12 MB | 2.0 s | 49 to 51 ms / 53 to 64 ms |
+| Esplanades | 12.1 MB | 1,958 | 158k | 1.0 MB | 10.1 s | 65 to 74 ms / 85 to 108 ms |
+| Molio | 74 MB | 3,498 | 728k | 4.1 MB | 26.3 s (16.7 s standalone) | 79 ms / 146 to 162 ms |
+| duplex (IFC-Bench) | 1.7 MB | 215 | 27k | 0.15 MB | 1.2 s | - |
+| ac20 (IFC-Bench) | 10.9 MB | 702 | 44k | 0.22 MB | 4.3 s | - |
+| Smiley West | 6.1 MB | 832 | 186k | 0.96 MB | 7.5 s | - |
+
+The Molio build peaks at about 0.7 GB above the process baseline. Over the network the geometry
+transfer is added (4.1 MB for Molio).
+
+Takeoff answers (floor and wall tiling, room-area sums) get an Order section in the answer panel and an
+order sheet (`app/static/ordersheet.js`): one row per room with floor area, perimeter, height, tiled
+height, gross wall area, each deducted opening (width, vertical range, deducted m2), net wall area and
+the row total, then floor, walls, net, waste and the order quantity. Surfaces, room height, tiled height
+and waste are editable and the sheet recomputes from the per-room figures the route returned (each
+opening carries its z range, `z0_m` / `z1_m`, so a lower tiled height deducts only the part of a door or
+window inside it); with the answer's own inputs it shows the route's numbers unchanged. Checked against
+the backend: FZK bathroom tiled to 1.2 m recomputes to 29.98 m2, the same as asking "tiles to 1.2 m".
+Export as CSV, or "Print or save PDF" opens a light A4 landscape page for the browser's print dialog.
+
+The order check takes what is written on an order ("184 m2 suspended ceiling", "120 m2 tiles", "12
+doors") and compares it with the drawing's quantity: a ceiling is compared with the rooms' net floor
+area, flooring with floor area plus waste, paint or walls with net wall area plus waste, anything else
+with the order quantity, a count with the count. Within 2% (an exact count for counts) it says the order
+matches; otherwise it states the difference in units and percent, with the rooms behind the drawing's
+quantity numbered as on the evidence.
 
 ### Three witnesses: cross-format agreement
 
