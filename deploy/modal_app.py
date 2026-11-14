@@ -66,11 +66,13 @@ if (HERE / "demo_results").is_dir():      # eval outputs for the Results view (o
 
 def nvidia_secret() -> list:
     """[Secret('nvidia')] if it exists in the workspace, else [] (Nemotron off). Checked at deploy time."""
-    if not modal.is_local():
-        return []
+    # The container must see the same dependency list as the deploy did, so the remote side returns the
+    # same lazy Secret object (not hydrated) instead of []. A missing secret is only detectable locally;
+    # if it is missing at deploy time, delete this attachment rather than deploying with a mismatch.
     try:
         s = modal.Secret.from_name("nvidia", required_keys=["NVIDIA_API_KEY"])
-        s.hydrate()
+        if modal.is_local():
+            s.hydrate()
         return [s]
     except Exception as ex:     # NotFoundError, or the key is missing
         print(f"[deploy] Modal Secret 'nvidia' not found or incomplete ({type(ex).__name__}); Nemotron fallback off")
