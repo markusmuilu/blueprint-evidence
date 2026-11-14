@@ -38,7 +38,7 @@ GROUPS = {"wet": ("bathroom", "wc", "sauna")}
 LABEL_RE = {
     "bathroom": r"bad|badezimmer|bain|bains|salle de bains?|salle d'eau|bagno|bagni|bathroom\s*\d*|bath|"
                 r"shower(\s*room)?|dusche|douche(ruimte)?|badkamer|badevaerelse|badrum|vannituba|dushiruum|"
-                r"kh\d?|kph\d?|ph\d?|pesuh(uone)?\d?|sh\d?|kylpyhuone|pesuhuone|suihkuhuone|ban|bano|aseo|"
+                r"kh\d?|kph\d?|ph\d?|pe|pesuh(uone)?\d?|sh\d?|kylpyhuone|pesuhuone|suihkuhuone|ban|bano|aseo|"
                 r"salle de douche|doccia|bagno di servizio",
     "wc": r"(m\.|w\.|staff|specimen|public|men'?s|women'?s)?\s*(toilet|toilets|toilette|toiletten|wc\d?|w\.c\.|"
           r"restroom|lavatory|tualett(ruum)?|tualettruum|vessa|sanitair|toilet(ruimte)?|toilettes|gabinetto|"
@@ -81,6 +81,7 @@ def label_parts(name: str) -> list[str]:
     f = _fold_label(name)
     f = re.sub(r"\(.*?\)", " ", f)
     # Spanish IFC codes "1IZQ-BAN", "2DER-HAB3": the room code is the last dash-separated part
+    f = re.sub(r"^(kph|kh|ph|sh|pesuh|pe)(wc)$|^(wc)(kph|kh|ph|sh|pesuh|pe)$", lambda m: "/".join(g for g in m.groups() if g), f)
     parts = [p.strip() for p in re.split(r"[/+,&;]|\s-\s|(?<=\w)-(?=[a-z])", f) if p.strip()]
     return parts or ([f] if f else [])
 
@@ -148,7 +149,10 @@ AREA_WORD = re.compile(r"pinta-ala|\barea\b|\bareas\b(?=.*\b(?:combined|together
                        # "koko talo" = the whole house stays out)
                        r"\btotal size\b|\bsizes?\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|"
                        r"\b\w+(?:iden|jen|ien|den|tten|en)\s+koko\b|"
-                       r"how much|kuinka paljon|paljonko|wie viel")
+                       r"how much|kuinka paljon|paljonko|wie viel|"
+                       # one named room: "how big is the kitchen", "what size is the bathroom", "kuinka iso on keittio"
+                       r"\bhow (?:big|large) is (?:the|this|that|our)\b|\bwhat(?: size|'s the size| is the size) (?:is|of) (?:the|this|that)\b|"
+                       r"\b(?:kuinka|miten) (?:iso|suur)\w* on\b|\bwie gross ist (?:die|das|der)\b")
 COUNT_Q = re.compile(r"\b(how many|kuinka monta|montako|wie viele|combien|quant[ie])\b")
 NAMED = re.compile(r"\b(named|labell?ed|called|schedule|nimetty|bezeichnung)\b")
 SCOPE_ID = re.compile(r"\b(house|building|block|wing|unit|apartment|flat|talo|rakennus|asunto|huoneisto)\s+[a-z0-9]{1,3}\b")

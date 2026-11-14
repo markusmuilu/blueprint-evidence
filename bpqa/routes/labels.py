@@ -21,7 +21,7 @@ ROOM_PATTERNS = {
     "kitchen": r"K|KK|KT|KEI?T+I*O?|KETT+IO|KEITTOKOMERO|AVOK|AVOKEITTIO|TUPAK|TUPAKEITTIO|APUK|APUKEITTIO|KOK|KOKSVRA",
     "sauna": r"S|SAUNA|LH|LOYLYH(UONE)?|BASTU",
     "wc_room": r"WC\d?",
-    "bathroom": r"KH\d?|KPH\d?|PH\d?|PESUH(UONE)?\d?|SH\d?|KYLPYH(UONE)?|SUIHKUH(UONE)?|BADRUM|BAD|DUSCH",
+    "bathroom": r"KH\d?|KPH\d?|PH\d?|PE|PESUH(UONE)?\d?|SH\d?|KYLPYH(UONE)?|SUIHKUH(UONE)?|BADRUM|BAD|DUSCH",
     "balcony": r"PARVEKE\d?|PARV|LASIT(ETTU)?PARVEKE|LPARVEKE|BALKONG",
 }
 
@@ -64,11 +64,21 @@ def _stem(part: str) -> str:
     return re.sub(r"\d+\.?$|\.$", "", part)
 
 
+# a combined bathroom + WC label whose separator the OCR dropped ("KPH / WC" read "KHWC", "KPHWC")
+COMBO_RE = re.compile(r"(KPH|KH|PH|SH|PESUH|PE)(WC)|(WC)(KPH|KH|PH|SH|PESUH|PE)")
+
+
+def _split_combo(p: str) -> list[str]:
+    m = COMBO_RE.fullmatch(p)
+    return [g for g in m.groups() if g] if m else [p]
+
+
 def parts(text: str) -> list[str]:
     t = norm(text)
     t = re.sub(r"\(.*?\)", " ", t)           # "MH (VARAUS)" -> "MH"
     t = re.sub(r"(?<=[A-Z])\.(?=[A-Z])", "", t)  # "W.C" -> "WC"
     ps = [p for p in re.split(r"[+/,;&\s()\[\]=]+", t) if p]
+    ps = [q for p in ps for q in _split_combo(p)]
     # apartment-type summaries ("3H+K+S", "1H+KK 32.5 m2") describe the flat, they are not room labels
     if any(re.fullmatch(r"\d*H", p) for p in ps) or re.match(r"\d\s*H\s*K", t):
         return []
@@ -91,6 +101,12 @@ def fuzzy(obj: str, part: str) -> str | None:
     hits = [w for o in ROOM_PATTERNS for w in ROOM_WORDS.get(o, ()) if len(w) >= FUZZY_MIN and _edit1(st, w)]
     own = [w for w in hits if w in ROOM_WORDS.get(obj, ())]
     return own[0] if own and len(hits) == len(own) else None    # ambiguous between types: no match
+
+
+def full_word(obj: str, part: str) -> bool:
+    """`part` is an English or German room word of this type read exactly (BEDROOM, KUCHE), not an
+    abbreviation and not a one-error read."""
+    return _stem(part) in ROOM_WORDS.get(obj, ())
 
 
 def match(obj: str, part: str) -> bool:
@@ -170,6 +186,13 @@ def dedupe(tokens, iou_thr=0.3, min_conf=0.5, prefer=None):
         if not any(_overlap(b, quad_box(k["quad"]), iou_thr) for k in keep):
             keep.append(t)
     return keep
+
+
+def read_labels(tokens, min_conf=0.5) -> list[dict]:
+    """The plan's room labels and plan words, one reading per text location across all rotations (and the
+    mirror when the plan is mirrored). The one reading every route shares: find_rooms, the consistency checks
+    and the area route's "labels read" lists all start from dedupe()."""
+    return [t for t in dedupe(tokens, min_conf=min_conf) if is_word(t["text"])]
 
 
 def clean_token(text: str) -> bool:

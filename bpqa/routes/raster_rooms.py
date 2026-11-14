@@ -15,6 +15,7 @@ tools/tune_rooms.py, stored in models/rooms_thresholds.json):
              (`proven_rule`: "agree", "agree_ocr" = the OCR reading is one its own rules prove,
              "agree_clean" = no room box scored inside the uncertainty band, or "none"); the rule is the
              one giving the most proven answers at >= 95% precision on the tune images
+  agree on 0 is never proven: no label of the type was read, which says nothing about unlabelled rooms
   disagree   tier "estimate"; the value is the reading the type's tuned policy prefers (`prefer`:
              "ocr", "det", or "ocr_proven": OCR when its own rules would have proven it, else the
              detector); both readings and their boxes are in the answer
@@ -36,7 +37,7 @@ from PIL import Image
 from ..answer import Answer, estimate
 from ..evidence import AMBER, BLUE, GREY, ImageCanvas, evidence_path, finish
 from .. import tiling
-from . import raster
+from . import labels, raster
 
 ROUTE = "raster-rooms"
 REPO = Path(__file__).resolve().parents[2]
@@ -112,12 +113,21 @@ def det_count(views: list[list[dict]], obj: str, cfg: dict) -> tuple[int, list[d
     return n, kept, unsure
 
 
-def combine(obj: str, o: int, o_proven: bool, d: int, cfg: dict, n_unsure: int = 0) -> tuple[int, bool, str]:
-    """(value, proven, which) from the OCR count o and the detector count d, per the tuned policy."""
+def combine(obj: str, o: int, o_proven: bool, d: int, cfg: dict, n_unsure: int = 0,
+            ocr_words: bool = False) -> tuple[int, bool, str]:
+    """(value, proven, which) from the OCR count o and the detector count d, per the tuned policy.
+
+    ocr_words: every label the OCR read is a full English or German room word read exactly ("Bedroom",
+    "Kuche"). The detector was trained on Finnish CubiCasa drawing styles, so where it finds fewer rooms than
+    such labels name, the labels win (still an estimate)."""
     if o == d:
         rule = cfg.get("proven_rule", "agree")
         proven = rule == "agree" or (rule == "agree_ocr" and o_proven) or (rule == "agree_clean" and n_unsure == 0)
+        if o == 0:
+            proven = False       # agreement by absence: no label of this type was read and none was drawn
         return o, proven, "both"
+    if ocr_words and o > d and cfg.get("prefer") != "off":
+        return o, False, "ocr"
     pref = cfg.get("prefer", "ocr_proven")
     if pref == "off":
         return o, o_proven, "ocr_only"
@@ -144,7 +154,8 @@ def answer(ctx, q) -> Answer:
         return raster.answer(ctx, q)
     d, kept, unsure = det_count(views, q.obj, cfg)
     o, o_proven = int(ocr.value), ocr.tier == "proven"
-    value, proven, which = combine(q.obj, o, o_proven, d, cfg, len(unsure))
+    words = o > 0 and all(labels.full_word(q.obj, it.get("match", "")) for it in ocr.items)
+    value, proven, which = combine(q.obj, o, o_proven, d, cfg, len(unsure), words)
     name = NAMES[q.obj]
     det_items = [{"n": i + 1, "reading": "drawn room", "type": q.obj, "score": k["conf"],
                   "xyxy": [round(v) for v in k["xyxy"]]} for i, k in enumerate(kept)]
@@ -159,7 +170,10 @@ def answer(ctx, q) -> Answer:
     ans = Answer(value=value, unit="count", route=ROUTE, confidence=0.85 if proven else 0.4,
                  tier="proven" if proven else "estimate", items=det_items + lab_items, explanation=expl)
     if not proven:
-        if which == "both":
+        if which == "both" and value == 0:
+            estimate(ans, f"no {name} label was read and none was drawn; both readings give 0, but absence of "
+                          f"a label is not proof that the plan has none")
+        elif which == "both":
             estimate(ans, f"both readings give {value}, but the proof rule for {name} counts "
                           f"({cfg.get('proven_rule')}) does not hold on this plan")
         else:
