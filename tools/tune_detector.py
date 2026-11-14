@@ -108,9 +108,9 @@ def main():
                     help="detector weights inside models/ (default models/detector.pt); a.pt+b.pt fuses both models' views")
     ap.add_argument("--imgsz", type=int, default=1280)
     ap.add_argument("--tile", type=int, default=0, help="tile size for tiled inference (0: whole image)")
-    ap.add_argument("--tile-scale", type=float, default=2.0)
+    ap.add_argument("--tile-scale", default="2.0", help="resize factor before tiling; 2,1.5 fuses both scales")
     ap.add_argument("--tile-overlap", type=int, default=192)
-    ap.add_argument("--tile-max-side", type=int, default=4096)
+    ap.add_argument("--tile-max-side", default="4096", help="long-side cap after resizing; one per scale, comma-separated")
     ap.add_argument("--tta", action="store_true", help="eight rotations and mirrors")
     ap.add_argument("--lam", type=float, default=1.0, help="cost of a wrong proven answer, in correct ones")
     ap.add_argument("--objects", default=",".join(det.OBJECTS))
@@ -121,7 +121,12 @@ def main():
     if any(m.parent != (REPO / "models").resolve() for m in models):
         raise SystemExit("put the weights in models/ (the route loads models/<name>)")
     model_name = "+".join(m.name for m in models)
-    tile = {"tile": a.tile, "scale": a.tile_scale, "overlap": a.tile_overlap, "max_side": a.tile_max_side} if a.tile else None
+    scales = [float(x) for x in str(a.tile_scale).split(",")]
+    sides = [int(x) for x in str(a.tile_max_side).split(",")]
+    sides = sides * len(scales) if len(sides) == 1 else sides
+    tile = [{"tile": a.tile, "scale": sc, "overlap": a.tile_overlap, "max_side": ms} for sc, ms in zip(scales, sides)] if a.tile else None
+    if tile and len(tile) == 1:
+        tile = tile[0]
     if a.images:
         paths = {l.strip() for l in Path(a.images).read_text(encoding="utf-8").splitlines() if l.strip()}
     else:

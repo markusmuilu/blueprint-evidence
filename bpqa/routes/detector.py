@@ -146,14 +146,22 @@ def model_files(c: dict) -> list[Path]:
     return [REPO / "models" / m for m in str(c["model"]).split("+")]
 
 
+def tile_modes(c: dict) -> list[dict | None]:
+    """The tiling of a policy: none, one tile config, or a list of them (several scales, fused)."""
+    t = c.get("tile")
+    return t if isinstance(t, list) else [t]
+
+
 def views_for(file: Path, c: dict, device=None) -> list[list[dict]] | None:
-    """Every view of every model in the policy (an ensemble is the views of its models, fused like TTA)."""
+    """Every view of every model and tile scale in the policy (an ensemble is the views of its models
+    and scales, fused like TTA)."""
     out = []
     for m in model_files(c):
-        v = detect_views(Path(file), model=m, imgsz=c["imgsz"], tile=c["tile"], tta=c["tta"], device=device)
-        if v is None:
-            return None
-        out += v
+        for t in tile_modes(c):
+            v = detect_views(Path(file), model=m, imgsz=c["imgsz"], tile=t, tta=c["tta"], device=device)
+            if v is None:
+                return None
+            out += v
     return out
 
 
@@ -236,7 +244,7 @@ def answer(ctx, q, img=None) -> Answer:
     t, band = c["conf"], c.get("band", 0.0)
     n, hits, unsure, spread = count_views(views, dets, q.obj, c)
     why = policy(hits, unsure, c, spread, n)
-    mode = " ".join(m for m in ("on tiles" if c["tile"] else "", "over rotations and mirrors" if c["tta"] else "",
+    mode = " ".join(m for m in ("on tiles" if c["tile"] else "", f"at {len(tile_modes(c))} scales" if len(tile_modes(c)) > 1 else "", "over rotations and mirrors" if c["tta"] else "",
                                 f"fused over {len(model_files(c))} models" if len(model_files(c)) > 1 else "") if m)
     ans = Answer(value=n, unit="count", route=ROUTE, tier="proven",
                  confidence=round(c.get("precision_estimate" if why else "precision", c.get("precision", 0.5)), 2),
