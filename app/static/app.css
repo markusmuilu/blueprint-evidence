@@ -1130,3 +1130,9 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 /* the cached answer says so near the top, in plain words (Markus, 14 Nov) */
 .cache-why { margin: var(--s2) 0 0; font-size: var(--fs-xs); color: var(--fg-2); line-height: 1.45; }
 .cache-why .cache-tag { margin: 0 var(--s2) 0 0; cursor: default; }
+
+/* remove one upload (15 Nov) */
+#uploadList li { display: flex; align-items: stretch; }
+#uploadList li .draw-item { flex: 1; min-width: 0; }
+.up-remove { flex: none; width: 32px; border: 0; background: transparent; color: var(--muted, #8a94a6); font-size: 20px; line-height: 1; cursor: pointer; border-radius: 6px; }
+.up-remove:hover, .up-remove:focus-visible { color: var(--text, #e6e9ef); background: rgba(127,127,127,.15); }

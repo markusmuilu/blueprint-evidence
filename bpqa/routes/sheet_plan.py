@@ -21,6 +21,7 @@ would run out of memory on a sheet.
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -375,7 +376,13 @@ def short_scale(sc: S.SheetScale) -> str:
 
 def _finish(ctx, cv: Canvas, head: str, note: str) -> str:
     return finish(cv.cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                  f"{head}   ESTIMATE   ({ROUTE}, local OCR and vision, €0)", note=note)
+                  f"{head}   ESTIMATE   ({ROUTE}, local OCR and vision, €0)", note=note,
+                  max_w=SHEET_EVIDENCE_W)
+
+
+# a drawing sheet's evidence is kept larger than a scan's 1600 px, so room names and numbers stay sharp when zoomed in
+# (his note 15 Nov: labels on the school sheet were blurry); the labels keep their on-screen size at fit
+SHEET_EVIDENCE_W = int(os.environ.get("SHEET_EVIDENCE_W", "4000"))
 
 
 # ---------------------------------------------------------------- answers

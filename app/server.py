@@ -144,6 +144,17 @@ def _precompute_scan(path: str):
                   out_dir=RENDER_DIR, evidence=False))
 
 
+@app.delete("/api/upload/{uid}")
+def delete_upload(uid: str):
+    """Remove one upload: its folder on this container and its copy in the shared store. Other containers drop
+    their copy when it expires; questions on it then say the drawing is gone."""
+    if not re.fullmatch(r"[0-9a-f]{6,40}", uid):
+        raise HTTPException(400, "bad upload id")
+    shutil.rmtree(UPLOADS / uid, ignore_errors=True)
+    shared.remove_upload(uid)
+    return {"removed": uid}
+
+
 @app.get("/api/precompute")
 def precompute_status(path: str):
     """Progress of the background reading started at upload: {state, kind, stage, done_stages, message, ...}."""

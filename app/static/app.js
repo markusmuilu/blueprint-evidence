@@ -462,8 +462,21 @@ function renderUploads() {
     b.addEventListener("dblclick", () => { if (batch.on) selectDrawing(d.path); });
     paintPick(b);
     li.appendChild(b);
+    const x = document.createElement("button");      // his request 15 Nov: remove one upload
+    x.type = "button"; x.className = "up-remove"; x.textContent = "×";
+    x.title = "Remove this upload"; x.setAttribute("aria-label", `Remove ${b.dataset.name}`);
+    x.addEventListener("click", (e) => { e.stopPropagation(); removeUpload(d); });
+    li.appendChild(x);
     ul.appendChild(li);
   }
+}
+async function removeUpload(d) {
+  uploadStore.write(uploadStore.read().filter((u) => u.path !== d.path));
+  const uid = (d.path.match(/^upload:([0-9a-f]+)\//) || [])[1];
+  if (uid) { try { await fetch(`/api/upload/${uid}`, { method: "DELETE" }); } catch (_) { /* offline: it expires in 24 h */ } }
+  if (state.drawing?.path === d.path) { state.drawing = null; state.answer = null; renderAnswer(null); showDrawing(); setHash(); }
+  renderUploads();
+  toast(`Removed ${d.name || "the upload"}`);
 }
 queueMicrotask(renderUploads);      // after the whole script has run: it needs uploadStore and the ask-several state (a call above either stopped the script, 14 Nov)
 

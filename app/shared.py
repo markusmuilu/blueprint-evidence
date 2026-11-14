@@ -247,6 +247,17 @@ def pull_caches(stem: str, out: Path | None = None) -> list[Path] | None:
 
 # ---------------------------------------------------------------- expiry
 
+def remove_upload(uid: str) -> None:
+    """Delete one upload from the shared store (the person pressed remove)."""
+    if not enabled():
+        return
+    for k in (f"up:{uid}", f"upm:{uid}"):
+        try:
+            _try(lambda: _d().pop(k), tries=2)
+        except Exception:
+            pass
+
+
 def purge_expired(ttl: float) -> list[str]:
     """Delete uploads older than ttl seconds, and the evidence made from them. Returns the uids."""
     if not enabled():
