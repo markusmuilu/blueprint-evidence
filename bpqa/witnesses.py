@@ -136,3 +136,54 @@ def agreement(rows: list[dict]) -> dict:
     return {"n_formats": len(rows), "n_answered": len(answered), "n_agree": len(major) if len(major) > 1 else (1 if answered else 0),
             "level": level, "majority_value": major[0]["value"] if major and (len(major) > 1 or len(answered) == 1) else None,
             "unit": unit}
+
+
+def spatial_disagreements(rows: list[dict], tol: float = 0.012) -> int:
+    """Circle where two witnesses drawn on the same page disagree about individual items.
+
+    Witnesses whose evidence is the whole page in pixels (a rendered PDF and its PNG) share a frame up to
+    scale when their aspect ratios match; their numbered boxes are compared by centre in page-relative
+    coordinates (tolerance `tol` of the page width). Each witness gets `disputed`: points (fractions of
+    its evidence body) that it counted and another format did not ("only here"), or that another format
+    counted and it did not ("missed here"). DXF and IFC evidence is drawn in model coordinates with no
+    page frame, so it is not compared. Returns the number of disputed points.
+    """
+    def centres(r):
+        m = r.get("marks") or {}
+        fr = m.get("frame") or {}
+        if fr.get("kind") != "pixel" or not m.get("w") or not m.get("h"):
+            return None
+        return [((b["rect"][0] + b["rect"][2]) / 2 / m["w"], (b["rect"][1] + b["rect"][3]) / 2 / m["h"], b.get("n"))
+                for b in m.get("marks", []) if b["kind"] == "box"]
+
+    paged = [(r, centres(r)) for r in rows if r.get("value") is not None and r.get("unit") == "count"]
+    paged = [(r, c) for r, c in paged if c]
+    for r in rows:
+        r["disputed"] = []
+    total = 0
+    for i, (ra, ca) in enumerate(paged):
+        for rb, cb in paged[i + 1:]:
+            asp_a = ra["marks"]["w"] / ra["marks"]["h"]
+            asp_b = rb["marks"]["w"] / rb["marks"]["h"]
+            if abs(asp_a - asp_b) > 0.01 * asp_a:
+                continue
+            used, only_a = set(), []
+            for xa, ya, na in ca:
+                best, bd = None, tol
+                for j, (xb, yb, _) in enumerate(cb):
+                    d = max(abs(xa - xb), abs(ya - yb) * (1 / asp_a))
+                    if j not in used and d <= bd:
+                        best, bd = j, d
+                if best is None:
+                    only_a.append((xa, ya, na))
+                else:
+                    used.add(best)
+            only_b = [c for j, c in enumerate(cb) if j not in used]
+            for x, y, n in only_a:
+                ra["disputed"].append({"x": round(x, 4), "y": round(y, 4), "n": n, "kind": "only", "other": rb["format"]})
+                rb["disputed"].append({"x": round(x, 4), "y": round(y, 4), "n": None, "kind": "missed", "other": ra["format"]})
+            for x, y, n in only_b:
+                rb["disputed"].append({"x": round(x, 4), "y": round(y, 4), "n": n, "kind": "only", "other": ra["format"]})
+                ra["disputed"].append({"x": round(x, 4), "y": round(y, 4), "n": None, "kind": "missed", "other": rb["format"]})
+            total += len(only_a) + len(only_b)
+    return total

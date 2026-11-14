@@ -425,6 +425,7 @@ def witnesses(body: WitnessBody):
     t0 = time.perf_counter()
     with SOLVE_LOCK:
         res = wit.run(root, rel, question, out_dir=RENDER_DIR, evidence=True, on_answer=keep)
+    res["n_disputed"] = wit.spatial_disagreements(res["witnesses"])
     res.update(path=body.path, question=question, time_ms=round((time.perf_counter() - t0) * 1000, 1), cached=False,
                gold=CATALOG.gold(rel, question) if not body.path.startswith("upload:") else None)
     cached.write_text(json.dumps(res, ensure_ascii=False, default=str), encoding="utf-8")

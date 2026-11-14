@@ -458,7 +458,14 @@ function drawPins(a) {
   const off = headerOff(a);
   const added = own ? state.corr.added.map((p, j) =>
     `<div class="pin add" style="left:${p.x - 9}px;top:${p.y + off - 9}px;width:18px;height:18px"><span>+${j + 1}</span></div>`).join("") : "";
-  $("#marks").innerHTML = html + added + '<div class="reticle" hidden></div>';
+  /* witness views: circle the places where another format disagrees about an individual item */
+  const mk = a.marks;
+  const dis = !own && mk && a.disputed ? a.disputed.map((d) => {
+    const R = Math.max(mk.w * 0.018, 14);
+    const tip = d.kind === "only" ? `Counted here as #${d.n}, not by ${d.other}` : `Counted by ${d.other}, missed here`;
+    return `<div class="dis ${d.kind}" title="${esc(tip)}" style="left:${d.x * mk.w - R}px;top:${d.y * mk.h + off - R}px;width:${2 * R}px;height:${2 * R}px"></div>`;
+  }).join("") : "";
+  $("#marks").innerHTML = html + added + dis + '<div class="reticle" hidden></div>';
 }
 function clearMarks() { $("#marks").innerHTML = ""; clearFocus(); }
 function clearFocus() {
@@ -510,7 +517,7 @@ function renderStrip() {
   $("#stripHead").innerHTML = `
     <h2 class="h-panel">Verify ${rows.length} ${noun}</h2>
     <span class="legend meta"><span class="key blue" aria-hidden="true"></span>${nBlue} proven${nAmber ? `<span class="key amber" aria-hidden="true"></span>${nAmber} to check` : ""}</span>
-    ${scale ? `<span class="meta scale-src" title="${esc(scale.text)}">Scale: ${esc(scale.text)}</span>` : ""}
+    ${scale ? `<span class="meta scale-src" title="${esc(scale.text)}">Scale from ${esc(scale.text.split(" (")[0].replace(/^Scale found on the sheet$/, "the sheet"))}</span>` : ""}
     <span class="strip-gap"></span>
     ${own ? `<span class="corr mono" id="corrLine">${esc(corrLine(a))}</span>
       ${isCount(a) ? `<button class="btn btn-quiet" type="button" id="addMode" aria-pressed="${state.addMode}">${icon("plus")}Add missed item</button>` : ""}
@@ -564,7 +571,7 @@ function drawThumb(cv, img, r, dim) {
   ctx.fillRect(0, 0, cv.width, cv.height);
   if (!img.naturalWidth || !r) return;
   const cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
-  const w = Math.max(r[2] * 1.8, r[3] * 1.8 * (TW / TH), 48);
+  const w = Math.max(r[2] * 2.4, r[3] * 2.4 * (TW / TH), 90);
   const h = w * (TH / TW);
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h, 0, 0, cv.width, cv.height);
@@ -880,9 +887,12 @@ function renderWitnesses(a, w) {
       <span class="wt ${st}" aria-label="${st === "none" ? "abstained" : st}">${st === "none" ? "" : icon(st === "proven" ? "proven" : "estimate")}</span>
     </button></li>`;
   }).join("");
+  const paged = w.witnesses.filter((r) => (r.disputed || []).length).map((r) => r.format);
+  const disLine = w.n_disputed ? `<p class="note dis-note"><span class="dis-key" aria-hidden="true"></span>${w.n_disputed} item${w.n_disputed > 1 ? "s" : ""} where ${esc(paged.join(" and "))} disagree on the same page ${w.n_disputed > 1 ? "are" : "is"} circled in their views. Select ${esc(paged.join(" or "))}.</p>` : "";
   $("#witBody").innerHTML = `
     <p class="wit-verdict ${vd.tone}">${icon(vd.icon)}<span>${esc(vd.text)}</span></p>
     <ul class="wit-list">${rows}</ul>
+    ${disLine}
     <p class="note">${rel ? esc(rel) + " " : ""}Each format is read on its own, twins hidden, no model calls. Select one to see its evidence; circled values disagree with the others.</p>`;
   $("#witBody").querySelectorAll(".wit-row:not([disabled])").forEach((b) => b.addEventListener("click", () => {
     const r = w.witnesses.find((x) => x.format === b.dataset.f);

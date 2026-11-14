@@ -263,6 +263,9 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .pin.on { --tone: var(--accent); border-width: 2.5px; }
 .pin.on span { color: var(--accent-fg); }
 .viewer.adding { cursor: crosshair; }
+/* a place where two formats disagree: circled in the estimate amber, darkened for paper */
+.dis { position: absolute; border: 2.5px solid oklch(0.66 0.16 60); border-radius: 50%; }
+.dis.missed { border-style: dashed; }
 .pin span {
   position: absolute; left: -1.5px; bottom: 100%; transform: scale(var(--inv, 1)); transform-origin: 0 100%;
   padding: 0 4px; background: var(--tone); color: oklch(0.18 0.02 245); border-radius: 2px;
@@ -439,6 +442,8 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
 .wit-row .wt { display: grid; place-items: center; }
 .wit-row .wt.proven { color: var(--ok); }
 .wit-row .wt.estimate { color: var(--warn); }
+.dis-note { display: flex; gap: var(--s2); align-items: center; color: var(--fg-2); }
+.dis-key { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--warn); flex: none; }
 .tbl tr.base td { color: var(--fg-2); border-top: 1px dashed var(--border-strong); }
 
 /* ------------------------------------------------------------ results */
