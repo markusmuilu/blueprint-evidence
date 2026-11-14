@@ -27,9 +27,9 @@ from shapely.ops import unary_union
 
 from .. import takeoff
 from .. import walls as wallmod
-from ..answer import Answer, abstain
+from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
-from .scope_guard import single_room_problem
+from .scope_guard import ambiguous_room, single_room_problem
 
 ROUTE = "ifc"
 CLASSES = {"door": ["IfcDoor"], "window": ["IfcWindow"], "wall": ["IfcWall"], "column": ["IfcColumn"],
@@ -459,11 +459,57 @@ def toilet_rooms_fallback(M, floor, tk):
     tr = tk2.get("toilet_rooms")
     if not tr:
         return [], tk, ""
+    if not any(kinds.values()):
+        tr["fixture_source"] = "model"      # no sanitary fixture on this floor: the wording says "the model", not "the drawing"
     return [r["sp"] for r in used], tk2, ("; ".join(filter(None, [tr["why"]])) if not used else "")
 
 
+
+def floor_room_names(M, floor, n=14) -> str:
+    """'Toilet x3, Depot, Gang ...': the type labels of the spaces on the floor (grouped, drawing order)."""
+    labs = Counter(space_type_label(sp) or "(unnamed)" for sp in floor)
+    out = [f"{k} x{v}" if v > 1 else k for k, v in labs.items()]
+    return ", ".join(out[:n]) + (f" and {len(out) - n} more" if len(out) > n else "")
+
+
+def types_elsewhere(M, storey, types) -> str:
+    """'Bad - Dame is on Kælder': where else in the model a room of one of `types` is named ('' when nowhere)."""
+    by = {}
+    for sp in M.entities("room"):
+        st = M.storey_of(sp)
+        if st is storey or (st is not None and storey is not None and st.id() == storey.id()):
+            continue
+        if takeoff.room_types(space_type_label(sp)) & set(types):
+            nm = st.Name if st is not None else "(no storey)"
+            by.setdefault(space_type_label(sp), [])
+            if nm not in by[space_type_label(sp)]:
+                by[space_type_label(sp)].append(nm)
+    if not by:
+        return ""
+    return "; ".join(f"{lab} is on {', '.join(sts[:5])}" + (" ..." if len(sts) > 5 else "") for lab, sts in list(by.items())[:4])
+
+
+def no_room_of_type(M, storey, floor, types):
+    """(sentence, extra) for a floor that has no room of `types`: what is on it, and where such rooms are.
+    The caller answers 0 m2 (proven, the way the count question answers 0); `extra` lists rooms of a related type."""
+    names = " / ".join(takeoff.TYPE_NAMES[t] for t in types)
+    s = (f"None on this floor: 0 m2. No space on storey {storey.Name} is named as {names}"
+         f"{' or typed as one from sanitary fixtures' if set(types) & {'bathroom', 'wc'} else ''}. "
+         f"Rooms on this storey: {floor_room_names(M, floor)}.")
+    elsewhere = types_elsewhere(M, storey, types)
+    if elsewhere:
+        s += f" Elsewhere in the model: {elsewhere}."
+    related = [sp for sp in floor if takeoff.room_types(space_type_label(sp)) & ({"wc"} if "bathroom" in types else {"bathroom"})
+               and not takeoff.room_types(space_type_label(sp)) & set(types)]
+    if related:
+        rt = "WC rooms" if "bathroom" in types else "bathrooms"
+        s += (f" {len(related)} {rt} on this storey ({floor_room_names(M, related, 4)}) are not counted; "
+              f"ask for the toilets or 'wet rooms' to include them.")
+    return s
+
 # count objects answered from IfcSpace names (and the WC fixtures for "toilets")
 ROOM_COUNTS = set(takeoff.COUNT_TYPES) | {"toilet"}
+SINK_OBJS = {"sink", "washbasin"}      # counted from the sanitary fixtures whose type reads as a basin or sink
 
 
 def room_type_count(M, storey, q) -> dict:
@@ -479,7 +525,7 @@ def room_type_count(M, storey, q) -> dict:
     where = f"on storey {storey.Name}" if storey is not None else "in the model"
     fx = [e for e in M.entities("sanitary") if (storey is None or M.storey_of(e) == storey) and fixture_kind(e) == "wc"]
     fx_note = (f"{len(fx)} WC fixture(s) (IfcSanitaryTerminal of WC type) {where}" if fx else
-               f"the model has no WC fixtures (IfcSanitaryTerminal of WC type) {where}")
+               f"0 WC fixture objects (IfcSanitaryTerminal of WC type) {where}: the model has no WC fixtures")
     if q.obj == "toilet" and not q.extra.get("toilet_ambiguous"):
         if not fx:
             return {"why": fx_note + "; WC seats cannot be counted from the model"}
@@ -508,7 +554,11 @@ def room_type_count(M, storey, q) -> dict:
             return {"used": [(e, None) for e in fx], "value": len(fx),
                     "note": f"{len(fx)} x IfcSanitaryTerminal of WC type {where} (no space is named as a WC / toilet room)",
                     "estimate": "'toilets' read as WC fixtures because no space is named as a toilet room"}
-        note += f"; 'toilets' read as toilet rooms (the dataset's IFC convention); {fx_note}"
+        if not fx and not typed:
+            note = (f"{fx_note}, and 0 spaces named as WC / toilet room {where}; "
+                    f"'toilets' read as toilet rooms (the dataset's IFC convention)")
+        else:
+            note += f"; 'toilets' read as toilet rooms (the dataset's IFC convention); {fx_note}"
     if not typed and not spaces:
         return {"why": f"no IfcSpace {where}"}
     return {"used": [(s, None) for s in typed], "value": len(typed), "note": note, "estimate": est}
@@ -535,6 +585,21 @@ def sheet_storey(M, ctx):
         return None, f"sheet text layer not readable ({type(ex).__name__})"
 
 
+def self_zero(ctx, M, storey, floor, tk, q, path, sheet_note) -> Answer:
+    """A takeoff or area question for a room type the storey does not have: 0 m2, proven (the storey's spaces were read
+    and none is of the type), with the rooms that are on the storey listed. The count question answers 0 the same way."""
+    text = no_room_of_type(M, storey, floor, tk["types"])
+    ans = Answer(value=0.0, unit="m2", route=ROUTE, confidence=0.9,
+                 items=[{"storey": storey.Name, "rooms_on_storey": len(floor)}],
+                 explanation=text + f" Source: {path.name}" + (f"; {sheet_note}." if sheet_note else "."))
+    if ctx.evidence:
+        try:
+            ans.evidence = render(ctx, M, storey, [], q, 0.0, "m2", f"0 rooms of the asked type on storey {storey.Name}")
+        except Exception:
+            ans.evidence = None
+    return ans
+
+
 def answer(ctx, q) -> Answer:
     path = ctx.model_ifc()
     if path is None:
@@ -546,7 +611,7 @@ def answer(ctx, q) -> Answer:
         if storey is None:
             return abstain(ROUTE, f"storey '{q.level}' not in model")
     sheet_note = ""
-    counted = q.obj in CLASSES or q.obj in ROOM_COUNTS
+    counted = q.obj in CLASSES or q.obj in ROOM_COUNTS or q.obj in SINK_OBJS
     if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or counted and sheet_scope_applies(ctx, q)):
         # a plan sheet shows one storey: find it from the storey name and space labels printed on the sheet
         storey, sheet_note = sheet_storey(M, ctx)
@@ -565,6 +630,19 @@ def answer(ctx, q) -> Answer:
         used, value, unit, note = rc["used"], rc["value"], "count", rc["note"]
         if rc.get("estimate"):
             tier_reason = rc["estimate"]
+    elif q.measure == "count" and q.obj in SINK_OBJS:
+        everything = M.entities("sanitary")
+        where = f"on storey {storey.Name}" if storey is not None else "in the model"
+        if not everything:
+            a = abstain(ROUTE, "cannot prove: this model has no sink objects (it has no sanitary fixtures at all, "
+                               "IfcSanitaryTerminal), so sinks cannot be counted from it")
+            a.final = True
+            return a
+        here = [e for e in everything if storey is None or M.storey_of(e) == storey]
+        ents = [e for e in here if fixture_kind(e) == "basin"]
+        used, value, unit = [(e, None) for e in ents], len(ents), "count"
+        note = (f"{len(ents)} x IfcSanitaryTerminal of sink / washbasin type {where}"
+                + (f" (the model has {len(here)} other sanitary fixture(s) {where}, none of them a sink)" if not ents and here else ""))
     elif q.measure == "count":
         if q.obj not in CLASSES:
             return abstain(ROUTE, f"no IFC class for {q.obj}")
@@ -585,25 +663,32 @@ def answer(ctx, q) -> Answer:
             if q.variant == "type_sum":
                 tk = tk_eff
                 want = set(tk["types"]) | ({"bathroom", "wc"} if "wet" in tk["types"] else set())
+                floor = [sp for sp in M.entities("room") if storey is None or M.storey_of(sp) == storey]
                 by_name = [sp for sp in spaces if takeoff.room_types(space_type_label(sp)) & set(tk["types"])]
                 spaces = by_name
                 if not spaces:
-                    inf = infer_space_types(M, M.entities("room") if storey is None else
-                                            [s for s in M.entities("room") if M.storey_of(s) == storey])
-                    spaces = [sp for sp in (M.entities("room") if storey is None else
-                                            [s for s in M.entities("room") if M.storey_of(s) == storey])
-                              if sp.id() in inf and inf[sp.id()][0] & want]
+                    inf = infer_space_types(M, floor)
+                    spaces = [sp for sp in floor if sp.id() in inf and inf[sp.id()][0] & want]
                     if spaces:
                         inferred = {sp.id(): inf[sp.id()][1] for sp in spaces}
+                where = f"on storey {storey.Name}" if storey is not None else "in the model"
                 if not spaces and "wc" in tk["types"]:
                     # "the toilets" with no separate WC room (by name or by fixtures): the rooms that contain a toilet
-                    floor = [sp for sp in M.entities("room") if storey is None or M.storey_of(sp) == storey]
+                    if storey is not None and not any("bathroom" in takeoff.room_types(space_type_label(sp)) for sp in floor):
+                        return self_zero(ctx, M, storey, floor, tk, q, path, sheet_note)
                     spaces, tk_eff, fb_why = toilet_rooms_fallback(M, floor, tk)
                     if not spaces and fb_why:
                         return abstain(ROUTE, fb_why)
                 if not spaces:
-                    names = sorted({space_type_label(sp) for sp in M.entities("room")} - {""})
-                    return abstain(ROUTE, f"no IfcSpace of type {', '.join(tk['types'])} "
+                    gen = takeoff.generic_reason([{"name": space_type_label(sp)} for sp in floor], tk["types"])
+                    if gen:
+                        a = abstain(ROUTE, gen + f" (space names {where}: {', '.join(sorted({space_type_label(sp) for sp in floor} - {''})[:15])})")
+                        a.final = True
+                        return a
+                    if storey is not None and floor:
+                        return self_zero(ctx, M, storey, floor, tk, q, path, sheet_note)
+                    names = sorted({space_type_label(sp) for sp in floor} - {""})
+                    return abstain(ROUTE, f"no IfcSpace of type {', '.join(tk['types'])} {where} "
                                           f"(space names: {', '.join(names[:15])})")
             if q.label and q.variant != "total":
                 lab = norm(q.label)
@@ -621,7 +706,7 @@ def answer(ctx, q) -> Answer:
             why = single_room_problem(q, [s for s, _ in used], lambda s: space_display(s) + (
                 f" on {M.storey_of(s).Name}" if M.storey_of(s) is not None else ""))
             if why:
-                return abstain(ROUTE, why)
+                return ambiguous_room(ROUTE, why)
             value, unit = round(sum(a for _, a in used), 3), "m2"
             note = f"sum of {len(used)} IfcSpace areas ({', '.join(sorted(srcs))})"
         elif (q.obj, q.measure) in QTO_KEYS:
@@ -677,6 +762,9 @@ def answer(ctx, q) -> Answer:
         tk = tk_eff
         if tk.get("toilet_rooms") and not inferred:
             ans.tier, ans.tier_reason = "estimate", takeoff.fallback_reason(tk)
+        scope_why = takeoff.scope_reason(tk, [r["label"] for r in rows])
+        if scope_why:
+            estimate(ans, scope_why)
         if wallmod.surfaces(tk)[1]:
             rooms, why = wall_rooms(M, used)
             if rooms is None:
@@ -689,6 +777,8 @@ def answer(ctx, q) -> Answer:
             ans.checks = wall_checks(ans.items)
             if any(c["status"] == "fail" for c in ans.checks):
                 ans.tier, ans.tier_reason = "estimate", "computed wall area differs from the model's own NetWallArea by more than 5%"
+                if scope_why:
+                    ans.tier_reason += "; " + scope_why
             if any("ASSUMED" in r.get("height_src", "") for r in rooms) or not any(r["height"] for r in rooms):
                 ans.tier = "estimate"
                 ans.tier_reason = (ans.tier_reason + "; " if ans.tier_reason else "") + "room height assumed"
@@ -709,6 +799,18 @@ def wall_checks(items):
             out.append({"name": f"wall area {it['room']}", "status": "pass" if ok else "fail",
                         "detail": f"computed {c:.2f} m2 vs model NetWallArea {m:.2f} m2"})
     return out
+
+
+def short_reason(reason: str, n: int = 70) -> str:
+    """Estimate reason for an evidence header: whole clauses only, never cut inside a bracket or quote."""
+    if len(reason) <= n:
+        return reason
+    out = ""
+    for part in re.split(r"(?<=[;,]) ", reason):
+        if len(out) + len(part) > n or part.count("(") != part.count(")") or part.count("'") % 2:
+            break
+        out += part + " "
+    return (out.strip(" ;,") or reason[:n].rsplit(" ", 1)[0]) + " ..."
 
 
 def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate=""):
@@ -743,7 +845,7 @@ def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate=""):
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     hs = sorted({r["height_src"].split(" (")[0] for r in rooms})
     nop = sum(len(r["openings"]) for r in rooms)
-    return finish(cv.img, out, ctx.q.question, wallmod.answer_line(value, totals, ROUTE, estimate[:40]),
+    return finish(cv.img, out, ctx.q.question, wallmod.answer_line(value, totals, ROUTE, short_reason(estimate)),
                   note=(f"Walls = outline (thick blue) x height - {nop} openings (amber boxes). Height: {'; '.join(hs)}. "
                         f"Surfaces: {totals['surfaces']}. Storey {storey.Name if storey is not None else '-'}."), checks=checks)
 

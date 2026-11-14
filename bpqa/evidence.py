@@ -226,6 +226,35 @@ class ImageCanvas:
 _STASH: dict = {}      # evidence path -> (overlay without header, question, answer line, note)
 
 
+def wrap_px(text: str, fnt, width: int, max_lines: int = 99) -> list[str]:
+    """Wrap text to a pixel width with the font that will draw it (a character count overruns the edge on wide
+    glyphs); words longer than a line are cut. The last line ends in '...' when the text did not fit."""
+    meas = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    lines, cur = [], ""
+    for w in text.split():
+        while meas.textlength(w, font=fnt) > width and len(w) > 1:       # one word wider than the line
+            k = len(w)
+            while k > 1 and meas.textlength(w[:k], font=fnt) > width:
+                k -= 1
+            if cur:
+                lines.append(cur)
+                cur = ""
+            lines.append(w[:k])
+            w = w[k:]
+        t = f"{cur} {w}".strip()
+        if cur and meas.textlength(t, font=fnt) > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = t
+    if cur:
+        lines.append(cur)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = lines[-1].rstrip(" .,;") + " ..."
+    return lines
+
+
 def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: str = "", max_w=1600,
            checks=None) -> str:
     """Add the header strip and save. Returns the path as a string.
@@ -242,26 +271,30 @@ def finish(img: Image.Image, out: Path, question: str, answer_line: str, note: s
         img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
     f, fb = font(15), font(19)
     cw = max(img.width, 900)                      # narrow scans: keep the header readable
-    lines = textwrap.wrap(question, max(40, cw // 9))[:3]
-    note_lines = textwrap.wrap(note, max(50, cw // 7))[:3] if note else []
+    tw = cw - 24                                  # text width: 12 px margin each side
+    lines = wrap_px(question, f, tw, 3)
+    ans_lines = wrap_px(answer_line, fb, tw, 3)
+    note_lines = wrap_px(note, font(13), tw, 6) if note else []
     check_lines = []
     for c in checks or []:
         st = c["status"] if isinstance(c, dict) else c.status
         nm = c["name"] if isinstance(c, dict) else c.name
         dt = c["detail"] if isinstance(c, dict) else c.detail
         mark = {"pass": "PASS", "fail": "FAIL"}.get(st, st.upper())
-        for i, ln in enumerate(textwrap.wrap(f"check {mark}  {nm}: {dt}", max(50, cw // 7))[:2]):
+        for i, ln in enumerate(wrap_px(f"check {mark}  {nm}: {dt}", font(13), tw, 2)):
             check_lines.append((ln if i == 0 else "      " + ln, st))
-    head_h = 14 + 20 * len(lines) + 26 + 18 * len(note_lines) + 18 * len(check_lines) + 8
+    head_h = 14 + 20 * len(lines) + 4 + 24 * len(ans_lines) + 18 * len(note_lines) + 18 * len(check_lines) + 8
     canvas = Image.new("RGB", (cw, img.height + head_h), "white")
     d = ImageDraw.Draw(canvas)
     y = 8
     for ln in lines:
         d.text((12, y), ln, fill=INK, font=f)
         y += 20
-    d.text((12, y + 2), answer_line, fill=(170, 100, 0) if "ESTIMATE" in answer_line.upper() else
-           FAIL if "ABSTAIN" in answer_line.upper() else BLUE, font=fb)
-    y += 28
+    for ln in ans_lines:
+        d.text((12, y + 2), ln, fill=(170, 100, 0) if "ESTIMATE" in answer_line.upper() else
+               FAIL if "ABSTAIN" in answer_line.upper() else BLUE, font=fb)
+        y += 24
+    y += 4
     for ln in note_lines:
         d.text((12, y), ln, fill=(90, 90, 90), font=font(13))
         y += 18

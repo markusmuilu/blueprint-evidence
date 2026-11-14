@@ -220,7 +220,9 @@ def describe(tk: dict) -> str:
     s = f"Takeoff{mat}: sum of net floor areas of rooms typed {names}{grp}, as drawn inside the walls, no waste allowance"
     if tr:
         other = "".join(f" and rooms typed {TYPE_NAMES[t]}" for t in tr.get("other_types", []))
-        how = ("a toilet symbol drawn inside" if tr["confirmed"] else "a bathroom label, toilet not visible in the drawing")
+        how = ("a toilet symbol drawn inside" if tr["confirmed"] else
+               "a bathroom name, no WC fixtures in the model" if tr.get("fixture_source") == "model" else
+               "a bathroom label, toilet not visible in the drawing")
         s = (f"Takeoff{mat}: sum of net floor areas of the rooms that contain a toilet ({how}){other}, as there is no "
              f"separate WC room on this floor, as drawn inside the walls, no waste allowance")
     if tk.get("surface") == "ceiling":
@@ -450,15 +452,100 @@ def toilet_fallback(rooms: list[dict], tk: dict, name_key: str = "name", has_toi
     return used + keep + unlabelled, generic, tk2
 
 
+def fixture_room_fallback(rooms: list[dict], tk: dict, kinds_of, name_key: str = "name") -> tuple[list[dict], dict]:
+    """Bathrooms asked for on a floor where no room is labelled as one: the rooms with no label at all that hold a
+    toilet, bathtub or shower (a numbered room whose name is missing, as the Swiss plans draw wet rooms).
+    kinds_of: callable room -> set of fixture kinds drawn inside ('toilet', 'bathtub', 'shower', 'washbasin').
+    Returns (rooms, tk) where tk is a copy that records the reading ('fixture_rooms'; interpretation() and
+    fallback_reason() state it and the route marks the answer an estimate), or ([], tk) when no room qualifies.
+    The same reading as the toilet fallback uses for unlabelled rooms, so the area and the tiling answers agree."""
+    if "bathroom" not in tk["types"] or any("bathroom" in room_types(r.get(name_key)) for r in rooms):
+        return [], tk
+    got = [r for r in rooms if not str(r.get(name_key) or "").strip() and r.get("number")
+           and kinds_of(r) & {"toilet", "bathtub", "shower"}]
+    if not got:
+        return [], tk
+    kinds = sorted({k for r in got for k in kinds_of(r) & {"toilet", "bathtub", "shower"}})
+    return got, dict(tk, fixture_rooms={"n": len(got), "kinds": kinds})
+
+
+def _type_word(t: str) -> str:
+    return {"wc": "WC room", "bathroom": "bathroom", "hall": "hall", "storage": "storage room"}.get(t, TYPE_NAMES.get(t, t))
+
+
+def combined_rooms(tk: dict, labels) -> list[tuple[str, int, list[str]]]:
+    """[(name, how many used rooms carry it, all its room types)] for used rooms whose name covers an asked type and
+    another one at the same time ('ELUTUBA+KOOK' = living room + kitchen in one): their whole area is counted under
+    the asked type. Room numbers in the label ('(3-1)', '2.04') are not part of the name."""
+    want = set(tk["types"])
+    names: dict[str, int] = {}
+    for lab in labels:
+        base = re.sub(r"\s*\([^)]*\)", "", lab)
+        base = re.sub(r"\s+[a-z]?\d+([.-]\d+)*$", "", base, flags=re.I).strip()
+        ts = room_types(base) - {"room"}
+        if len(ts) > 1 and ts & want:
+            names[base] = names.get(base, 0) + 1
+    return [(n, c, sorted(room_types(n) - {"room"})) for n, c in names.items()]
+
+
+def scope_sentence(tk: dict, labels) -> str:
+    """Sentences about how the question's room word was read: a singular room type with several matching
+    rooms (all summed), and combined rooms (whole area counted). '' when neither applies."""
+    labels = list(labels)
+    parts = []
+    if tk.get("single_type") and len(labels) > 1:
+        t = _type_word(tk["types"][0])
+        parts.append(f"The question names one {t}; all {len(labels)} matching rooms are summed "
+                     f"(name the room number to pick one).")
+    comb = combined_rooms(tk, labels)
+    if comb:
+        parts.append("Combined room name" + ("s" if len(comb) > 1 else "") + ": "
+                     + "; ".join(f"{n}{f' (x{c})' if c > 1 else ''} names {' and '.join(_type_word(t) for t in ts)} in one room"
+                                 for n, c, ts in comb[:4])
+                     + "; the whole area of such a room is counted under the asked type.")
+    return " ".join(parts)
+
+
+def scope_reason(tk: dict, labels) -> str:
+    """Estimate-tier reason for those readings ('' when the answer stands as proven)."""
+    labels = list(labels)
+    why = []
+    if tk.get("single_type") and len(labels) > 1:
+        why.append(f"the question names one {_type_word(tk['types'][0])} but {len(labels)} rooms match; all are summed")
+    comb = combined_rooms(tk, labels)
+    if comb:
+        why.append(f"combined room name(s) ({', '.join(n for n, _, _ in comb[:3])}): the whole area is counted "
+                   f"under the asked type")
+    return "; ".join(why)
+
+
 def interpretation(tk: dict, rows: list[tuple[str, float]]) -> str:
-    """The sentence that opens an answer built on the toilet fallback ('' otherwise).
-    rows: (label, floor area) of the rooms used; rooms of other asked types are not named."""
+    """The sentence that opens an answer built on the toilet fallback ('' otherwise); scope_sentence() is
+    appended for every takeoff. rows: (label, floor area) of the rooms used; rooms of other asked types
+    are not named."""
+    extra = scope_sentence(tk, [lab for lab, _ in rows])
+    fr = tk.get("fixture_rooms")
+    if fr:
+        named = ", ".join(f"{lab} ({a:.2f} m2)" for lab, a in rows)
+        extra = (f"No room on this floor is labelled as a bathroom; using the {fr['n']} unnamed room(s) that hold a "
+                 f"{' / '.join(fr['kinds'])} symbol: {named}. " + extra).strip()
+    return (_toilet_interpretation(tk, rows) + (" " if extra and tk.get("toilet_rooms") else "") + extra).strip()
+
+
+def _toilet_interpretation(tk: dict, rows) -> str:
     tr = tk.get("toilet_rooms")
     if not tr:
         return ""
     other = set(tr.get("other_types", []))
     named = [f"{lab} ({a:.2f} m2)" for lab, a in rows if not (room_types(lab) & other)]
-    s = "No separate WC room on this floor; using the rooms that contain a toilet: " + (", ".join(named) or "none") + "."
+    if tr["confirmed"]:
+        s = "No separate WC room on this floor; using the rooms that contain a toilet: " + (", ".join(named) or "none") + "."
+    elif tr.get("fixture_source") == "model":
+        s = ("No separate WC room on this floor and no WC fixtures in the model; using the rooms named as bathrooms "
+             "(toilet not confirmed): " + (", ".join(named) or "none") + ".")
+    else:
+        s = ("No separate WC room on this floor and no toilet symbols drawn; using the rooms labelled as bathrooms "
+             "(toilet not confirmed): " + (", ".join(named) or "none") + ".")
     boxed = "" if tr.get("no_boxes") else " (boxed on the evidence image)"   # IFC evidence images do not box fixtures
     if tr["confirmed"]:
         if tr.get("unknown"):
@@ -470,17 +557,34 @@ def interpretation(tk: dict, rows: list[tuple[str, float]]) -> str:
             s += f" {tr['unlabelled']} of them carr{'ies' if tr['unlabelled'] == 1 else 'y'} no room name, only the toilet symbol."
         if tr["left_out"]:
             s += f" Left out, no toilet drawn inside: {', '.join(tr['left_out'][:8])}."
+    elif tr.get("fixture_source") == "model":
+        s += " The model carries no WC fixtures to confirm a room with."
     else:
         s += " The drawing has no toilet symbols this route can read, so every room labelled as a bathroom is used."
     return s
 
 
+def fallback_label(tk: dict) -> str:
+    """Short tag for an evidence header ('' when no fallback was used)."""
+    if tk.get("toilet_rooms"):
+        return "rooms with a toilet, no WC room" if tk["toilet_rooms"].get("fixture_source") != "model" else             "bathrooms used as toilet rooms"
+    if tk.get("fixture_rooms"):
+        return "unnamed rooms with wet fixtures read as bathrooms"
+    return ""
+
+
 def fallback_reason(tk: dict) -> str:
     """Estimate-tier reason for an answer built on the toilet fallback ('' otherwise)."""
     tr = tk.get("toilet_rooms")
+    fr = tk.get("fixture_rooms")
+    if fr and not tr:
+        return (f"interpretation: no room is labelled as a bathroom, so {fr['n']} unnamed room(s) holding a "
+                f"{' / '.join(fr['kinds'])} symbol are read as bathrooms")
     if not tr:
         return ""
-    how = "bathrooms with a toilet symbol inside" if tr["confirmed"] else "bathroom labels, toilet not confirmed"
+    how = ("bathrooms with a toilet symbol inside" if tr["confirmed"] else
+           "bathroom names, no WC fixtures in the model" if tr.get("fixture_source") == "model" else
+           "bathroom labels, toilet not confirmed")
     if tr["confirmed"] and tr.get("unknown"):
         how += f"; {len(tr['unknown'])} bathroom(s) with nothing drawn inside used on the label alone"
     return "interpretation: no separate WC room, so 'toilets' read as the rooms that contain a toilet (" + how + ")"

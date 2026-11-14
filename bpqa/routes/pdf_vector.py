@@ -37,7 +37,7 @@ from ..evidence import AMBER, BLUE, PALETTE, ImageCanvas, evidence_path, finish,
 from ..pdfvec import PT_M, load_page
 from .dxf_swiss import AREA_RE, NUM_RE, OUTDOOR, SHAFT_VOID, UNIT_RE, UNNAMED_MIN_WIDTH_M, _window_groups, short_side
 from . import pdf_generic
-from .scope_guard import single_room_problem
+from .scope_guard import ambiguous_room, single_room_problem
 
 ROUTE = "pdf-vector"
 GENERIC_ROUTE = "pdf-generic"   # answers from the convention-free reading (pdf_generic.py): estimates
@@ -481,7 +481,7 @@ def answer(ctx, q) -> Answer:
 
     if q.measure == "count":
         table = {"door": fl.doors, "window": fl.windows, "toilet": fl.toilets, "washbasin": fl.washbasins,
-                 "bathtub": fl.bathtubs, "shower": fl.showers}
+                 "bathtub": fl.bathtubs, "shower": fl.showers, "sink": fl.washbasins}
         if q.scope == "model":
             return abstain(ROUTE, "question is about the whole model; one PDF sheet shows one level")
         if q.obj in table:
@@ -506,7 +506,8 @@ def answer(ctx, q) -> Answer:
                 note = {"door": "thin unfilled door-opening quads in the door stroke style",
                         "window": "frame rectangles with two glazing lines (or three strips)",
                         "toilet": "ellipse outlines without a drain circle", "washbasin": "ellipse outlines with a drain circle",
-                        "bathtub": "rounded-rectangle tub outlines 1.2-2.3 m", "shower": "square shower-tray outlines"}[q.obj]
+                        "bathtub": "rounded-rectangle tub outlines 1.2-2.3 m", "shower": "square shower-tray outlines",
+                        "sink": "ellipse outlines with a drain circle (washbasins; kitchen sinks not told apart)"}[q.obj]
         elif q.obj == "apartment":
             if not fl.units:
                 return abstain(ROUTE, "no apartment labels found")
@@ -589,7 +590,7 @@ def answer(ctx, q) -> Answer:
             return abstain(ROUTE, "no rooms matched")
         why = single_room_problem(q, rooms_used, lambda r: r.get("tname") or r["name"] or r["number"])
         if why:
-            return abstain(ROUTE, why)
+            return ambiguous_room(ROUTE, why)
         value = round(sum(fl.room_area(r) for r in rooms_used), 2)
     else:
         return abstain(ROUTE, f"measure {q.measure} not supported from a PDF")
@@ -607,6 +608,9 @@ def answer(ctx, q) -> Answer:
     scale_note = f"scale {sc.method} ({sc.detail})" if sc.known else "scale unknown"
     ans = Answer(value=value, unit=unit, route=ROUTE if gen_conf is None else GENERIC_ROUTE, confidence=conf, items=items,
                  explanation=f"{value} = {note} in {ctx.file.name}; {scale_note}")
+    if q.obj == "sink" and q.measure == "count":
+        from .dxf_swiss import SINK_REASON
+        estimate(ans, SINK_REASON)
     if gen_conf is not None:      # door swings or text labels, not a recognised drawing convention
         estimate(ans, f"convention-free reading ({note}), confidence {conf}")
         ans.uncertain = items or [{"n": i + 1, "bbox_pt": [round(v, 1) for v in b]} for i, b in enumerate(boxes)]
@@ -614,6 +618,9 @@ def answer(ctx, q) -> Answer:
         rows = [{"label": r["tname"] or "unlabelled room", "number": r["number"], "area": fl.room_area(r),
                  "source": "drawn room outline x scale"} for r in rooms_used]
         ans.value, ans.items, expl = takeoff.summary(rows, tku or q.extra["takeoff"])
+        sr = takeoff.scope_reason(tku or q.extra["takeoff"], [r["label"] for r in rows])
+        if sr:
+            estimate(ans, sr)
         if tku.get("toilet_rooms"):
             estimate(ans, takeoff.fallback_reason(tku))
             note = takeoff.interpretation(tku, [(r["label"] + (f" {r['number']}" if r["number"] else ""), r["area"])

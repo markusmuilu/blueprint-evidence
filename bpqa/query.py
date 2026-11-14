@@ -55,6 +55,7 @@ OBJECTS: list[tuple[str, str]] = [
     ("shower_or_bath", r"showers and bathtubs|suihkua ja kylpyammetta"),
     ("toilet", r"water closets|toilet bowls|wc-istuin|toilets \(wc\)|\bwcs\b|combien de wc|quanti wc|\bwc\b sont|toilets exist"),
     ("washbasin", r"lavatories|washbasin|lavabo|lavabi"),
+    ("sink", r"\bsinks?\b"),
     ("bathtub", r"bathtub|badewanne|baignoire|vasche da bagno|kylpyamme"),
     ("shower", r"shower|dusche|douche|docce|suihku"),
     ("sauna", r"sauna"),
@@ -281,7 +282,9 @@ class RuleParser(QueryParser):
                 if tk.get("scope_named"):
                     q.extra["unresolved_scope"] = True
                 if single_type_asked(f, tk):
-                    q.extra["single_room"] = True
+                    # a singular room TYPE ("the kitchen"): several matches are summed and said so (estimate),
+                    # unlike a quoted room name, which keeps the abstaining guard (routes/scope_guard.py)
+                    tk["single_type"] = True
                 q.extra["takeoff"] = tk
         return q
 
