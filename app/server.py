@@ -167,16 +167,25 @@ ROUTES = {
     "dxf-geometry": ("DXF geometry", "Read from the DXF layers of the same drawing: exact geometry, no vision model."),
     "ifc": ("IFC model", "Read from the IFC model: entities, storey containment and quantity sets."),
     "pdf-text": ("PDF text layer", "Read from the PDF text layer and its schedule tables."),
+    "dxf-generic": ("DXF layers, generic", "Read from the DXF's layer and block names (AIA, ISO 13567 or plain words in several "
+                    "languages), not a known office's layer convention."),
     "pdf-vector": ("PDF linework", "Read from the PDF's own vector linework and text, without a CAD twin."),
+    "pdf-generic": ("PDF, convention-free", "Door swings or printed room labels read from the PDF without a recognised "
+                    "drawing convention, so the count is an estimate."),
+    "nemotron-estimate": ("Nemotron estimate", "Last resort after every local route abstained: NVIDIA Nemotron read the image "
+                          "and named the regions it used. The reply was validated and the regions are drawn as given; "
+                          "nothing checked them, so this is an estimate."),
     "raster-ocr-labels": ("Scan, room labels", "Room labels on the scan read by a local OCR model and matched to room types."),
     "raster-detector": ("Scan, symbol detector", "Symbols on the scan counted by a local object detector above a tuned score threshold."),
     "raster-cv": ("Scan, panel analysis", "Separate drawing panels found on the scan by image analysis."),
-    "raster-fixtures": ("Scan, outlines", "Closed outlines on the scan classified as fixtures."),
+    "raster-cv-fixtures": ("Scan, outlines", "Closed outlines on the scan classified as fixtures."),
+    "raster-area": ("Scan, printed areas", "Room areas printed on the scan, read by a local OCR model and attached to their room labels."),
     "raster-prior": ("Baseline prior", "Most common answer for this question type. A baseline, not visual proof."),
     "parser": ("Question parser", "The question was not turned into a typed query."),
     "router": ("Router", "No route reads this file type."),
 }
-PROVEN_ROUTES = {"dxf-geometry", "ifc", "pdf-text", "pdf-vector"}
+PROVEN_ROUTES = {"dxf-geometry", "dxf-generic", "ifc", "pdf-text", "pdf-vector"}
+ESTIMATE_ROUTES = {"pdf-generic", "nemotron-estimate", "nemotron"}     # never proven, whatever the confidence
 
 
 def tier(a: dict) -> tuple[str, str]:
@@ -184,10 +193,13 @@ def tier(a: dict) -> tuple[str, str]:
     if a.get("abstain") is not None or a.get("value") is None:
         return "cannot", "No route could prove an answer, so none is given."
     explicit = str(a.get("tier") or a.get("status") or "").lower()
-    if explicit.startswith("proven"):
-        return "proven", "The route marked this answer as proven."
+    reason = (a.get("tier_reason") or "").strip()
+    if a.get("route") in ESTIMATE_ROUTES:
+        return "estimate", "Estimate: " + (reason or "this route never proves an answer") + "."
     if explicit.startswith("estim"):
-        return "estimate", "The route marked this answer as an estimate."
+        return "estimate", "The route marked this answer as an estimate" + (f": {reason}." if reason else ".")
+    if explicit.startswith("proven"):
+        return "proven", "The route marked this answer as proven: its tuned conditions for a provable answer held."
     if a.get("route") in PROVEN_ROUTES and (a.get("confidence") or 0) >= 0.8:
         return "proven", "Structured route (CAD, BIM or PDF data) with confidence of at least 0.8."
     return "estimate", "Answer read from pixels or with confidence under 0.8: verify the numbered items."
@@ -201,7 +213,7 @@ def scale_source(a: dict, query: dict, ext: str) -> str | None:
         return "DXF model units in metres; room outline area by the shoelace formula."
     if route == "ifc":
         return "IFC project units; NetFloorArea from quantity sets, else the space footprint."
-    if route == "pdf-vector":
+    if route in ("pdf-vector", "pdf-generic"):
         m = re.search(r"; (scale .*)$", a.get("explanation") or "")
         return (m.group(1) if m else "Scale found on the sheet") + ". The text that set the scale is boxed blue on the evidence."
     return None
@@ -233,7 +245,7 @@ def why(a: dict, query: dict, ext: str) -> list[dict]:
         out.append({"kind": "query", "text": "Question read as " + ", ".join(bits) + "."})
     expl = a.get("explanation") or ""
     sc = scale_source(a, query, ext)
-    if route == "pdf-vector" and "; scale" in expl:
+    if route in ("pdf-vector", "pdf-generic") and "; scale" in expl:
         expl = expl.split("; scale")[0]          # the scale gets its own line
     if expl:
         out.append({"kind": "derivation", "text": expl})
@@ -366,7 +378,22 @@ def evidence(eid: str, body: int = 0):
 
 @app.get("/api/results")
 def results_list():
-    return {"runs": [{k: r[k] for k in ("id", "header")} for r in results_mod.list_runs()]}
+    return {"runs": [{k: r[k] for k in ("id", "header", "label", "dataset", "dataset_name", "split", "flags", "questions")}
+                     for r in results_mod.list_runs()]}
+
+
+@app.get("/api/overview")
+def results_overview():
+    """One line per named test set (full set, preview, Nemotron baseline sample, unseen drawings) with its source file."""
+    return results_mod.overview()
+
+
+@app.get("/api/baseline")
+def results_baseline():
+    b = results_mod.baseline()
+    if b is None:
+        raise HTTPException(404, "out/baseline_nemotron.json not found")
+    return b
 
 
 @app.get("/api/results/{run_id}")

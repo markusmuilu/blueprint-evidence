@@ -151,6 +151,12 @@
         </div>
       </header>
 
+      <section class="panel" aria-labelledby="hOverview">
+        <h2 class="h-panel" id="hOverview">Results by test set</h2>
+        <div class="table-wrap"><table class="tbl" id="overviewTable"></table></div>
+        <p class="meta">Each number names the questions it was measured on and the file it was read from. The tables below show one eval run at a time.</p>
+      </section>
+
       <p class="headline" id="runHeadline"></p>
 
       <div class="results-grid">
@@ -175,8 +181,10 @@
 
           <section class="panel panel-baseline" aria-labelledby="hBase">
             <h2 class="h-panel" id="hBase">Naive AI baseline</h2>
-            <p class="value-na mono">Not measured yet</p>
-            <p class="meta">The same test questions sent straight to a general vision model with the drawing attached, scored the same way, with cost per question. It goes in this table when it has run.</p>
+            <div id="baselineBody">
+              <p class="value-na mono">Not measured yet</p>
+              <p class="meta">The same test questions sent straight to a general vision model with the drawing attached, scored the same way, with cost per question. It appears here when out/baseline_nemotron.json exists.</p>
+            </div>
           </section>
         </div>
       </div>

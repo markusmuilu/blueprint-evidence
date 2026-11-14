@@ -641,10 +641,12 @@ async function loadRuns() {
       $("#runHeadline").textContent = "No eval outputs found. Run eval.py; its out/<run>/summary.json files appear here.";
       return;
     }
-    sel.innerHTML = runs.map((r) => `<option value="${esc(r.id)}">${esc(r.id)}</option>`).join("");
+    sel.innerHTML = runs.map((r) => `<option value="${esc(r.id)}">${esc(r.label || r.id)}  [out/${esc(r.id)}]</option>`).join("");
     sel.onchange = () => loadRun(sel.value);
     runsLoaded = true;
     loadRun(runs[0].id);
+    loadOverview();
+    loadBaseline();
   } catch (e) {
     $("#runHeadline").textContent = "Could not read results: " + e.message;
   }
@@ -655,11 +657,12 @@ async function loadRun(id) {
     runData = await api("/api/results/" + encodeURIComponent(id));
   } catch (e) { toast("Could not load run: " + e.message, true); return; }
   const d = runData;
-  $("#runHeader").textContent = d.header || d.id;
+  $("#runHeader").textContent = `${d.label || d.id}. Source: out/${d.id}/summary.json. ${d.header || ""}`;
   const all = d.rows.find((r) => r.source === "ALL" && r.type === "ALL");
-  const split = d.id.split("-")[0];
+  const where = d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
+  const flags = d.flags && d.flags.length ? ` (${esc(d.flags.join("; "))})` : "";
   $("#runHeadline").innerHTML = all
-    ? `On the <strong>${esc(split)}</strong> split, <strong>${pct(all.accuracy)}</strong> of ${num(all.n)} questions were answered correctly. The system answered <strong>${pct(all.coverage)}</strong> of them and was right on <strong>${pct(all.precision)}</strong> of those, at <strong>$${Number(all.cost_per_q || 0).toFixed(4)}</strong> per question.`
+    ? `On ${where}${flags}, <strong>${pct(all.accuracy)}</strong> of ${num(all.n)} questions were answered correctly. The system answered <strong>${pct(all.coverage)}</strong> of them and was right on <strong>${pct(all.precision)}</strong> of those, at <strong>$${Number(all.cost_per_q || 0).toFixed(4)}</strong> per question.`
     : "";
   renderSrcTable(d);
   renderChart(d);
@@ -670,6 +673,38 @@ async function loadRun(id) {
   if (srcs.includes(prev)) os.value = prev; else if (srcs.includes("cubicasa5k")) os.value = "cubicasa5k";
   os.onchange = () => renderObjTable(d);
   renderObjTable(d);
+}
+
+async function loadOverview() {
+  let items = [];
+  try { ({ items } = await api("/api/overview")); } catch (e) {
+    $("#overviewTable").innerHTML = `<tbody><tr><td class="dim">Could not read: ${esc(e.message)}</td></tr></tbody>`;
+    return;
+  }
+  const head = `<thead><tr><th>Test set</th><th class="num">Questions</th><th class="num">Accuracy</th><th class="num">Precision when answered</th><th>Detail</th><th>Source</th></tr></thead>`;
+  const body = items.map((it) => {
+    if (it.missing) return `<tr><td>${esc(it.set)}</td><td colspan="4" class="dim">Not run on this machine (${esc(it.missing)}). The README states the last measured numbers.</td><td></td></tr>`;
+    let detail = "";
+    if (it.baseline_accuracy != null) detail = `Nemotron, plain prompt: ${pct(it.baseline_accuracy)}; router: ${esc(it.note || "")}`;
+    else if (it.wrong != null) detail = `${it.correct} correct, ${it.wrong} wrong (${it.proven_wrong} of them proven), ${it.abstain} abstained, ${it.abstain_ok} correctly abstained`;
+    else if (it.proven != null) detail = `proven ${num(it.proven)} at ${pct(it.proven_precision)}, estimate ${num(it.estimate)} at ${pct(it.estimate_precision)}`;
+    return `<tr><td>${esc(it.set)}</td><td class="num">${num(it.n)}</td><td class="num">${pct(it.accuracy)}</td>
+      <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td><td class="mono dim">${esc(it.source || "")}</td></tr>`;
+  }).join("");
+  $("#overviewTable").innerHTML = head + "<tbody>" + body + "</tbody>";
+}
+
+async function loadBaseline() {
+  let b;
+  try { b = await api("/api/baseline"); } catch (e) { return; }      // keeps the "not measured" text
+  const rows = b.by_source.map((s) => `<tr><td>${esc(SOURCE_NAMES[s.source] || s.source)}, ${esc(s.type)}</td><td class="num">${s.n}</td>
+    <td class="num">${s.nemo_correct}</td><td class="num">${s.ours_correct}</td></tr>`).join("");
+  const price = b.price_assumption ? `an assumed ${b.price_assumption[0]} / ${b.price_assumption[1]} USD per million input / output tokens` : "an assumed list price";
+  $("#baselineBody").innerHTML = `
+    <p class="value-na mono">Nemotron ${pct(b.nemo_accuracy)} vs router ${pct(b.ours_accuracy)}</p>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Questions</th><th class="num">n</th><th class="num">Nemotron</th><th class="num">Router</th></tr></thead>
+    <tbody>${rows}<tr class="total"><td>All</td><td class="num">${b.n}</td><td class="num">${b.nemo_correct}</td><td class="num">${b.ours_correct}</td></tr></tbody></table></div>
+    <p class="meta">Sample: Stoa preview set, test split, ${num(b.n)} questions (${esc(b.sample)}). Nemotron got the drawing as one image and was asked for just the number: no regions, no checks. Median latency ${esc(b.latency_median_s)} s; about $${Number(b.cost_per_q || 0).toFixed(3)} per question at ${esc(price)} (free on NVIDIA Build). Router: $0, ${esc(b.ours_source)}. Source: out/baseline_nemotron.json.</p>`;
 }
 
 function renderSrcTable(d) {
