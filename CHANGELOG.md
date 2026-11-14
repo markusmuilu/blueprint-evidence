@@ -48,8 +48,9 @@ KPH, LH) are now the full rooms closed at the wall line (MH2 measures 8.7 m2 aga
 and -6207 gain a scale and clean outlines; plans without thick strokes are unchanged. Note: colorful-11196 is a Stoa
 test-split drawing; it was used to debug the mask, not for any number above.
 
-`eval.py --split dev --sources cubicasa5k`: unchanged (Stoa asks only count questions on CubiCasa, and no count route
-uses the regions).
+`eval.py --split dev --sources cubicasa5k`, before (`STOA_WALL_MODE=legacy`) and after: the first 4,481 of the 58,354
+dev questions (run stopped for time) give identical answers, 3,793 correct both times. All CubiCasa questions are
+counts, and no count route uses the regions, so the rest cannot move either.
 
 Tried and kept off: (1) the stroke mask alone, without the legacy sets: 243 rooms instead of 307, and on the plans
 with a stroke mask 33.8% median error against 20.7%, because many high_quality_architectural plans have solid
