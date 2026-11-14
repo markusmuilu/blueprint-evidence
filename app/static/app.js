@@ -48,8 +48,13 @@ function toast(msg, err = false) {
   toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 2600);
 }
 
+const UPLOAD_EXPIRED = "This upload has expired (uploads are deleted after 15 minutes). Please upload it again.";
 async function api(url, opts) {
   const r = await fetch(url, opts);
+  /* expired upload block: uploads are named "upload:<id>/..." (deploy/web.py); a 404 on one means it was deleted */
+  if (r.status === 404 && /upload(:|%3A)/i.test(String(url) + (opts && typeof opts.body === "string" ? opts.body : ""))) {
+    const err = new Error(UPLOAD_EXPIRED); err.expired = true; throw err;
+  }
   if (!r.ok) {
     let msg = r.statusText;
     try { const j = await r.json(); msg = j.detail || msg; } catch (_) { /* not JSON */ }
@@ -1365,6 +1370,11 @@ async function ask(refresh = false) {
   btn.disabled = true;
   btn.setAttribute("aria-busy", "true");
   $("#viewerBusy").hidden = false;
+  /* answer panel busy block: show the question while it runs */
+  const firstOnDrawing = !(state.answeredPaths && state.answeredPaths.has(state.drawing.path));
+  $("#detailQ").textContent = q;
+  $("#detailWait").hidden = !firstOnDrawing;
+  $("#detailBusy").hidden = false; $("#detailEmpty").hidden = true; $("#detailBody").hidden = true;
   const t0 = performance.now();
   const tick = () => { $("#busyText").textContent = `Reading the drawing  ${((performance.now() - t0) / 1000).toFixed(1)} s`; };
   tick();
@@ -1379,6 +1389,7 @@ async function ask(refresh = false) {
     // a slow answer that comes back after another drawing or question was opened is dropped, never shown on it
     if (ticket !== state.askTicket || !state.drawing || state.drawing.path !== asked) return;
     state.answer = a;
+    (state.answeredPaths = state.answeredPaths || new Set()).add(asked);
     state.corr = { removed: new Set(), added: [] };
     state.witnesses = null;
     renderAnswer(a);
@@ -1388,11 +1399,12 @@ async function ask(refresh = false) {
     setHash();
     loadWitnesses(a, refresh);
   } catch (e) {
-    toast("The question failed: " + e.message, true);
+    toast(e.expired ? e.message : "The question failed: " + e.message, true);
   } finally {
     if (ticket === state.askTicket) {         // only the latest question owns the busy state
       clearInterval(busyT);
       $("#viewerBusy").hidden = true;
+      $("#detailBusy").hidden = true; $("#detailEmpty").hidden = !!state.answer; $("#detailBody").hidden = !state.answer;
       btn.disabled = false;
       btn.removeAttribute("aria-busy");
     }
@@ -1932,6 +1944,8 @@ window.addEventListener("hashchange", async () => {
     { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language." },
     { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
     { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
+    /* tour step (verify strip) */
+    { el: () => { const st = $("#strip"); return st && !st.hidden && st.offsetParent ? st : $("#viewer") || $("#viewerWrap"); }, side: ["top", "left"], text: "Every counted item is numbered on the drawing. Click one to see step by step how it was read." },
   ];
 
   let shield, spot, bubble, idx = -1, returnFocus = null, busy = false;
@@ -2006,6 +2020,9 @@ window.addEventListener("hashchange", async () => {
       busy = true;
       const b = bubble.querySelector('[data-a="next"]'); b.disabled = true; b.textContent = "Working";
       bubble.setAttribute("aria-busy", "true");
+      /* tour waiting line */
+      const w = document.createElement("p"); w.className = "meta tour-wait"; w.textContent = "Answering, about 15 s...";
+      bubble.querySelector("p").after(w);
       await step.run();
       busy = false;
       if (idx < 0) return;                       // skipped while it ran

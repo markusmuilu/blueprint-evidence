@@ -862,3 +862,7 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .tour-act .tour-step { font-size: var(--fs-xs); color: var(--muted); margin-right: auto; }
 .tour-bubble[hidden], .tour-offer[hidden], .tour-spot[hidden], .tour-shield[hidden] { display: none; }
 @media (max-width: 1080px) { #guideOpen, .tour-offer { display: none; } }
+
+/* answer panel busy state and tour wait line */
+.detail-q { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
+.tour-wait { margin: 0; }
