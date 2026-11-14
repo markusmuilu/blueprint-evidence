@@ -292,7 +292,8 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .workbar { display: grid; gap: var(--s3); padding: var(--s3) var(--s5); border-bottom: 1px solid var(--rule); background: var(--bg); }
 .drawing-head { display: grid; gap: 0; }
 .drawing-head .meta { font-size: var(--fs-xs); }
-.drawing-head .read-status { color: var(--accent); }
+/* a fixed slot (two lines): the progress line appearing or going away must not move the question field */
+.drawing-head .read-status { color: var(--accent); height: 2.7em; line-height: 1.35; margin: 0; overflow: hidden; }
 .ask-row { display: flex; gap: var(--s2); }
 .ask-row input { min-height: 36px; font-size: var(--fs-base); }
 .ask-row .btn { min-height: 36px; }

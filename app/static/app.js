@@ -429,25 +429,22 @@ async function upload(fileList) {
 /* the background reading started at upload (app/precompute.py): a status line under the drawing title */
 let readT = null;
 function showReading(st) {
-  let el = $("#readStatus");
-  if (!el) {
-    el = document.createElement("p");
-    el.id = "readStatus";
-    el.className = "meta read-status";
-    el.setAttribute("role", "status");
-    $("#drawMeta").after(el);
-  }
+  const el = $("#readStatus");        // always in the page, so the line coming and going never shifts the layout
   el.textContent = st ? st.message : "";
-  el.hidden = !st;
+  el.title = st ? st.message : "";
 }
 function watchReading(path, first) {
   clearTimeout(readT);
+  let misses = 0;
   const tick = (st) => {
     if (state.drawing?.path !== path) { showReading(null); return; }   // another drawing was opened
     showReading(st);
     if (st.state === "queued" || st.state === "running") {
       readT = setTimeout(async () => {
-        try { tick(await api("/api/precompute?path=" + encodeURIComponent(path))); } catch { showReading(null); }
+        // a failed poll keeps the last line and tries again; only repeated failures drop it
+        let next = null;
+        try { next = await api("/api/precompute?path=" + encodeURIComponent(path)); misses = 0; } catch { misses++; }
+        if (next) tick(next); else if (misses > 5) showReading(null); else tick(st);
       }, 2000);
     } else {
       readT = setTimeout(() => showReading(null), st.state === "done" ? 6000 : 12000);
@@ -718,9 +715,18 @@ const viewer = (() => {
     if (map[e.key]) { e.preventDefault(); map[e.key](); }
   });
   /* orientation shortcuts work anywhere on the Ask view except while typing: R, Shift+R, M, O */
+  /* ... nor for 2.5 s after the question field was typed in or left, or the bar above the viewer changed size: a
+     layout shift can put the click on the viewer while the person is already typing */
+  const qf = $("#question");
+  let qLeftAt = 0;
+  qf.addEventListener("blur", () => { qLeftAt = Date.now(); });
+  qf.addEventListener("input", () => { qLeftAt = Date.now(); });
+  document.querySelector("#askForm")?.addEventListener("pointerdown", () => { qLeftAt = Date.now(); });
+  new ResizeObserver(() => { qLeftAt = Date.now(); }).observe(document.querySelector(".workbar"));   // the field moved
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
     if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+    if (document.activeElement === qf || Date.now() - qLeftAt < 2500) return;
     if ($("#view-ask").hidden || vp.classList.contains("mode-3d") || !img.naturalWidth) return;
     const key = e.key.toLowerCase();
     if (key === "r") turn(e.shiftKey ? -1 : 1);

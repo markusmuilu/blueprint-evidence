@@ -12,6 +12,12 @@ for whatever is still running.
       SOLVE_LOCK only when it is free: a scan takes 3 to 26 s on CPU, and a question asked meanwhile waits for it.
 
 One worker thread, one job at a time, in upload order. `status(path)` is what GET /api/precompute returns.
+
+Several containers (app/shared.py): the job runs on the container that took the upload. Its status and, as each stage
+ends, the cache files that stage wrote are published to the shared Dict. Another container asked for the status
+reports the published one (not a 404), and one asked a question about the drawing waits for the shared stage the
+question needs (polling the Dict), pulls the cache files, and so reads nothing again. Without the Dict (local runs)
+none of this exists.
 """
 from __future__ import annotations
 
@@ -21,15 +27,21 @@ import threading
 import time
 from pathlib import Path
 
+from . import shared
+
 STAGES = ("text", "rooms", "doors")
 LABEL = {"text": "text", "rooms": "room outlines", "doors": "doors and windows"}
 RASTER = {"png", "jpg", "jpeg", "tif", "tiff"}
 WAIT_MAX_S = 600              # a question never waits longer than this for the background job
+STALE_S = 300                 # a shared status not refreshed for this long belongs to a container that is gone
+POLL_S = 0.75                 # how often a question polls the shared Dict for the stage it waits for
+PUBLISH_EVERY_S = 3.0         # progress within a stage is published at most this often
 
 _Q: "queue.Queue[tuple[str, Path]]" = queue.Queue()
 _JOBS: dict[str, dict] = {}
 _COND = threading.Condition()
 _worker: threading.Thread | None = None
+_PUB: dict[str, tuple] = {}   # path -> (signature, time) of the last status published
 
 
 def needed_stage(question: str) -> str:
@@ -53,17 +65,55 @@ def start(path: str, file: Path, solve_lock: threading.Lock, ask_scan) -> dict |
         _JOBS[path] = {"state": "queued", "kind": kind, "stage": None, "done_stages": [], "stage_done": 0,
                        "stage_total": 0, "queued_at": time.time(), "started_at": None, "finished_at": None,
                        "error": None, "_lock": solve_lock, "_ask": ask_scan}
+    _publish(path, force=True)
     _Q.put((path, file))
     _ensure_worker()
     return status(path)
 
 
-def status(path: str) -> dict | None:
+def _public(j: dict) -> dict:
+    return {k: (list(v) if isinstance(v, list) else v) for k, v in j.items() if not k.startswith("_")}
+
+
+def _publish(path: str, force: bool = False):
+    """Publish this container's status of `path` to the shared Dict (no-op without it). Progress inside a stage is
+    throttled; a change of state, stage or finished stages always goes out."""
+    if not shared.enabled():
+        return
     with _COND:
         j = _JOBS.get(path)
         if j is None:
+            return
+        out = _public(j)
+    sig = (out["state"], out["stage"], tuple(out["done_stages"]))
+    last = _PUB.get(path)
+    now = time.time()
+    if not force and last and last[0] == sig and now - last[1] < PUBLISH_EVERY_S:
+        return
+    _PUB[path] = (sig, now)
+    shared.publish_status(path, out)
+
+
+def _shared_status(path: str) -> dict | None:
+    """The status another container published. One nobody refreshed for STALE_S died with its container: it is
+    reported as failed, and questions then read the drawing themselves."""
+    j = shared.fetch_status(path)
+    if j is None:
+        return None
+    if j["state"] in ("queued", "running") and time.time() - j.get("updated_at", 0) > STALE_S:
+        j = {**j, "state": "error", "error": "the container reading this drawing stopped", "finished_at": time.time()}
+    return j
+
+
+def status(path: str) -> dict | None:
+    with _COND:
+        j = _JOBS.get(path)
+        out = _public(j) if j is not None else None
+    if out is None:
+        out = _shared_status(path)       # the job runs on another container
+        if out is None:
             return None
-        out = {k: v for k, v in j.items() if not k.startswith("_")}
+        out = {k: v for k, v in out.items() if k != "updated_at"}
     out["message"] = message(out)
     now = out["finished_at"] or time.time()
     out["elapsed_s"] = round(now - out["started_at"], 1) if out["started_at"] else 0.0
@@ -89,20 +139,53 @@ def message(j: dict) -> str:
 def wait_for(path: str, question: str, timeout: float = WAIT_MAX_S) -> float:
     """Block (outside any lock) until the background job of `path` has done what `question` needs. Returns the
     seconds waited. A queued job behind another is not waited for: the question does its own work, and the job
-    later finds the caches filled."""
+    later finds the caches filled. A job on another container is waited for through the shared Dict and its cache
+    files are pulled here before the question is solved; on a timeout or a dead container the question computes."""
     t0 = time.time()
     with _COND:
         j = _JOBS.get(path)
-        if j is None or j["state"] != "running":
-            return 0.0
-        need = needed_stage(question) if j["kind"] == "sheet" else None
+        if j is not None:
+            if j["state"] == "running":
+                need = needed_stage(question) if j["kind"] == "sheet" else None
 
-        def ready():
-            if j["state"] != "running":
-                return True
-            return need is not None and need in j["done_stages"]
-        _COND.wait_for(ready, timeout=timeout)
+                def ready():
+                    if j["state"] != "running":
+                        return True
+                    return need is not None and need in j["done_stages"]
+                _COND.wait_for(ready, timeout=timeout)
+            return round(time.time() - t0, 2)
+    if shared.enabled():
+        _wait_shared(path, question, t0, timeout)
     return round(time.time() - t0, 2)
+
+
+def _stem(path: str) -> str:
+    return Path(path.split("/", 1)[1]).stem
+
+
+def _wait_shared(path: str, question: str, t0: float, timeout: float):
+    st = _shared_status(path)
+    if st is None:
+        return
+    need = needed_stage(question) if st["kind"] == "sheet" else None
+    while st["state"] == "running" and not (need is not None and need in st["done_stages"]):
+        if time.time() - t0 > timeout:
+            break                        # stop waiting: the question computes what is missing
+        time.sleep(POLL_S)
+        st = _shared_status(path)
+        if st is None:
+            return
+    pull(path)
+
+
+def pull(path: str):
+    """Fetch the cache files the reading of `path` has published, and drop this container's older in-memory copy
+    of a sheet reading that a newer file replaced."""
+    written = shared.pull_caches(_stem(path))
+    if written:
+        from bpqa import sheet as S
+        for f in written:
+            S._MEM.pop(str(f), None)
 
 
 def _set(path: str, **kw):
@@ -111,6 +194,7 @@ def _set(path: str, **kw):
         if j is not None:
             j.update(kw)
             _COND.notify_all()
+    _publish(path)
 
 
 def _progress(path: str):
@@ -125,11 +209,14 @@ def _run_sheet(path: str, file: Path):
     cb = _progress(path)
     _set(path, stage="text", stage_done=0, stage_total=0)
     d = S.analyse(file, regions=False, progress=cb)
+    shared.publish_caches(file.stem, ["text"])           # before the status says the stage is done
     _set(path, done_stages=["text"], stage="rooms", stage_done=0, stage_total=0)
     if d["scale"]["ppm"]:
         S.analyse(file, regions=True)
+    shared.publish_caches(file.stem, ["text", "rooms"])
     _set(path, done_stages=["text", "rooms"], stage="doors", stage_done=0, stage_total=0)
     SP.detect(file, d["scale"]["ppm"], progress=cb)
+    shared.publish_caches(file.stem, list(STAGES))
     _set(path, done_stages=list(STAGES))
 
 
@@ -137,6 +224,7 @@ def _run_scan(path: str, j: dict):
     _set(path, stage="scan")
     with j["_lock"]:            # the routes behind a scan keep module-level state: one solve at a time
         j["_ask"](path)
+    shared.publish_caches(_stem(path), ["scan"])
 
 
 def _loop():
