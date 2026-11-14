@@ -169,7 +169,7 @@ def main(argv=None):
 
     hdr = (f"{'source':<16}{'type':<8}{'n':>6}{'answered':>10}{'coverage':>10}{'correct':>9}{'accuracy':>10}"
            f"{'precision':>11}{'proven':>8}{'prec':>7}{'estim':>8}{'prec':>7}{'$/q':>8}")
-    lines = [f"split={args.split}  questions={len(qs)}  time={time.time() - t0:.0f}s", hdr]
+    lines = [f"split={args.split}  questions={len(qs)}  time={time.time() - t0:.0f}s  data={Path(root).name}", hdr]
     for r in rows:
         s = stats[(r["source"], r["type"])]
         lines.append(f"{r['source']:<16}{r['type']:<8}{r['n']:>6}{r['answered']:>10}{r['coverage']:>10.1%}"
