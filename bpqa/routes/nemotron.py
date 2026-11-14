@@ -190,70 +190,11 @@ def answer(ctx, q: Query) -> Answer:
 
 # ---------------------------------------------------------------- question-parse fallback
 
-OBJ_NAMES = sorted({n for n, _ in OBJECTS} | {"room", "apartment"})
-MEASURES = ["count", "area", "length", "volume", "text"]
-SCOPES = ["drawing", "level", "model"]
-VARIANTS = ["total", "net_indoor_total", "side_area"]
-
-
 class NemotronParser(QueryParser):
-    """Maps a question the rules could not parse to the typed query schema, validated.
-
-    The schema is closed (measure, obj, scope and variant come from fixed lists); a room label, room
-    number, apartment letter or level name must appear in the question text itself, so a made-up value is
-    rejected. A reply that fails validation leaves the query unparsed (the router abstains as before).
-    """
+    """Kept for callers of the old name: the question-parse fallback now lives in bpqa/phrasing.py (closed intent
+    schema, normalised into the Query shapes the routes accept)."""
     name = "nemotron"
 
-    def prompt(self, question: str) -> str:
-        return (
-            "Map this question about a construction drawing to a JSON query. Question:\n"
-            f"{question}\n\n"
-            "Reply with one JSON object with these keys:\n"
-            f'  "measure": one of {MEASURES}\n'
-            f'  "obj": one of {OBJ_NAMES} (what is counted or measured)\n'
-            '  "label": name of a room as written in the question, or null\n'
-            '  "room_no": room number as written in the question, or null\n'
-            '  "apartment": apartment letter as written in the question, or null\n'
-            '  "level": storey or level name as written in the question, or null\n'
-            f'  "scope": one of {SCOPES} ("model" if the question is about a whole building model, "level" if about '
-            'one named storey, else "drawing")\n'
-            f'  "variant": one of {VARIANTS} or null\n'
-            "Use null for anything the question does not say. Do not add other keys.")
-
     def parse(self, question: str) -> Query:
-        q = Query(raw=question, parser="nemotron")
-        if not N.enabled():
-            return q
-        r = N.chat(self.prompt(question), None, system=SYSTEM, max_tokens=1024, think=False)
-        d = extract_json(r.get("content"))
-        if d is None:
-            return q
-        q.extra["cost_usd"] = ((r.get("prompt_tokens") or 0) * PRICE_IN + (r.get("completion_tokens") or 0) * PRICE_OUT) / 1e6
-        f = fold(question)
-        if d.get("measure") not in MEASURES or d.get("obj") not in OBJ_NAMES:
-            return q
-        if d.get("scope", "drawing") not in SCOPES or d.get("variant") not in VARIANTS + [None]:
-            return q
-        for key in ("label", "room_no", "apartment", "level"):
-            v = d.get(key)
-            if v is None:
-                continue
-            if not isinstance(v, str) or fold(v) not in f:      # a value the question does not contain: reject all
-                return q
-        q.measure, q.obj = d["measure"], d["obj"]
-        q.label, q.room_no, q.apartment, q.level = d.get("label"), d.get("room_no"), d.get("apartment"), d.get("level")
-        q.scope, q.variant = d.get("scope") or "drawing", d.get("variant")
-        if q.apartment:
-            q.apartment = q.apartment.upper()
-        # Same conventions as the rule parser, so the routes see one shape of query whoever parsed it:
-        if q.label or q.room_no:                 # a named or numbered room is obj "room" (name in `label`)
-            q.obj, q.variant = "room", None
-        if q.apartment and q.measure == "area":
-            q.obj = "apartment"
-        if q.level and q.scope == "drawing":
-            q.scope = "level"
-        if not q.level and q.scope == "level":
-            q.scope = "drawing"
-        q.extra["llm_parsed"] = True
-        return q
+        from ..phrasing import llm_parse
+        return llm_parse(question)

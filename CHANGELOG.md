@@ -209,6 +209,50 @@ Shared:
 - Combined room names (`ELUTUBA+KOOK` = living room and kitchen) are named in the explanation and make the answer an estimate.
 - Evidence headers wrap to the image width (`evidence.finish`, `wrap_px`), answer line and note included.
 - Tests: `tests/test_vecfix.py`.
+## 2026-11-14: question understanding, branch `question-understanding`
+
+Problem: people ask the same thing in many ways. The rules (`query.py`, `takeoff.py`) missed phrasings
+("makuuhuoneiden koko yhteensa", "What's the total size of the bedrooms?"), and when Nemotron did parse, its
+shape ({measure: area, obj: bedroom, variant: total}) was not the takeoff shape the routes accept, so the
+question fell to the slow image estimate.
+
+- `bpqa/phrasing.py`: 32 canonical intents and the Query each builds; a closed-schema prompt (enums, 7 examples);
+  `normalise()` (synonyms, the old loose shape, values checked against the schema and the question text);
+  `build()` (same Query as the rules, rule flags reused); policy `read()` (rules first; the model only for a missing,
+  unroutable or weak rule parse; quoted dataset templates keep their rule parse). The parse call has its own 4 s
+  limit including retries (`NEMO_PARSE_DEADLINE_S`, separate from `NEMO_DEADLINE_S`); a 429 or timeout falls back to
+  the rule parse at once and is not cached; definite readings are cached on disk (`out/parse_cache`) by the
+  normalised question. Model-read questions say so in the Why panel.
+- Rule vocabulary (count cues, Swedish / Finnish / German nouns, waste and height words, floor and wall words); the
+  rule parse of all 6,789 distinct dataset questions is unchanged (before/after dump).
+- Takeoff inputs read by the model (waste, heights) travel in `takeoff["inputs"]` (`walls.parse_inputs(question, tk)`).
+
+Benchmark: `tests/data/paraphrases.jsonl`, 612 paraphrases, 32 intents, EN FI SV DE (hand-written, casual wording,
+typos, word order, units, imperatives), expected canonical parse for each; 306 tune / 306 held-out.
+`tools/paraphrase_bench.py run`. Rule vocabulary and normaliser were tuned on the tune half; the prompt was not
+changed after the first run (the shared API key was rate limited, 3 to 4 calls a minute, so one prompt version).
+
+| parse accuracy | old rules | rules (now) | rules + LLM |
+|---|---|---|---|
+| tune (306) | 33.7% | 72.2% | 98.0% |
+| held-out (306), first run, clean | 34.6% | 65.4% to 69.3% (rule snapshots) | 91.5% to 94.4% |
+| held-out (306), after fixes made from its misses | 34.6% | 70.3% | 98.4% |
+
+The last row is not clean: after the first held-out run I fixed what its misses showed (an apartment named as the
+scope of a count, "this floor" read as a storey name, count questions asked in kvm, a few words); treat 94.4% as the
+unbiased held-out figure and 98.4% as an optimistic one. The held-out cases share an author and vocabulary with the
+tune half, so both overstate accuracy on strangers' wording. Held-out per language (last row): de 100%, en 100%,
+sv 100%, fi 93.0%. Remaining held-out misses: Finnish count questions ("MH:ta", "altaata", "ammetta", "laattaa").
+Old Nemotron parser: not measured on the benchmark (its schema cannot express a takeoff).
+
+Latency of the parse call (text only, thinking off, ~1,170 prompt tokens, ~10 completion tokens): median 0.96 s,
+p90 1.46 s, max 4.2 s over 189 calls (successful calls; 429 waits excluded). Rules-only questions cost 0.
+
+Safety: rule parse of 6,789 distinct dataset questions identical; `eval.py --split dev` (Nemotron off) gives identical
+value, route, tier and correctness on all 5,289 questions (114 queries gain an `extra.weak` marker, 25 abstentions
+carry a new message); pytest 99 passed. Of the dataset questions the rules parse, 4 free-text ones are weak and could
+be sent to the model; 931 unparsed ones (ifc_models, ifc_bench) go to the model as before and should come back as
+`other`.
 
 ## 2026-11-14: object scale for scans without printed areas, branch `object-scale` (behind a flag, off)
 

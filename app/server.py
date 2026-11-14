@@ -243,7 +243,13 @@ def why(a: dict, query: dict, ext: str) -> list[dict]:
     route = a.get("route") or ""
     out.append({"kind": "method", "text": ROUTES.get(route, (route, f"Route {route}."))[1]})
     q = {k: v for k, v in query.items() if k in ("measure", "obj", "scope", "level", "room", "apartment", "lang", "parser")}
-    if q and route != "parser":
+    ex = query.get("extra") or {}
+    if query.get("parser") == "llm" and ex.get("reading") and route != "parser":
+        # a language-model reading is said plainly, so a person can catch a misreading
+        why_llm = ex.get("llm_reason") or "the rule parser did not read the question"
+        out.append({"kind": "query", "text": f"Question read by the language model as: {ex['reading']}. "
+                                             f"(Asked because {why_llm}.) Check that this is what you asked."})
+    elif q and route != "parser":
         bits = [f"{q.get('measure', '?')} of {q.get('obj', '?')}"]
         if q.get("lang"):
             bits.append(f"language {q['lang']}")

@@ -40,29 +40,42 @@ def _f(s: str) -> float:
     return float(s.replace(",", "."))
 
 
-def parse_inputs(question: str) -> dict:
-    """Editable inputs stated in the question: ceiling height, tiled height, waste %, order intent."""
+def parse_inputs(question: str, tk: dict | None = None) -> dict:
+    """Editable inputs stated in the question: ceiling height, tiled height, waste %, order intent.
+    `tk` is the takeoff the question was read as: inputs the language model read (tk["inputs"], already
+    checked against the question text) fill in what the wording rules did not find."""
+    out = _parse_inputs(question)
+    for k, v in ((tk or {}).get("inputs") or {}).items():
+        if k not in out or (k == "waste_pct" and out.get(k) is None):
+            out[k] = v
+    return out
+
+
+def _parse_inputs(question: str) -> dict:
     f = fold(question)
     out = {}
     m = re.search(rf"(?:ceiling|room|wall)?\s*heights?\s*(?:of|is|=|:)?\s*{_NUM}\s*(m|cm|mm)\b", f) or \
         re.search(rf"{_NUM}\s*(m|cm|mm)\s*(?:high|tall|ceilings?|ceiling height|korkea|korkuinen)", f) or \
-        re.search(rf"huonekorkeus\s*(?:on)?\s*{_NUM}\s*(m|cm|mm)", f)
+        re.search(rf"(?:huonekorkeus|raumhohe|deckenhohe|takhojd|rumshojd)\s*(?:on|ist|ar|von)?\s*{_NUM}\s*(m|cm|mm)", f)
     if m:
         v = _f(m.group(1)) / {"m": 1, "cm": 100, "mm": 1000}[m.group(2)]
         if 1.5 <= v <= 12:
             out["ceiling_m"] = v
     m = re.search(rf"(?:tiles?|tiling|tiled|laatoitus|laatat?)\s*(?:up\s*)?(?:to|until|asti|korkeuteen)\s*(?:a\s*height\s*of\s*)?{_NUM}\s*(m|cm|mm)", f) or \
-        re.search(rf"(?:tiling|tile|tiled)\s*height\s*(?:of|=|:)?\s*{_NUM}\s*(m|cm|mm)", f)
+        re.search(rf"(?:tiling|tile|tiled)\s*height\s*(?:of|=|:)?\s*{_NUM}\s*(m|cm|mm)", f) or \
+        (re.search(r"\btil(e|es|ing|ed)\b|laat|fliese|kakel|klinker|carrelage", f) and (
+            re.search(rf"\b(?:up\s*to|until|bis|asti|till|upp till)\s*(?:a\s*height\s*of\s*)?{_NUM}\s*(m|cm|mm)\b", f) or
+            re.search(rf"{_NUM}\s*(m|cm|mm)\s*(?:korkeuteen|asti|hohe|hojd)", f)))
     if m:
         out["tile_m"] = _f(m.group(1)) / {"m": 1, "cm": 100, "mm": 1000}[m.group(2)]
     if re.search(r"\bfull[- ]height\b|floor to ceiling|kattoon asti", f):
         out["tile_m"] = None
         out["full_height"] = True
-    if re.search(r"\b(no|without|zero|ilman)\s+(waste|allowance|cutting|hukkaa?)", f):
+    if re.search(r"\b(no|without|zero|ilman|ohne|utan|kein|keinen)\s+(waste|allowance|cutting|hukkaa?|verschnitt|spill|svinn)", f):
         out["waste_pct"] = 0.0
     else:
-        m = re.search(rf"{_NUM}\s*%\s*(?:of\s*)?(?:waste|cutting|allowance|extra|reserve|spare|hukka|lisaa)", f) or \
-            re.search(rf"(?:waste|allowance|hukka|reserve)\s*(?:of|=|:)?\s*{_NUM}\s*%", f)
+        m = re.search(rf"{_NUM}\s*%\s*(?:of\s*)?(?:waste|cutting|allowance|extra|reserve|spare|hukka|lisaa|verschnitt|spill|svinn)", f) or \
+            re.search(rf"(?:waste|allowance|hukka|reserve|verschnitt|spill)\s*(?:of|=|:)?\s*{_NUM}\s*%", f)
         if m:
             out["waste_pct"] = _f(m.group(1))
     out["order"] = bool(re.search(r"\b(order|buy|purchase|need|needed|get|tilata|tilaan|ostaa|tarvit|bestellen|kaufen|"
@@ -120,7 +133,7 @@ def room_walls(room: dict, inp: dict) -> dict:
 def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, str, dict]:
     """rooms: {label, number, floor_area, floor_src, perimeter, perimeter_src, height, height_src, openings}.
     Returns (value, items, explanation, totals)."""
-    inp = parse_inputs(question)
+    inp = parse_inputs(question, tk)
     want_floor, want_walls, how = surfaces(tk)
     waste = inp.get("waste_pct", DEFAULT_WASTE_PCT)
     waste_src = "given in the question" if "waste_pct" in inp else f"default {DEFAULT_WASTE_PCT:g}% cutting allowance (say 'with 15% waste' or 'no waste' to change)"

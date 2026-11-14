@@ -809,7 +809,7 @@ def answer(ctx, q) -> Answer:
                 ans.tier = "estimate"
                 ans.tier_reason = (ans.tier_reason + "; " if ans.tier_reason else "") + "room height assumed"
             if ctx.evidence:
-                ans.evidence = render_walls(ctx, M, rooms, ans.value, totals, wexpl, ans.checks, ans.tier_reason if ans.tier == "estimate" else "")
+                ans.evidence = render_walls(ctx, M, rooms, ans.value, totals, wexpl, ans.checks, ans.tier_reason if ans.tier == "estimate" else "", tk)
             return ans
     if ctx.evidence:
         ans.evidence = render(ctx, M, storey, used, q, value, unit, note)
@@ -839,7 +839,7 @@ def short_reason(reason: str, n: int = 70) -> str:
     return (out.strip(" ;,") or reason[:n].rsplit(" ", 1)[0]) + " ..."
 
 
-def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate=""):
+def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate="", tk=None):
     """Plan of the storey: the rooms filled, their wall faces drawn thick (blue), openings deducted boxed
     (amber), each room labelled with floor and net wall area."""
     from ..evidence import AMBER, BLUE
@@ -857,7 +857,7 @@ def render_walls(ctx, M, rooms, value, totals, expl, checks=None, estimate=""):
                 cv.poly(list(p.exterior.coords), fill=(235, 235, 235, 255) if e.is_a("IfcWall") else None,
                         outline=(175, 175, 175), width=1)
 
-    inp = wallmod.parse_inputs(ctx.q.question)
+    inp = wallmod.parse_inputs(ctx.q.question, tk)
     for r in rooms:
         w = wallmod.room_walls(r, inp)
         for o, d in zip(r["openings"], w["deductions"]):
