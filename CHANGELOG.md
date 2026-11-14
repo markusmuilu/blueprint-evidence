@@ -3,6 +3,37 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: rooms on generic drawings, preview, plain reasons, branch `generic-rooms`
+
+QA tried the unseen plan (architecture-floor-plan.dxf, 18 labelled rooms in a 6 x 3 grid): "How many rooms?" was
+"no generic DXF rule for count of room", "area of the cafe" had no answer, the DXF had no preview and a cannot showed
+"image estimate switched off (NEMO_IMAGE_ESTIMATE=0)".
+
+- **Rooms from walls** (`routes/wall_regions.py`, used by `dxf_generic` and, for PDFs with no room shapes, `pdf_vector`
+  through `pdf_generic.wall_regions`). Wall-class lines (wall, window, column layers) are thickened by 2.5 cm and cut out of
+  a box around the drawing; what is left is one region per room. Door openings are sealed by the closed leaf of each
+  door swing (hinge to arc end), then any remaining gap between two wall ends on the same line is bridged, trying
+  0, 1.0, 1.3 and 1.8 m in turn. Each label (room-name text on room, plain annotation or unclassed layers, not numbers,
+  areas, door or furniture tags) is attached to the region holding its centre. Proven only when every label lies in a
+  closed region and no region holds two labels; otherwise an estimate that says which labels sit outside or share a
+  region. Areas use $INSUNITS (or the door-swing check) and are proven on the same condition.
+- **Questions answered this way:** room count (no label named), count of rooms by label or by a word in the label
+  ("how many open offices"), area of a named room, also when the parser lost the label ("how big is MEETING 01":
+  the label is found in the question text). Several rooms with one label ("OPEN OFFICE" twice) are added up as an
+  estimate. The unseen DXF: 18 rooms proven (was a cannot), CAFE 9.23 m2, MEETING 01 9.23 m2 proven. Its PDF twin is
+  answered from the DXF; the PDF alone has no text layer (labels are outlined glyphs), so it still cannot name rooms
+  and says so.
+- **"List the rooms"** is not parsed by the rule parser (query.py belongs to the phrasing work); the count answer's
+  explanation lists every room with its area, so it is ready for when the parser maps it.
+- **DXF preview.** `/api/preview` shows the PDF twin when there is one, else a PNG drawn from the DXF with the ezdxf
+  drawing add-on (matplotlib Agg, in requirements.txt already), cached with the PDF previews.
+- **Plain reasons.** `answer.public_reason` drops env flags (NEMO_*), exception text ("AssertionError: Invalid device
+  id"), model file names and script paths from what the app shows and puts model failures in a sentence; the raw text is
+  printed to the server log. Failed checks show "this check could not run on this drawing".
+- **Used-line:** a cannot answer says "Tried: ...; none could prove it" instead of "Answered with: ...".
+- No change on dev: swiss_dwellings, ifc_bench, cubicasa5k and ifc_models room/door/window/toilet rows are identical
+  before and after (see commit message); tests/test_wall_rooms.py adds 15 cases.
+
 ## 2026-11-14: casual phrasings, branch `phrasing-2`
 
 QA asked 50 casual questions on the live app: 30 fine, 3 wrong proven, the rest not understood. Fixed in general ways.

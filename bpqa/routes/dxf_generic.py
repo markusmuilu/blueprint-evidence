@@ -39,6 +39,7 @@ from .. import takeoff
 from ..answer import Answer, abstain, estimate
 from ..evidence import AMBER, BLUE, PALETTE, VectorCanvas, evidence_path, finish
 from ..query import fold
+from . import wall_regions
 from .scope_guard import ambiguous_room, single_room_problem
 
 ROUTE = "dxf-generic"
@@ -173,6 +174,7 @@ class GenericFloor:
         self.closed = []         # (layer, pts) closed polylines
         self.pieces = {}         # layer -> list of point lists (lines and polylines)
         self.texts = []          # (layer, text, (x, y))
+        self.text_box = {}       # (layer, text, (x, y)) -> (x0, y0, x1, y1) estimated extent of the printed text
         self.entity_layers = {}
         for e in msp:
             self._add(e)
@@ -230,6 +232,9 @@ class GenericFloor:
                 use_align = e.dxf.get("halign", 0) or e.dxf.get("valign", 0)
                 p = e.dxf.align_point if use_align else e.dxf.insert
                 self.texts.append((layer, e.dxf.text.strip(), (p.x, p.y)))
+                self.text_box[(layer, e.dxf.text.strip(), (p.x, p.y))] = _text_extent(
+                    e.dxf.text.strip(), (p.x, p.y), e.dxf.get("height", 0) or 0, e.dxf.get("halign", 0) or 0,
+                    e.dxf.get("valign", 0) or 0)
             elif t == "MTEXT":
                 p = e.dxf.insert
                 for k, line in enumerate(e.plain_text().split("\n")):
@@ -440,6 +445,75 @@ class GenericFloor:
                 r["name"] = s
         return rooms
 
+    # -- rooms from walls ---------------------------------------------------------------------
+    def region_labels(self):
+        """Room-name labels for the wall-region reading: text on room, plain annotation or unclassed layers (not
+        on door, window, wall, furniture, fixture or column layers, where text is a tag), not numbers or areas.
+        The same text printed twice at one spot counts once. Dicts with text, centre c, anchor."""
+        out = []
+        for layer, s, xy in self.label_texts():
+            c = self.layer_cls.get(layer, set())
+            if c - {"room", "annotation"} or ("annotation" in c and "room" not in c and not _is_plain_anno(layer)):
+                continue
+            if _MEASURE_TEXT.match(s) or len(s) > 40:
+                continue
+            box_ = self.text_box.get((layer, s, xy))
+            ctr = ((box_[0] + box_[2]) / 2, (box_[1] + box_[3]) / 2) if box_ else xy
+            out.append({"text": s, "c": ctr, "anchor": xy, "box": box_, "layer": layer})
+        tol = self.m(0.5) or 0.02 * max(self.bounds[2] - self.bounds[0], self.bounds[3] - self.bounds[1])
+        uniq = []
+        for lb in out:
+            if all(not (label_eq(lb["text"], u["text"]) and math.dist(lb["anchor"], u["anchor"]) <= tol) for u in uniq):
+                uniq.append(lb)
+        return uniq
+
+    def door_closers(self):
+        """Segments that seal door openings: for each door swing arc, hinge to either end of the arc (one of the two
+        is the closed leaf and lies in the wall line; the other is a dangling line that encloses nothing)."""
+        lays = set(self.layers_of("door"))
+        out = []
+        for a in self.arcs:
+            if a["layer"] not in lays or not 30 <= a["span"] <= 180:
+                continue
+            if self.m_per_unit is not None and not 0.4 <= a["r"] * self.m_per_unit <= 2.0:
+                continue
+            for ang in (a["a0"], a["a0"] + a["span"]):
+                out.append((a["c"], (a["c"][0] + a["r"] * math.cos(math.radians(ang)),
+                                     a["c"][1] + a["r"] * math.sin(math.radians(ang)))))
+        return out
+
+    def regions_by_walls(self):
+        """(Result, labels) of the closed regions the wall lines enclose, or (None, reason)."""
+        if getattr(self, "_wr", None) is not None:
+            return self._wr
+        lays = {l for c in ("wall", "window", "column") for l in self.layers_of(c)}
+        if not self.layers_of("wall"):
+            self._wr = (None, "no wall layer in this DXF to build rooms from")
+            return self._wr
+        labels = self.region_labels()
+        if not labels:
+            self._wr = (None, "no room-name text labels in this DXF")
+            return self._wr
+        lines = [p for l, p in self.lines if l in lays]
+        res = wall_regions.build(lines, labels, self.m_per_unit, closers=self.door_closers())
+        self._wr = (res, labels) if res.regions or res.problems else (None, res.why_none or "no closed regions")
+        if res.why_none:
+            self._wr = (None, res.why_none)
+        return self._wr
+
+
+_MEASURE_TEXT = re.compile(r"^\s*[+\-]?\d[\d.,\s]*(m2|m\u00b2|sqm|sq\.? ?m|m|mm|cm)?\s*$", re.I)
+
+
+def _text_extent(s, xy, h, halign, valign):
+    """Estimated box of a TEXT entity from its height and alignment (glyph width about 0.6 of the height)."""
+    h = h or 0
+    w = 0.75 * h * len(s)
+    x, y = xy
+    x0 = x if halign in (0, 3, 5) else (x - w / 2 if halign in (1, 4) else x - w)
+    y0 = y - h / 2 if valign == 2 and halign in (1, 4) else y
+    return (x0, y0, x0 + w, y0 + h)
+
 
 def _is_plain_anno(layer: str) -> bool:
     """A general annotation layer (ANNO, TEXT, A-ANNO-TEXT) can hold room names; dims, grids and title
@@ -587,6 +661,10 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         elif q.obj == "room" and q.label:
             rooms = fl.rooms()
             named = [r for r in rooms if r["texts"]]
+            if not named:       # no room outlines: wall-enclosed regions with the label inside, if they close
+                got = _by_regions(ctx, q, fl, dxf, "count_label", q.label)
+                if isinstance(got, Answer):
+                    return got
             if named:
                 rooms_used = [r for r in named if any(label_eq(t, q.label) for t in r["texts"])]
                 value = len(rooms_used)
@@ -615,12 +693,26 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
                 conf = 0.7
             if value == 0:
                 return abstain(ROUTE, f"no room label naming a {rtype}; a 0 from labels is not proof")
+        elif q.obj == "room":
+            got = _by_regions(ctx, q, fl, dxf, "count_all")
+            if isinstance(got, Answer):
+                return got
+            return abstain(ROUTE, f"rooms not counted: {got}")
         else:
+            got = _by_regions(ctx, q, fl, dxf, "count_word", None, q.obj)
+            if isinstance(got, Answer):
+                return got
             return abstain(ROUTE, f"no generic DXF rule for count of {q.obj}")
     elif q.measure == "area" and q.obj == "room":
         if fl.m_per_unit is None:
             return abstain(ROUTE, f"drawing units unknown ({fl.units_source}); areas need units")
         rooms = [r for r in fl.rooms() if r["texts"]]
+        if not rooms:
+            got = _by_regions(ctx, q, fl, dxf, "area_label", q.label)
+            if isinstance(got, Answer):
+                return got
+            return abstain(ROUTE, f"no closed room outlines with a label on a room/area layer, and no rooms from walls: "
+                                  f"{got} (layers: {_layer_summary(fl)})")
         if not rooms:
             return abstain(ROUTE, f"no closed room outlines with a label on a room/area layer (layers: {_layer_summary(fl)})")
         if q.label:
@@ -710,6 +802,121 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         ans.evidence = finish(cv.img, out, ctx.q.question,
                               f"Answer: {value} {unit}{'   ESTIMATE' if ans.tier == 'estimate' else '   proven'}"
                               f"   route: {ROUTE} (cost €0)", note=note)
+    return ans
+
+
+def _label_from_question(question: str, labels) -> str | None:
+    """The label text the question names when the parser found none ('how big is MEETING 01'): the longest label
+    whose words appear in the question (a plural 's' on the last word is tolerated)."""
+    qf = " " + re.sub(r"[^a-z0-9]+", " ", fold(question or "")) + " "
+    best = None
+    for lb in labels:
+        w = re.sub(r"[^a-z0-9]+", " ", fold(lb["text"])).strip()
+        if w and (f" {w} " in qf or f" {w}s " in qf or f" {w}es " in qf) and (best is None or len(w) > len(best[0])):
+            best = (w, lb["text"])
+    return best[1] if best else None
+
+
+def _label_words(text: str) -> set[str]:
+    """Folded words of a label with simple plurals removed ('OPEN OFFICES' -> open, office), to compare with room types."""
+    return {w[:-1] if w.endswith("s") and len(w) > 3 else w for w in re.split(r"[^a-z0-9]+", fold(text)) if w}
+
+
+def _word_hits(word: str, labels):
+    """Labels naming the asked object word ('office' -> OPEN OFFICE, OFFICE 2): a label word equal to it or its plural."""
+    w = fold(word or "").strip()
+    if len(w) < 3:
+        return []
+    forms = {w, w + "s", w + "es", w.rstrip("s")}
+    return [i for i, lb in enumerate(labels) if any(t in forms for t in re.split(r"[^a-z0-9]+", fold(lb["text"])))]
+
+
+def _by_regions(ctx, q, fl: GenericFloor, dxf: Path, kind: str, label: str | None = None, word: str | None = None):
+    """Rooms read as wall-enclosed regions with a label inside. Returns an Answer, or a plain reason string when the
+    drawing does not give regions that can answer.
+
+    kind: count_all (rooms in the plan), count_label (rooms labelled `label`), count_word (rooms whose label names
+    `word`), area_label (area of the room labelled `label`). Proven only when every label lies in exactly one closed
+    region and no region holds two labels; areas additionally need the drawing's units."""
+    res, labels = fl.regions_by_walls()
+    if res is None:
+        return labels
+    regs = res.regions
+    names = lambda r: " / ".join(dict.fromkeys(labels[i]["text"] for i in r["labels"]))
+    if kind in ("area_label", "count_label"):
+        label = label or _label_from_question(ctx.q.question, labels)
+        types = set((q.extra.get("takeoff") or {}).get("types") or []) if kind == "area_label" else set()
+        if not label and not types:
+            return "the question does not name a room label that the drawing carries"
+        if label:
+            used = [r for r in regs if any(label_eq(labels[i]["text"], label) for i in r["labels"])]
+            what = f"region(s) enclosed by walls with the label '{label}' inside"
+        else:       # an area by room type ("area of the offices"): rooms whose label names that type
+            used = [r for r in regs if any(types & (text_room_types(labels[i]["text"]) | _label_words(labels[i]["text"]))
+                                           for i in r["labels"])]
+            what = f"region(s) enclosed by walls whose label names {'/'.join(sorted(types))}"
+    elif kind == "count_word":
+        hit = set(_word_hits(word, labels))
+        used = [r for r in regs if hit & set(r["labels"])]
+        what = f"region(s) enclosed by walls whose label names '{word}'"
+    else:
+        used, what = list(regs), "region(s) enclosed by wall lines, each holding a room label"
+    if not used:
+        return f"no wall-enclosed region holds a label for it (labels read: {', '.join(sorted({lb['text'] for lb in labels})[:12])})"
+    measure_area = kind == "area_label"
+    if measure_area and fl.m_per_unit is None:
+        return f"drawing units unknown ({fl.units_source}); areas need units"
+    area = lambda r: r["poly"].area * fl.m_per_unit ** 2 if fl.m_per_unit else None
+    if measure_area:
+        why = single_room_problem(q, used, names)
+        if why:
+            return ambiguous_room(ROUTE, why)
+    value = round(sum(area(r) for r in used), 2) if measure_area else len(used)
+    unit = "m2" if measure_area else "count"
+    how = wall_regions.describe(res, fl.m_per_unit, bool(fl.door_closers()))
+    items = [{"label": names(r), "texts": [labels[i]["text"] for i in r["labels"]],
+              "area_m2": round(area(r), 2) if fl.m_per_unit else None} for r in used]
+    show_area = measure_area or (kind == "count_all" and fl.m_per_unit is not None)
+    list_txt = ", ".join(it["label"] + (f" {it['area_m2']:g} m2" if show_area else "") for it in items[:30])
+    if len(items) > 30:
+        list_txt += ", ..."
+    if measure_area:
+        expl = f"{value} m2 = {what}: {list_txt} in {dxf.name}. {how}; units {fl.units_source}"
+    else:
+        expl = f"{value} = {what} in {dxf.name}: {list_txt}. {how}"
+    ans = Answer(value=value, unit=unit, route=ROUTE, confidence=0.85 if res.clean else 0.7, items=items, explanation=expl)
+    if res.clean and measure_area and len(used) > 1:
+        estimate(ans, f"{len(used)} rooms carry the label and are added up; the question may mean one of them")
+    elif res.clean:
+        ans.tier = "proven"
+    else:
+        estimate(ans, "wall regions do not map one to one onto the labels: " + "; ".join(res.problems))
+        ans.uncertain = items
+    if ctx.evidence:
+        est = ans.tier == "estimate"
+        cv = VectorCanvas(fl.bounds)
+        for layer, p in fl.lines:
+            c = fl.layer_cls.get(layer, set())
+            cv.line(p, color=(90, 90, 90) if "wall" in c else (180, 180, 180), width=2 if "wall" in c else 1)
+        for lb in labels:
+            cv.text(lb["c"], lb["text"], size=10, color=(120, 120, 120), anchor="mm", bg=False)
+        for i, r in enumerate(regs):
+            on = r in used
+            col = (AMBER if est else PALETTE[i % len(PALETTE)]) if on else (170, 170, 170)
+            cv.poly(list(r["poly"].exterior.coords), fill=col + ((70,) if on else (25,)), outline=col,
+                    width=3 if on else 1)
+        pad = fl.m(0.08) or 0.0
+        for n, r in enumerate(used, 1):
+            lb = labels[r["labels"][0]]
+            bb = lb["box"] or (lb["c"][0] - 1, lb["c"][1] - 1, lb["c"][0] + 1, lb["c"][1] + 1)
+            cv.box(bb, n=n, pad=pad, color=AMBER if est else BLUE)
+            if measure_area:
+                rp = r["poly"].representative_point()
+                cv.text((rp.x, rp.y - (fl.m(0.5) or 0)), f"#{n} {area(r):.2f} m²", size=12)
+        out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
+        ans.evidence = finish(cv.img, out, ctx.q.question,
+                              f"Answer: {value} {unit}{'   ESTIMATE' if est else '   proven'}   route: {ROUTE} (cost €0)",
+                              note=f"{how}; each region (shaded) and its label (boxed) from the file's own wall lines")
     return ans
 
 

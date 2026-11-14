@@ -771,7 +771,7 @@ async function showDrawing() {
   $("#openImg").hidden = true;
   const d = state.drawing;
   if (!d) return;
-  if (["pdf", "png", "jpg", "jpeg"].includes(d.ext)) {
+  if (["pdf", "png", "jpg", "jpeg", "dxf"].includes(d.ext)) {
     const src = "/api/preview?path=" + encodeURIComponent(d.path);
     const ok = await viewer.load(src);
     if (!ok) viewer.clear("No preview", "This file could not be rendered. Ask a question to draw its evidence.");
@@ -1689,7 +1689,10 @@ function usedLine(a) {
   const q = a.query || {}, ex = q.extra || {}, c = a.compute || {};
   const llm = q.parser === "llm";
   const parts = [];
-  for (const r of String(a.route || "").split("+")) {
+  const answered = a.value != null && !a.abstain;
+  /* a cannot answer used nothing to answer with: list what was tried instead */
+  const routes = answered ? String(a.route || "").split("+") : (a.tried && a.tried.length ? a.tried : String(a.route || "").split("+"));
+  for (const r of routes) {
     const w = USED_PART[r] || ROUTE_LABEL[r] || r;
     if (w && !parts.includes(w)) parts.push(w);
   }
@@ -1702,7 +1705,7 @@ function usedLine(a) {
   if (imageEst) calls.push(second ? "Nemotron second opinion" : "Nemotron image estimate");
   const callTxt = calls.length ? `${calls.length} (${calls.join(", ")})` : (llm && ex.parse_cached ? "none (question reading cached)" : "none");
   const per = c.usd_per_1000 != null ? `${fmtUsd(c.usd_per_1000)} per 1,000 questions like this` : "";
-  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${llm ? "language model" : "rules"}</span><span><b>Answered with:</b> ${esc(parts.join(" and ") || "-")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}</p>`;
+  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${llm ? "language model" : "rules"}</span><span><b>${answered ? "Answered with" : "Tried"}:</b> ${esc(answered ? (parts.join(" and ") || "-") : (parts.join(", ") || "-") + "; none could prove it")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}</p>`;
 }
 /* END used-line */
 

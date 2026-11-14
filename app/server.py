@@ -31,6 +31,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from bpqa.answer import public_reason
 from bpqa.data import Question
 from bpqa.router import Context, solve
 
@@ -136,6 +137,33 @@ def drawing(path: str):
     return d
 
 
+def _dxf_preview(f: Path) -> Path:
+    """Flat PNG of a DXF's model space (ezdxf drawing add-on, matplotlib Agg), cached beside the PDF previews."""
+    st = f.stat()
+    key = hashlib.sha1(f"dxf|{f}|{st.st_size}|{int(st.st_mtime)}".encode()).hexdigest()[:16]
+    out = PREVIEW_CACHE / f"{key}.png"
+    if out.exists():
+        return out
+    try:
+        import ezdxf
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from ezdxf.addons.drawing import Frontend, RenderContext
+        from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
+        doc = ezdxf.readfile(str(f))
+        fig = plt.figure(figsize=(16, 11), dpi=150)
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_axis_off()
+        Frontend(RenderContext(doc), MatplotlibBackend(ax)).draw_layout(doc.modelspace(), finalize=True)
+        fig.savefig(str(out), dpi=150, facecolor="white")
+        plt.close(fig)
+    except Exception as ex:
+        print(f"[stoa] dxf preview failed for {f.name}: {type(ex).__name__}: {ex}", flush=True)
+        raise HTTPException(415, "this DXF could not be drawn flat; ask a question to render the evidence")
+    return out
+
+
 @app.get("/api/preview")
 def preview(path: str):
     root, rel = resolve(path)
@@ -143,6 +171,12 @@ def preview(path: str):
     ext = f.suffix.lower()[1:]
     if ext in ("png", "jpg", "jpeg"):
         return FileResponse(f)
+    if ext == "dxf":
+        twin = f.with_suffix(".pdf")          # a PDF twin of the drawing is the better picture: show it
+        if twin.exists():
+            f, ext = twin, "pdf"
+        else:
+            return FileResponse(_dxf_preview(f), media_type="image/png")
     if ext != "pdf":
         raise HTTPException(415, f"no preview for .{ext}; ask a question to render the evidence")
     st = f.stat()
@@ -332,6 +366,14 @@ def ask(body: AskBody):
         ms = (time.perf_counter() - t0) * 1000
         cpu_s = time.process_time() - c0
     a = ans.as_dict()
+    if a.get("abstain"):
+        print(f"[stoa] reason (raw) for {rel!r}: {a['abstain']}", flush=True)     # internal text stays in the log
+    a["abstain"] = public_reason(a.get("abstain"))
+    a["tier_reason"] = public_reason(a.get("tier_reason")) if a.get("tier_reason") else a.get("tier_reason")
+    for c in a.get("checks") or []:
+        if c.get("status") == "error":
+            print(f"[stoa] check error: {c.get('name')}: {c.get('detail')}", flush=True)
+            c["detail"] = "this check could not run on this drawing"
     qd = query.as_dict()
 
     ev_id, geo, marks = None, None, None
