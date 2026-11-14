@@ -404,29 +404,34 @@ room labels alone, which fails where a label is missing, mirrored or unreadable 
   "agree_ocr" = the OCR reading is one its own rules prove, "agree_clean" = no room scored near the
   threshold; the rule with the most proven answers at >= 95% precision on the tune images, else none);
   when they differ it is an estimate with both readings, valued by the type's preferred reading
-  ("det", "ocr", or "ocr_proven" = OCR when its own rules prove it, else the detector). The checking
-  layer then runs as before.
+  ("det", "ocr", or "ocr_proven" = OCR when its own rules prove it, else the detector; "off" keeps the
+  OCR route for the type). Policies are scored after the checking layer, which then runs as before.
 - **Evidence**: each counted room boxed and numbered (blue proven, amber estimate), rooms scored near the
   threshold in grey, the labels read boxed thin and numbered L1, L2 ...
 
 Results, exact count, abstentions counted wrong (accuracy; proven answers and their precision in
 brackets). Before = main (OCR labels + checking layer), after = raster-rooms + the same checking layer.
-Full set test split: 10,032 questions on 1,510 images, run once after the thresholds were frozen. Preview
-dev: 1,048 questions; its images are among the tune images, so dev is not held out from the tuning.
+Full set test split: 10,032 questions on 1,510 images. Preview dev: 1,048 questions; its images are among
+the tune images, so dev is not held out from the tuning.
 
 | room type | full test before | full test after | preview dev before | preview dev after |
 |---|---|---|---|---|
 | kitchen | 64.0% (1170, 98.8%) | 90.8% (1008, 98.8%) | 61.4% | 85.1% |
-| bathroom | 61.5% (816, 96.8%) | 85.4% (788, 93.7%) | 82.4% | 93.2% |
+| bathroom | 87.9% (816, 96.8%) | 85.3% (806, 94.3%) | 89.2% | 93.2% |
 | WC room | 81.2% (1278, 82.0%) | 89.4% (1160, 96.4%) | 89.3% | 93.3% |
 | sauna | 63.6% (518, 81.9%) | 93.4% (1218, 96.2%) | 69.4% | 89.2% |
-| bedroom | 75.1% (1276, 86.4%) | 81.5% (none proven) | 76.7% | 78.6% |
+| bedroom | 75.1% (1276, 86.4%) | 80.0% (1290, 95.2%) | 76.7% | 80.6% |
 | balcony | 85.8% (772, 87.6%) | 85.8% (660, 93.6%) | 87.2% | 87.2% |
-| all six | 70.2% | 88.1% | 75.4% | 87.2% |
+| all six | 74.1% | 87.8% | 76.3% | 87.6% |
 
-Bedrooms get no proven tier: no proof rule reached 95% precision on the tune images. Bathroom proven
-precision on test (93.7%) is under the 95% it was tuned to. The detector adds about 0.1 s per image on
-the CPU (plus about 4 s to load the model once).
+Bathrooms got worse on test (87.9% -> 85.3%) although the tune images showed a small gain (90.9% -> 91.3%
+after checks): the OCR route plus the "a detected shower means a bathroom" check was already strong there.
+Setting `prefer: "off"` for bathroom in `models/rooms_thresholds.json` returns that type to the OCR route;
+that choice would be made from the test result, so it is left open. The test split was run twice: first
+with policies tuned without the checking layer (bedroom 81.5% then, bathroom the same 85.3%, every other
+type identical), then once more after the tuner was changed to score policies after the checks, which is
+what is committed. The detector adds about 0.1 s per image on the CPU (plus about 4 s to load the model
+once).
 
 ### Nemotron
 

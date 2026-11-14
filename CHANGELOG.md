@@ -25,11 +25,19 @@ estimates that were about 20% right).
 - TTA (eight rotations/mirrors) was tried on the tune images: under 1 point of cross-validated gain per type
   for 8x the CPU time, so it is off.
 
-Full set test split (run once, thresholds frozen), exact count: kitchen 64.0% -> 90.8%, bathroom 61.5% ->
-85.4%, WC 81.2% -> 89.4%, sauna 63.6% -> 93.4%, bedroom 75.1% -> 81.5%, balcony 85.8% -> 85.8%; all six
-70.2% -> 88.1% (10,032 questions). Proven precision: WC 82.0% -> 96.4%, sauna 81.9% -> 96.2%, balcony
-87.6% -> 93.6%, kitchen 98.8% both, bathroom 96.8% -> 93.7%; bedrooms are no longer proven (86.4% before).
-Preview dev (its images are tune images): 75.4% -> 87.2%.
+Full set test split, exact count (before = main): kitchen 64.0% -> 90.8%, bathroom 87.9% -> 85.3%, WC
+81.2% -> 89.4%, sauna 63.6% -> 93.4%, bedroom 75.1% -> 80.0%, balcony 85.8% -> 85.8%; all six 74.1% ->
+87.8% (10,032 questions). Proven precision: WC 82.0% -> 96.4%, sauna 81.9% -> 96.2%, bedroom 86.4% ->
+95.2%, balcony 87.6% -> 93.6%, kitchen 98.8% both, bathroom 96.8% -> 94.3%. Preview dev (its images are
+tune images): 76.3% -> 87.6%.
+
+Test was run twice. Run 1 used policies tuned without the checking layer and showed bathrooms down; the
+before number had also been understated (61.5%) because the "detected shower" check could not run in that
+eval's environment (CPU-only torch settings), fixed by rerunning with the fixture detector cache filled.
+The tuner was then changed to score policies after the checks (`tools/tune_rooms.py`), retuned on the tune
+images only, and test run once more (run 2, the numbers above; run 1 differed only for bedroom, 81.5%).
+Bathroom still regresses on test; turning the type off (`prefer: "off"`) is left open since it would be
+chosen from the test result.
 
 ## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
 
