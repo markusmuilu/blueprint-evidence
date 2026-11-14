@@ -36,9 +36,9 @@ abstained, and so would a judge's "what is the fire rating of door D-12".
 | set (full set) | before | after | after proven: n / precision | after estimate: n / precision |
 |---|---|---|---|---|
 | IFC-Bench dev (439) | 0.2% (1) | 33.3% (146) | 57 / 64.9% | 285 / 38.2% |
-| IFC-Bench test (TEST_N) | TEST_BEFORE | TEST_IFCB | TEST_PROVEN | TEST_EST |
+| IFC-Bench test (381) | 1.3% (5) | 27.8% (106) | 69 / 39.1% | 242 / 32.6% |
 | OpeningDesign dev (44) | 45.5% | 90.9% (40, no wrong answer) | 40 / 100% | - |
-| OpeningDesign test (20) | 0% | TEST_OD | | |
+| OpeningDesign test (20) | 0% | 70.0% (14; 5 wrong) | 19 / 73.7% | - |
 
 Text answers are scored by `eval.py`'s lenient rule (every gold number present within 2%, else 60% of the gold
 words); 20 random dev answers scored right were read by hand, 19 answer the question and 1 is partly right.

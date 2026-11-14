@@ -313,10 +313,16 @@ Results (full set; dev used for development, test run once at the end):
 
 | set | before | after | after: proven n / precision | after: estimate n / precision |
 |---|---|---|---|---|
-| IFC-Bench dev (439) | 0.2% | DEV_IFCB | DEV_PROVEN | DEV_EST |
-| IFC-Bench test (381) | 1.3% | TEST_IFCB | TEST_PROVEN | TEST_EST |
-| OpeningDesign dev (44, Sports Complex) | 45.5% | DEV_OD | | |
-| OpeningDesign test (20, Cannery Trail) | 0% | TEST_OD | | |
+| IFC-Bench dev (439) | 0.2% (1) | 33.3% (146) | 57 / 64.9% | 285 / 38.2% |
+| IFC-Bench test (381) | 1.3% (5) | 27.8% (106) | 69 / 39.1% | 242 / 32.6% |
+| OpeningDesign dev (44, Sports Complex) | 45.5% (20) | 90.9% (40, none wrong) | 40 / 100% | - |
+| OpeningDesign test (20, Cannery Trail) | 0% | 70.0% (14; 5 wrong) | 19 / 73.7% | - |
+
+On IFC-Bench test the narrow "proven" lookups held up worse than on dev (39% vs 65% precise): project
+information is answered with the model's placeholder names ("Project Name", "Projektnummer") and decimal
+coordinates where the gold answer judges the data as imprecise or prints degrees and minutes, and "largest
+room" answers from footprints where the gold says the area properties are empty. Those answers are wrong by
+the scorer though their values are in the file; the tier rule was not changed after the test run.
 
 The OpeningDesign test number is not a clean held-out result: the generic schedule reader was built while
 looking at the layout of the Cannery Trail sheet (A700) as well as the dev sheet, and its questions had been
@@ -457,6 +463,16 @@ Takeoff checks: `python tests/test_takeoff.py`; `tools/takeoff_eval.py --split d
 Stoa's area answers); `tools/ocr_r0.py --split dev --limit 2000` then `tools/area_eval.py --split dev
 --mode walls` (raster leave-one-out).
 
+Wall takeoff and property questions:
+
+```
+.venv\Scripts\python ask.py data/ifc_models/kit-fzk-haus_ac20-fzk-haus.ifc "How many square meters of tiling should I order for the bathrooms?"
+.venv\Scripts\python ask.py data/ifc_bench/ac20_arc.ifc "What material are the walls in room 104 made of?"
+.venv\Scripts\python tests/test_walls.py
+.venv\Scripts\python tools/wall_eval.py --data ../data/stoa-full/junction-dataset      (about 7 minutes)
+.venv\Scripts\python tools/nemo_props_eval.py --split dev --limit 60                  (calls Nemotron)
+```
+
 The data is never copied into the repo; point at it with `--data` or `STOA_DATA` (default:
 `../data/stoa-preview/junction-dataset-preview`).
 
@@ -554,8 +570,10 @@ Cost is $0 per question on every line (no model calls; Nemotron fallback off).
 | Unseen public drawings (12 drawings not in Stoa's data) | 50 | **82.0%** (41 correct, 3 wrong, 4 abstained, 2 correctly abstained) | 93.2% (41 of 44) | 0 proven answers wrong | the 3 wrong answers are estimates | `tools/unseen_run.py --data ../data/unseen`, detector on, `out/unseen/results.jsonl` |
 
 Full set, test split, by source: CubiCasa scans 73.5% (27,160 questions), Swiss dwellings 99.0% (11,408; counts
-100.0%, areas 97.0%), IFC models 87.7% (838; 99.7% precise), IFC-Bench 1.3% (381 free-text questions, almost
-all abstained), OpeningDesign 0% (20, abstained). Per CubiCasa question type: storeys 90.5%, toilets 88.3%,
+100.0%, areas 97.0%), IFC models 87.7% (838; 99.7% precise), IFC-Bench 27.8% (381 free-text questions; 1.3% before the
+`ifc-props` route), OpeningDesign 70.0% (20; 0% before the generic schedule reader). With those two sources
+the full test split is 80.7% (32,127 of 39,807; computed from the per-source change, the other sources not
+re-run). Per CubiCasa question type: storeys 90.5%, toilets 88.3%,
 bathrooms 87.9%, balconies 85.8%, WC rooms 81.2%, sinks 78.7%, showers/baths 76.0%, bedrooms 75.1%, kitchens
 64.0%, saunas 63.6%, doors 55.4%, windows 46.4%.
 
