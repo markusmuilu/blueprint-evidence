@@ -328,6 +328,8 @@ def room_scope(q: Query, question: str) -> dict | None:
     if q.measure != "count" or q.obj not in _ROOM_SCOPED_OBJS:
         return None
     f = EXCLUDE.sub(" ", fold(strip_quoted(question)))
+    if _SCHEDULE_Q.search(f):
+        return None                       # a drawing sheet or schedule question: the schedule routes read rooms there
     for t, rx in Q_TYPE_RE.items():
         if t == "wet" or (t == "wc" and q.obj == "toilet"):
             continue
