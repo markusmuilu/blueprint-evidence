@@ -163,6 +163,35 @@ baseline: toilets 89.3%, sinks 78.1%, showers/baths 74.1%, doors 54.1%, windows 
 comparison transfers. Showers and baths get a proven tier for the first time (the policy is right more
 often than wrong).
 
+Final model: 61 epochs in the 5.3 h budget (best epoch 60; tile validation mAP50 0.943, mAP50-95 0.817;
+cubi2 on its whole-image validation set: 0.892 and 0.676, not directly comparable). Tuned on the same 624 held-out train-split images as
+cubi2. 2-fold cross-validated exact-count accuracy (every image answered), and the proven tier's share
+and precision:
+
+| object | cubi2 | cubi2 + TTA | tiles | tiles + TTA | kept | proven share / precision (kept) | estimate precision (kept) |
+|---|---|---|---|---|---|---|---|
+| toilet | 81.7% | 82.7% | 87.5% | **88.3%** | tiles + TTA | 97.9% / 88.9% | 61.5% |
+| sink | 65.5% | 70.2% | 78.2% | **79.3%** | tiles + TTA | 93.0% / 82.0% | 44.2% |
+| shower/bath | 36.2% | 41.5% | 72.4% | **77.6%** | tiles + TTA | 98.3% / 78.1% | 50.0% |
+| door | 48.8% | 51.9% | **59.1%** | 58.2% | tiles | 67.6% / 71.0% | 33.8% |
+| window | 41.7% | 43.8% | 44.7% | **50.0%** | tiles + TTA | 50.0% / 71.2% | 28.8% |
+
+The tiled model wins every object, so the route now uses `detector_tiles.pt` for all five (with TTA for
+four of them). `models/detector_thresholds.json` names the model and mode per object.
+
+Preview, cubi2 before this branch (`--no-tiers`, main's thresholds) against the final route:
+
+| | dev overall | dev CubiCasa | test overall | test CubiCasa | test proven: n / precision | test estimate: n / precision |
+|---|---|---|---|---|---|---|
+| before | 66.2% | 47.9% | 72.3% | 49.2% | 2056 / 95.0% (all answers) | - |
+| final | 80.5% | 73.9% | 85.7% | 75.6% | 2292 / 94.1% | 354 / 44.6% |
+
+Preview test per CubiCasa object, before -> final (exact): toilets 85.5% -> 92.1%, sinks 50.0% -> 74.3%,
+showers/baths 0% -> 83.3%, doors 18.3% -> 60.0%, windows 31.6% -> 44.7%, bathrooms 43.2% -> 86.5%,
+bedrooms 54.9% -> 74.5%, saunas 22.2% -> 63.0%, WC rooms 75.7% -> 91.9%, balconies 76.2% -> 100%,
+kitchens 57.4% -> 59.6%, storeys 93.4% -> 96.1%. The preview test has 76 CubiCasa images, so these move
+in steps of 1.3 points.
+
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
 Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the
