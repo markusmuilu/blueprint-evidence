@@ -173,7 +173,7 @@ and precision:
 | toilet | 81.7% | 82.7% | 87.5% | **88.3%** | tiles + TTA | 97.9% / 88.9% | 61.5% |
 | sink | 65.5% | 70.2% | 78.2% | **79.3%** | tiles + TTA | 93.0% / 82.0% | 44.2% |
 | shower/bath | 36.2% | 41.5% | 72.4% | **77.6%** | tiles + TTA | 98.3% / 78.1% | 50.0% |
-| door | 48.8% | 51.9% | **59.1%** | 58.2% | tiles | 67.6% / 71.0% | 33.8% |
+| door | 48.8% | 51.9% | **59.1%** | 58.2% | tiles | 68.1% / 71.0% | 33.8% |
 | window | 41.7% | 43.8% | 44.7% | **50.0%** | tiles + TTA | 50.0% / 71.2% | 28.8% |
 
 The tiled model wins every object, so the route now uses `detector_tiles.pt` for all five (with TTA for
