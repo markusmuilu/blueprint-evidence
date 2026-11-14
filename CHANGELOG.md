@@ -3,6 +3,67 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: large raster drawing sheets, branch `big-raster-plans` (not merged)
+
+Builders AQ and AQ2. Stoa's sample drawing is a whole A2 sheet exported as one 14000 x 9902 px PNG (a UK special
+school plan, "1:200", scale bar 0 / 10 / 20 m, English room names, no printed areas). The scan routes were built for
+CubiCasa images of 240 to 2000 px and run out of memory on it. Images with a long side of 5000 px or more now go to
+a new route, `raster-sheet` (`bpqa/sheet.py` reads the sheet once and caches it, `bpqa/routes/sheet_plan.py` answers):
+
+- Text: tiled OCR on a copy 5000 px long, lines of one label joined ("Secondary" / "Classroom" / "(Severe Needs)")
+  unless a wall line runs between them.
+- Scale: the printed ratio with the printed sheet size (A2, image aspect checked), cross-checked with the scale bar:
+  117.8 px per m against 118.0 (0.2%). `What is the scale` answers 1:200 from it.
+- Rooms: wall-bounded regions traced on a copy at 50 px per m with the scan route's wall code (wall-line gaps up to
+  4.5 m closed), each room-name label flood filled; gross footprint from the outer walls.
+- Questions matched to the room names printed on the sheet: the longest run of question words found in a name, its
+  head noun preferred ("store" matches "Secure Store", "lift" matches "Lift" and not "Lift Landing"), a few English
+  synonyms (staircase / stair, WC / toilet, disabled / accessible, class room / classroom, elevator / lift). Counts,
+  areas, perimeters, "is there a ...?" (yes, or an abstention when no name matches: a name not read is not a no),
+  total floor area (gross, with the named rooms' net sum stated). Skirting / baseboard questions deduct the door
+  boxes in each room's walls.
+- Doors and windows: the scan detector on tiles of a copy at 80 px per m. Windows count only boxes in the outer
+  walls: the detector also boxes vision panels and glazed screens in internal walls (12 on the sample).
+- `sheet_plan.rooms(file)` gives each named room its perimeter and the door boxes in its walls in the record shape
+  `bpqa/baseboard.py` reads (`perimeter`, `openings` [{kind, width, ...}], `doors_m`, `baseboard_m`), for builder
+  AT's baseboard takeoff.
+- Everything is tier "estimate".
+
+Doors and windows checked by eye on the sample (every region of the plan, crops at full resolution): of 125 door
+boxes 3 were not doors (two glazed panels, one cubicle partition) and 7 doors were missed (two sliding doors, three
+plant-room double doors drawn without swing arcs, two double doors in the thin walls of the covered walkway): about
+129 doors, each double door one. All 68 window boxes on the outer walls were windows and none was missed there.
+
+Truth list, the sample sheet, answered by eye from the drawing against the route:
+
+| question | by eye | ours |
+|---|---|---|
+| scale | 1:200 (printed, scale bar agrees) | 1:200 |
+| classrooms | 8 (6 Secondary Classroom, 2 Severe Needs) | 8 |
+| group rooms | 10 | 10 |
+| toilets | 7 rooms named toilet (2 of them accessible) | 7 |
+| accessible toilets | 2 | 2 |
+| stores | 12 names with "store" (8 Store, 3 Secure Store, Servery and Furniture Store) | 12 |
+| offices | 4 (Staff Office x2, Admin Office, Head's Office) | 4 |
+| staircases | 3 (2 "Stair (Ground)", 1 escape stair drawn without a name) | 2 (wrong: the unnamed stair) |
+| area of the hall | 245.2 m2 (17.82 x 13.76 m between wall faces, measured in pixels) | 244.7 m2 |
+| area of the library | 25.8 m2 (7.77 x 3.32 m) | 26.3 m2 |
+| doors | about 129 | 125 |
+| windows | 68 in the outer walls (plus 12 internal glazed panels) | 68 (80 before the outer-wall rule) |
+
+Known wrong: a wall-line bridge from a short wall stub to the facade cuts some rooms (Therapy Room 8.4 m2 against
+about 13 by eye, the south Staff Office 12.8 against about 20, Interview Room 4.3 against about 9). Lowering the 4.5 m
+bridge limit to 2.0 m fixes those but merges the hall with the servery (a 4 m serving hatch) and lets Reception reach
+the sheet edge, so the limit stays; the fix would be to bridge only gaps continuing a wall line. Rooms with a cut
+outline also lose their door openings. Each count by name misses a room drawn without a name.
+
+Timing on 8 pinned CPU cores, cold cache, with evidence drawn (`bpqa.router.solve` in one process): first question
+(area of the hall: OCR, scale, wall tracing) 90 s; first door question after it 251 s (the detector on about a hundred
+1024 px tiles); every later question 0.4 s; peak memory 2.5 GB. The machine was at 100% CPU from other sessions'
+processes during the run, so these are upper bounds (AQ measured 50 s for the first question on 4 idle cores). The
+detector run is the slow step: reading the sheet and running the detector at upload, before the first question,
+would hide both.
+
 ## 2026-11-14: area approximation on scans that print no areas, branch `scale-approximation` (ON)
 
 His decision: ship the area approximation switched on, as long as the answer shows clearly where the number comes

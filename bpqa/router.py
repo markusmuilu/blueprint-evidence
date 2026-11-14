@@ -25,7 +25,7 @@ from .query import Query, parse
 from . import nemotron as nemo_client
 from . import phrasing
 from . import second_opinion
-from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_scale
+from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_plan, sheet_scale
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -146,7 +146,19 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         # rules first; the language model reads the question only when the rules read nothing, read something no
         # route answers, or ignored a room type the question names (bpqa/phrasing.py), and its reading is
         # validated into the same Query shape the rules build
-        query = phrasing.read(ctx.q.question, use_llm=use_nemo)
+        # on a large drawing sheet the sheet route reads the question against the room names printed on it, so the
+        # language-model reading (a network call) is not needed
+        big = ctx.q.ext in RASTER_EXT and sheet_plan.applies(ctx)
+        query = phrasing.read(ctx.q.question, use_llm=use_nemo and not big)
+    if ctx.q.ext in RASTER_EXT and query.obj != "scale" and sheet_plan.applies(ctx):
+        # a large drawing sheet: read once at the resolution each step needs (bpqa/sheet.py); the scan routes below
+        # were built for 2000 px images and would run out of memory on it
+        try:
+            a = sheet_plan.answer(ctx, query)
+        except Exception as ex:
+            a = abstain(sheet_plan.ROUTE, f"error: {type(ex).__name__}: {ex}")
+        ctx.tried.append(a.route)
+        return query, a
     if not query.ok():
         return query, _try_text(ctx, query, "question not understood by the rule parser (language-model parse off, or it found no measurable question)")
     if query.extra.get("compound") or query.extra.get("unresolved_scope"):
