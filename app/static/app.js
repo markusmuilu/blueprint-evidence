@@ -984,7 +984,7 @@ function clearFocus() {
 function focusRect(r, i, focus) {
   if (state.mode === "3d") {                    // in 3D the strip and item list select the element in the model
     const it = state.answer ? answerItems(state.answer)[+i] : null;
-    if (focus && it && it.guid && window.Viewer3D) Viewer3D.select(it.guid);
+    if (focus && it && it.guid && window.Viewer3D) { mark3dItem(i); Viewer3D.select(it.guid); }
     return;
   }
   if (!r || state.layer !== "evidence") return;
@@ -1016,9 +1016,14 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.defaultPrevented || e.target?.closest?.("input, textarea, select")) return;
   if (layers.sel != null || lastFocus) deselect();
 });
+/* in 3D: the selected element is marked in both the strip and the Items list */
+function mark3dItem(i) {
+  document.querySelectorAll("#itemList .item.on, #stripList .thumb.on").forEach((b) => b.classList.remove("on"));
+  document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
+}
 function markItem(btn, it, a, n, focus) {
   if (state.mode === "3d" && it && it.guid && window.Viewer3D) {
-    if (focus) { document.querySelectorAll("#itemList .item.on").forEach((b) => b.classList.remove("on")); btn.classList.add("on"); Viewer3D.select(it.guid); }
+    if (focus) { mark3dItem(btn.dataset.i); Viewer3D.select(it.guid); }
     return;
   }
   if (focus && isSelected(btn.dataset.i)) { deselect(); return; }

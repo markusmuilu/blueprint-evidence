@@ -935,6 +935,8 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 /* a narrowed answer panel reflows instead of sliding under its edge (his request, 14 Nov) */
 #detailBody, #detailBody .ans-head, #detailBody .sec, #detailBody .kv > dd { min-width: 0; }
 #detailBody { overflow-wrap: anywhere; }
+#detailBody .btn { overflow-wrap: normal; white-space: nowrap; }
+.oc .ask-row .btn { flex: none; }
 .used-line > span { white-space: normal; min-width: 0; }
 .meter-row { grid-template-columns: minmax(0, 140px) minmax(24px, 1fr) auto; }
 /* END answer-panel-light */
