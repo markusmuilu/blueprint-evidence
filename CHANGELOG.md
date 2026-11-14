@@ -99,6 +99,9 @@ Main on the same images: door 59.1%, window 50.0%. The three-scale TTA policy is
 there is within 1.5 points of main, inside the noise of choosing among a dozen variants on 624 images.
 Cost: 24 views instead of 8 (doors had 1), about 3x the detector time per image for those two objects.
 
+To use it: copy `tools/detector_thresholds_v3.json` to `models/detector_thresholds.json` (main's policy
+for toilet, sink and shower/bath, the three-scale policy for door and window; same `detector_tiles.pt`).
+
 ## 2026-11-14 morning: English and German room labels, evidence colours, app tiers and results, branch `polish`
 
 Problem: on the unseen-drawing set the room-label route read only Finnish and Swedish words, so the two
