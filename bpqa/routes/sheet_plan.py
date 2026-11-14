@@ -46,13 +46,15 @@ STOP = {"how", "many", "what", "is", "the", "area", "areas", "total", "of", "are
         "big", "large", "ground", "storey", "story", "sheet", "building", "school", "exist", "exists", "i", "can",
         "see", "please", "measure", "measured", "room", "rooms"}
 GENERIC = {"room", "rooms", "space", "spaces"}
-TOTAL_RE = re.compile(r"\b(total|whole|overall|entire|gross)\b.*\b(floor )?area\b|\bfloor area\b|\bgross\b", re.I)
+TOTAL_RE = re.compile(r"\b(total|whole|overall|entire|gross)\b.*\b(floor )?area\b|\bfloor area\b|\bgross\b|"
+                      r"kokonais\w*ala\w*|kokonaispinta\w*|bruttoala\w*|rakennuksen (pinta-?\s?)?ala\w*|gesamtfl\w*", re.I)
 PERIM_RE = re.compile(r"\b(perimeter|skirting|baseboard|base board)\b", re.I)
 EXIST_RE = re.compile(r"^\s*(is|are) there\b|\b(does|do) (the|this|it|we)\b.*\b(have|has|contain|include|show)\b|"
                       r"\bis there (a|an|any)\b|\bare there any\b", re.I)
 COUNT_RE = re.compile(r"\bhow many\b|\bnumber of\b|\bcount\b|\bkuinka monta\b|\bmontako\b|\bwie ?viele\b|\banzahl\b|"
                       r"\bcombien\b|\bhvor mange\b|\bhur manga\b", re.I)
-AREA_Q_RE = re.compile(r"\b(area|perimeter|skirting|baseboard|m2|square)\b|pinta-?ala|neliometri|neliömetri|fl(a|ä)che|"
+AREA_Q_RE = re.compile(r"\b(area|perimeter|skirting|baseboard|m2|square)\b|\bhow (big|large)\b|kuinka (iso|suuri)|"
+                       r"kokonais\w*ala|pinta-?\s?ala|neliometri|neliömetri|fl(a|ä)che|"
                        r"quadratmeter|m²", re.I)
 
 
@@ -95,8 +97,11 @@ def label_words(text: str) -> list[str]:
 # and compound forms match (wc-tilaa -> wctilaa, WC-Raume -> wcraume, kaytavien, luokkahuoneita).
 FOREIGN_ROOM = [(re.compile(r"^(wc\w*|vess\w+|toalet\w*|toilette\w*|klo|klos)$"), "toilet"),
                 (re.compile(r"^(kaytav\w*|korridor\w*|flur\w*)$"), "corridor"),
-                (re.compile(r"^(sali|salin|salissa|salit|salien|halli\w*|aula\w*)$"), "hall"),
-                (re.compile(r"^(luokkahuone\w*|luok(ka|an|ass|ia|ien|at)\w*|klassenzimmer\w*|klassenr(au|ae|a)m\w*)$"), "classroom"),
+                (re.compile(r"^(sali|salin|salissa|salit|salien|halli\w*)$"), "hall"),
+                (re.compile(r"^(aula\w*|eteisaul\w*)$"), "lobby"),
+                (re.compile(r"^(ryhmahuone\w*|ryhmatila\w*|gruppenraum\w*|gruppenr(ae|a)um\w*)$"), "group"),
+                (re.compile(r"^(kirjasto\w*|bibliothek\w*)$"), "library"),
+                (re.compile(r"^(luokkahuone\w*|luok(ka|an|ass|ia|ien|at|kiin|issa|ista)\w*|klassenzimmer\w*|klassenr(au|ae|a)m\w*)$"), "classroom"),
                 (re.compile(r"^(keitti\w*|kuche\w*|kueche\w*)$"), "kitchen"),
                 (re.compile(r"^(toimisto\w*|buro\w*|buero\w*)$"), "office"),
                 (re.compile(r"^(varast\w*|lager\w*|abstellr\w*)$"), "store"),
