@@ -5,11 +5,11 @@ for whatever is still running.
         text     OCR tiles and the printed scale          bpqa.sheet.analyse(regions=False)
         rooms    wall tracing, room outlines, footprint   bpqa.sheet.analyse(regions=True)
         doors    the door / window detector on tiles      bpqa.routes.sheet_plan.detect
-      These run outside the server's SOLVE_LOCK, so other requests are never blocked by them. A question on the same
+      These run outside the server's solve gate, so other requests are never blocked by them. A question on the same
       sheet waits (outside the lock) for the stage it needs (`needed_stage`); the per-drawing locks in sheet.analyse
       and sheet_plan.detect also make a question that gets there first do the work once, the job then reads its cache.
   scan (any other PNG / JPG)   one normal solve of a window question (detector, OCR and room caches), taken under
-      SOLVE_LOCK only when it is free: a scan takes 3 to 26 s on CPU, and a question asked meanwhile waits for it.
+      the scan lane of the solve gate (app/gate.py), behind any question: a scan takes 3 to 26 s on CPU, and a question asked meanwhile waits for it.
 
 One worker thread, one job at a time, in upload order. `status(path)` is what GET /api/precompute returns.
 
@@ -54,7 +54,7 @@ def needed_stage(question: str) -> str:
     return "text"
 
 
-def start(path: str, file: Path, solve_lock: threading.Lock, ask_scan) -> dict | None:
+def start(path: str, file: Path, solve_lock, ask_scan) -> dict | None:
     """Queue the background reading of an uploaded drawing; None for a file that needs none (PDF, DXF, IFC)."""
     ext = file.suffix.lower().lstrip(".")
     if ext not in RASTER:

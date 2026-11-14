@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import asyncio
 import io
 import json
 import re
@@ -27,7 +28,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +42,7 @@ from bpqa.evidence import marks_path
 from bpqa.scale_objects import norm_assume
 
 from . import costs
+from .gate import Cancelled, SolveGate, gate_witness_solves, hold_for_witnesses, lane_for, serialise_yolo
 from . import precompute
 from . import ifc3d
 from . import results as results_mod
@@ -64,7 +66,8 @@ for d in (EVIDENCE_DIR, RENDER_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
 
 DATA_ROOT = find_data_root()
 CATALOG = Catalog(DATA_ROOT)
-SOLVE_LOCK = threading.Lock()     # routes keep module-level caches; one solve at a time
+GATE = SolveGate()     # one solve at a time per lane (scans / vector files); questions before background work (app/gate.py)
+threading.Thread(target=serialise_yolo, daemon=True, name="yolo-lock").start()   # before any solve can predict
 
 app = FastAPI(title="Blueprint Evidence", docs_url="/api/docs", redoc_url=None)
 
@@ -125,7 +128,7 @@ async def upload(files: list[UploadFile] = File(...)):
     for dr in res["drawings"]:
         try:
             root, rel = resolve(dr["path"])          # uploads live under <uid>/data/upload/
-            dr["precompute"] = precompute.start(dr["path"], Path(root) / rel, SOLVE_LOCK, _precompute_scan)
+            dr["precompute"] = precompute.start(dr["path"], Path(root) / rel, GATE.background(lane_for(rel)), _precompute_scan)
         except Exception as ex:      # never fail an upload over the background reading
             print(f"[precompute] {dr['path']}: {type(ex).__name__}: {ex}", flush=True)
     first = res["drawings"][0]
@@ -134,7 +137,7 @@ async def upload(files: list[UploadFile] = File(...)):
 
 def _precompute_scan(path: str):
     """The upload precompute of a scan: one solve of a window question fills the detector, OCR and room caches.
-    Called by app/precompute.py with SOLVE_LOCK held."""
+    Called by app/precompute.py holding the scan lane, behind any question."""
     root, rel = resolve(path)
     solve(Context(root=root, q=Question(qid=-1, path=rel, question="How many windows are shown on this floor plan?"),
                   out_dir=RENDER_DIR, evidence=False))
@@ -400,8 +403,39 @@ class AskBody(BaseModel):
     assume: dict | None = None
 
 
+async def _until_gone(request: Request, gone: threading.Event, done: threading.Event):
+    """Sets `gone` when the browser drops the request (a newer question replaced it), so a request still waiting for
+    its lane is not solved for nobody. A solve already running finishes and is cached."""
+    try:
+        while not done.is_set():
+            if await request.is_disconnected():
+                gone.set()
+                return
+            await asyncio.sleep(0.3)
+    except Exception:                # detection is best effort; never fail the request over it
+        return
+
+
+async def _run_watched(request: Request, fn, *args):
+    gone, done = threading.Event(), threading.Event()
+    watch = asyncio.create_task(_until_gone(request, gone, done))
+    try:
+        return await run_in_threadpool(fn, *args, gone.is_set)
+    except Cancelled:
+        return JSONResponse({"detail": "request abandoned"}, status_code=499)
+    finally:
+        done.set()
+        watch.cancel()
+
+
 @app.post("/api/ask")
-def ask(body: AskBody):
+async def ask_endpoint(body: AskBody, request: Request):
+    return await _run_watched(request, lambda b, c: ask(b, cancelled=c, background=False), body)
+
+
+def ask(body: AskBody, cancelled=None, background: bool = True):
+    """Answer one question. Called directly (deploy/web.py prewarm) it is background work: a person's question goes
+    first. The HTTP route calls it as a question, with `cancelled` telling whether the browser is still waiting."""
     question = body.question.strip()
     if not question:
         raise HTTPException(400, "empty question")
@@ -422,7 +456,7 @@ def ask(body: AskBody):
     ctx = Context(root=root, q=q, out_dir=RENDER_DIR, evidence=True, pdf_only=body.pdf_only, assume=assume)
     # an upload still being read in the background: wait, outside the solve lock, for the part this question needs
     waited_s = precompute.wait_for(body.path, question) if body.path.startswith("upload:") else 0.0
-    with SOLVE_LOCK:
+    with GATE.hold(lane_for(rel), background=background, cancelled=cancelled):
         t0, c0 = time.perf_counter(), time.process_time()
         query, ans = solve(ctx)
         ms = (time.perf_counter() - t0) * 1000
@@ -553,7 +587,11 @@ def _keep_evidence(drawn: str | None, key: str) -> tuple[str | None, dict | None
 
 
 @app.post("/api/witnesses")
-def witnesses(body: WitnessBody):
+async def witnesses_endpoint(body: WitnessBody, request: Request):
+    return await _run_watched(request, witnesses, body)
+
+
+def witnesses(body: WitnessBody, cancelled=None):
     """The same question answered from every format of the drawing (DXF, IFC, PDF alone, PNG), side by side."""
     from bpqa import witnesses as wit
     question = body.question.strip()
@@ -578,8 +616,12 @@ def witnesses(body: WitnessBody):
         row.pop("evidence", None)
 
     t0 = time.perf_counter()
-    with SOLVE_LOCK:
+    # background work, one format at a time: a question asked meanwhile waits for one witness solve, not all of them
+    gate_witness_solves(wit, GATE)
+    with hold_for_witnesses(cancelled):
         res = wit.run(root, rel, question, out_dir=RENDER_DIR, evidence=True, on_answer=keep)
+    if cancelled is not None and cancelled():     # abandoned part way: the skipped formats read as errors, do not cache
+        raise Cancelled()
     res["n_disputed"] = wit.spatial_disagreements(res["witnesses"])
     res.update(path=body.path, question=question, time_ms=round((time.perf_counter() - t0) * 1000, 1), cached=False,
                gold=CATALOG.gold(rel, question) if not body.path.startswith("upload:") else None)

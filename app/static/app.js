@@ -475,6 +475,8 @@ async function selectDrawing(path, keepAnswer = false) {
       leaveBatchView();                              // ask-several block
       if (state.drawing && state.askTicket) {      // a question still running on the previous drawing is abandoned
         state.askTicket += 1;
+        abortAsk();                                  // and its request dropped, so the server does not solve it for nobody
+        state.askingQ = null;
         clearInterval(busyT);
         $("#viewerBusy").hidden = true;
         $("#askBtn").disabled = false;
@@ -546,7 +548,7 @@ function setHash() {
   const p = new URLSearchParams();
   if (state.drawing) p.set("path", state.drawing.path);
   const q = $("#question").value.trim();
-  if (q && state.answer) p.set("q", q);
+  if (q && (state.answer || state.askingQ)) p.set("q", state.askingQ || q);
   if (state.mode === "3d") p.set("mode", "3d");
   history.replaceState(null, "", "#" + p.toString());
 }
@@ -1516,13 +1518,19 @@ async function ask(refresh = false) {
   clearInterval(busyT);
   busyT = setInterval(tick, 100);
   const asked = state.drawing.path, ticket = (state.askTicket = (state.askTicket || 0) + 1);
+  abortAsk();                             // a question still running is replaced: its request is dropped
+  const ctl = (state.askCtl = new AbortController());
+  state.askingQ = q;
+  setHash();                              // the question is in the URL while it runs: a reload asks it again
   try {
     const a = await api("/api/ask", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: asked, question: q, pdf_only: $("#pdfOnly").checked, refresh }),
+      signal: ctl.signal,
     });
     // a slow answer that comes back after another drawing or question was opened is dropped, never shown on it
     if (ticket !== state.askTicket || !state.drawing || state.drawing.path !== asked) return;
+    state.askingQ = null;
     state.answer = a;
     (state.answeredPaths = state.answeredPaths || new Set()).add(asked);
     state.corr = { removed: new Set(), added: [] };
@@ -1534,9 +1542,12 @@ async function ask(refresh = false) {
     setHash();
     loadWitnesses(a, refresh);
   } catch (e) {
+    if (e.name === "AbortError" || ticket !== state.askTicket) return;      // replaced by a newer question or drawing
+    state.askingQ = null;
     toast(e.expired ? e.message : "The question failed: " + e.message, true);
   } finally {
     if (ticket === state.askTicket) {         // only the latest question owns the busy state
+      state.askCtl = null;
       clearInterval(busyT);
       $("#viewerBusy").hidden = true;
       $("#detailBusy").hidden = true; $("#detailEmpty").hidden = !!state.answer; $("#detailBody").hidden = !state.answer;
@@ -1544,6 +1555,11 @@ async function ask(refresh = false) {
       btn.removeAttribute("aria-busy");
     }
   }
+}
+
+function abortAsk() {
+  if (state.askCtl) { state.askCtl.abort(); state.askCtl = null; }
+  if (state.witCtl) { state.witCtl.abort(); state.witCtl = null; }   // the witnesses of the answer before, too
 }
 
 function fmtValue(v) {
@@ -1775,14 +1791,17 @@ async function loadWitnesses(a, refresh = false) {
   clearInterval(witT);
   witT = setInterval(() => { meta.textContent = `${((performance.now() - t0) / 1000).toFixed(1)} s`; }, 100);
   try {
+    const ctl = (state.witCtl = new AbortController());
     const w = await api("/api/witnesses", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: a.path, question: a.question, refresh }),
+      signal: ctl.signal,
     });
     if (state.answer !== a) return;
     state.witnesses = w;
     renderWitnesses(a, w);
   } catch (e) {
+    if (e.name === "AbortError" || state.answer !== a) return;
     $("#witBody").innerHTML = `<p class="meta">Could not ask the other formats: ${esc(e.message)}</p>`;
   } finally {
     clearInterval(witT);
@@ -2610,12 +2629,14 @@ function renderObjTable(d) {
     $("#view-ask").classList.add("no-picker");      // phones start on the question, library one tap away
     $("#pickerToggle").setAttribute("aria-expanded", "false");
   }
+  /* the question field shows the URL's question, never one the browser restored from the page before (QA 14 Nov) */
+  const p = new URLSearchParams(location.hash.slice(1));
+  $("#question").value = p.get("q") || "";
   renderExamples();
   renderTry();
   loadStatus();
   loadCosts();
   await loadDrawings();
-  const p = new URLSearchParams(location.hash.slice(1));
   if (p.get("path")) {
     await selectDrawing(p.get("path"));
     if (p.get("mode") === "3d") setMode("3d");
