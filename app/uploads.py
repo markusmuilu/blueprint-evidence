@@ -12,6 +12,8 @@ shown to the visitor and an optional note.
     out as a single-page PDF, because the PDF routes read page 1 of the file they are given
   - TIFF (all frames) and SVG are converted to PNG; an image whose content is not what its extension says
     is converted too
+  - a PDF page that is a scan (one big picture, almost no vector lines) is stored as a PNG at the picture's own
+    resolution, so the scan routes read it instead of the PDF routes finding nothing
   - DWG is converted to DXF when `dwg2dxf` (LibreDWG) is on the PATH, otherwise refused with a clear message
 """
 from __future__ import annotations
@@ -156,6 +158,54 @@ def pdf_pages(data: bytes, name: str) -> tuple[list[bytes | None], int]:
         return out, n
 
 
+SCAN_MIN_COVER = 0.6           # a PDF page whose largest image covers this share of the page ...
+SCAN_MAX_PATHS = 300           # ... and that has fewer vector paths than this is a scan saved as PDF
+SCAN_MAX_SIDE = 14000          # px: long side cap when such a page is turned into an image
+SCAN_MIN_SIDE = 200            # px: floor for a broken image size; otherwise the native size is kept (upscaling hurt the counts, box test 14 Nov)
+
+
+def scanned_page_png(page) -> bytes | None:
+    """PNG of a PDF page that is a scan (one big picture, almost no vector lines), else None.
+
+    Such a page has nothing for the PDF text and vector routes to read, so it is stored as an image and read by
+    the scan routes (OCR, detectors, the big-sheet path). The page is drawn at the embedded picture's own
+    resolution, so no detail is lost and none is invented."""
+    import pymupdf
+    try:
+        area = abs(page.rect.width * page.rect.height) or 1.0
+        best, best_px = 0.0, 0
+        for info in page.get_image_info(xrefs=True):
+            x0, y0, x1, y1 = info.get("bbox", (0, 0, 0, 0))
+            cover = abs((x1 - x0) * (y1 - y0)) / area
+            if cover > best:
+                best, best_px = cover, max(int(info.get("width") or 0), int(info.get("height") or 0))
+        if best < SCAN_MIN_COVER:
+            return None
+        if len(page.get_drawings()) >= SCAN_MAX_PATHS:
+            return None
+        long_pt = max(page.rect.width, page.rect.height) or 1.0
+        side = min(SCAN_MAX_SIDE, max(SCAN_MIN_SIDE, int(best_px / max(best, 1e-6) ** 0.5)))
+        z = side / long_pt
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(z, z), alpha=False)
+        return pix.tobytes("png")
+    except Exception as ex:          # never fail an upload over this check: keep the PDF as it is
+        print(f"[uploads] scanned-page check failed: {type(ex).__name__}: {ex}", flush=True)
+        return None
+
+
+def pdf_scans(data: bytes, pages: list[bytes | None]) -> list[bytes | None]:
+    """For each stored page, the PNG to store instead when the page is a scan, else None."""
+    import pymupdf
+    out = []
+    for b in pages:
+        try:
+            with pymupdf.open(stream=data if b is None else b, filetype="pdf") as doc:
+                out.append(scanned_page_png(doc[0]))
+        except Exception:
+            out.append(None)
+    return out
+
+
 def dwg_to_dxf(data: bytes, name: str) -> bytes:
     exe = shutil.which("dwg2dxf")
     if not exe:
@@ -204,13 +254,24 @@ def _units(name: str, data: bytes, allowed: set[str], notes: list[str]) -> list[
                  "note": "Drawn from an SVG as a picture, so it is read as a scan: counts are estimates."}]
     if ext == "pdf":
         pages, total = pdf_pages(data, name)
+        scans = pdf_scans(data, pages)        # a scanned page is stored as an image, so the scan routes read it
+        scan_note = "Scanned page saved as PDF: read as a scan image (OCR and detectors), so counts are estimates."
         if total == 1:
+            if scans[0] is not None:
+                return [{"label": name, "stored": f"{stem}.png", "ext": "png", "data": scans[0], "note": scan_note}]
             return [{"label": name, "stored": name, "ext": "pdf", "data": data, "note": None}]
         notes.append(f"{name} has {total} pages. Each page is its own drawing.")
         if total > MAX_PAGES:
             notes.append(f"Only the first {MAX_PAGES} pages of {name} were added.")
-        return [{"label": f"{name}, page {i + 1}", "stored": f"{stem}_p{i + 1}.pdf", "ext": "pdf", "data": b,
-                 "note": f"Page {i + 1} of {total}."} for i, b in enumerate(pages)]
+        out = []
+        for i, b in enumerate(pages):
+            if scans[i] is not None:
+                out.append({"label": f"{name}, page {i + 1}", "stored": f"{stem}_p{i + 1}.png", "ext": "png",
+                            "data": scans[i], "note": f"Page {i + 1} of {total}. {scan_note}"})
+            else:
+                out.append({"label": f"{name}, page {i + 1}", "stored": f"{stem}_p{i + 1}.pdf", "ext": "pdf", "data": b,
+                            "note": f"Page {i + 1} of {total}."})
+        return out
     if ext in RASTER:
         parts = raster_pages(data, name)
         out = []
