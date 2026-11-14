@@ -2720,7 +2720,7 @@ function renderTiles() {
     if (run.proven_precision != null) tiles.push(`<div class="tile" title="${esc(run.source || "")}"><p class="tile-k">Proven answers right</p>
       <p class="tile-v">${pct(run.proven_precision)}</p>${tileBar(run.proven_precision)}<p class="tile-s">${num(run.proven)} answers marked Proven on the same split</p></div>`);
   }
-  tiles.push(`<div class="tile" title="${esc(COST_SOURCE)}"><p class="tile-k">Cost per 1,000 questions</p>
+  tiles.push(`<div class="tile" title="${esc(COST_SOURCE)}"><p class="tile-k">Cost per 1,000 questions (estimate)</p>
     <p class="tile-v">about ${fmtUsd(COST_BLENDED_USD_PER_1000)}</p>
     <p class="tile-s">${b && b.cost_per_q ? `Nemotron alone: about ${fmtUsd(b.cost_per_q * 1000)} at its measured tokens` : "CPU time at an assumed cloud price"}</p></div>`);
   if (b) tiles.push(`<div class="tile tile-vs" title="${esc(b.ours_source || "")}"><p class="tile-k">Against a vision model alone</p>
@@ -2918,8 +2918,8 @@ function compareTiles(t) {
   return `<section class="tiles cmp-tiles" aria-label="Totals">
     ${vs("Accuracy", t.ours_accuracy, t.nemotron_accuracy, "Nemotron", `${num(t.questions)} test questions, both scored the same way`)}
     ${b ? vs("Against the best of other vision models", b.ours_accuracy, b.best_accuracy, "Best other", `${b.models} hosted models on ${b.n} of our weakest scan questions; small sample`) : ""}
-    ${c ? `<div class="tile"><p class="tile-k">Cost per 1,000 questions</p>
-      <p class="tile-v">${fmtUsd(c.ours_usd_per_1000)}</p>
+    ${c ? `<div class="tile" title="${esc(COST_SOURCE)}"><p class="tile-k">Cost per 1,000 questions (estimate)</p>
+      <p class="tile-v">about ${fmtUsd(COST_BLENDED_USD_PER_1000)}</p>
       <p class="tile-s">Nemotron alone: about ${fmtUsd(c.nemotron_usd_per_1000)}, on the same ${num(t.questions)} questions</p></div>` : ""}
   </section>`;
 }
