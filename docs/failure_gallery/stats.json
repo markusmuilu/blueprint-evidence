@@ -1,0 +1,159 @@
+{
+ "stats": {
+  "by": {
+   "door": [
+    120,
+    76
+   ],
+   "window": [
+    152,
+    66
+   ],
+   "toilet": [
+    152,
+    140
+   ],
+   "sink": [
+    148,
+    110
+   ],
+   "shower_or_bath": [
+    144,
+    120
+   ],
+   "storey": [
+    152,
+    146
+   ],
+   "kitchen": [
+    94,
+    82
+   ],
+   "bathroom": [
+    74,
+    66
+   ],
+   "wc_room": [
+    74,
+    72
+   ],
+   "sauna": [
+    108,
+    96
+   ],
+   "balcony": [
+    42,
+    42
+   ],
+   "bedroom": [
+    102,
+    76
+   ]
+  },
+  "drawings": {
+   "door": 60,
+   "window": 76,
+   "toilet": 76,
+   "sink": 74,
+   "shower_or_bath": 72,
+   "storey": 76,
+   "kitchen": 47,
+   "bathroom": 37,
+   "wc_room": 37,
+   "sauna": 54,
+   "balcony": 21,
+   "bedroom": 51
+  },
+  "tier": {
+   "estimate|False": 270,
+   "estimate|True": 940,
+   "proven|True": 152
+  },
+  "wrong_pairs": 135,
+  "det_wrong": 102,
+  "det_off_by_one": 61,
+  "box_causes": {
+   "door": {
+    "fp": 12,
+    "near t": 16,
+    "miss": 3,
+    "fp outside unit": 3,
+    "low score": 6
+   },
+   "window": {
+    "near t": 27,
+    "low score": 26,
+    "miss": 15,
+    "fp": 6,
+    "split": 5,
+    "fp outside unit": 4,
+    "merge": 31
+   }
+  },
+  "direction": {
+   "door": {
+    "wrong": 22,
+    "over": 13,
+    "under": 9,
+    "off_by_one": 16
+   },
+   "window": {
+    "wrong": 43,
+    "over": 11,
+    "under": 32,
+    "off_by_one": 17
+   },
+   "sink": {
+    "wrong": 19,
+    "over": 7,
+    "under": 12,
+    "off_by_one": 14
+   },
+   "toilet": {
+    "wrong": 6,
+    "over": 3,
+    "under": 3,
+    "off_by_one": 5
+   },
+   "shower_or_bath": {
+    "wrong": 12,
+    "over": 4,
+    "under": 8,
+    "off_by_one": 9
+   }
+  },
+  "window_by_kind": {
+   "colorful": [
+    2,
+    1
+   ],
+   "high_quality": [
+    13,
+    8
+   ],
+   "high_quality_architectural": [
+    61,
+    24
+   ]
+  },
+  "n_drawings": 76
+ },
+ "mode_counts": {
+  "window_pair": 9,
+  "other_space": 8,
+  "door_noarc": 5,
+  "furniture_door": 5,
+  "fixture_symbol": 5,
+  "scribbles": 4,
+  "balcony_porch": 3,
+  "no_cause": 3,
+  "degraded": 3,
+  "label": 3,
+  "room_detector": 3,
+  "missed_small": 3,
+  "thin_window": 3,
+  "gold_vs_drawing": 2,
+  "low_res": 2,
+  "cut_edge": 1
+ }
+}
