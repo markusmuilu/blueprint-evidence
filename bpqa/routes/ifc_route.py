@@ -584,6 +584,31 @@ def room_type_count(M, storey, q) -> dict:
     return {"used": [(s, None) for s in typed], "value": len(typed), "note": note, "estimate": est}
 
 
+FLAT_ROOM_NO = re.compile(r"^\s*(\d{1,4})-(\d{1,3})\s*$")
+
+
+def flats_from_space_numbers(M, storey) -> dict:
+    """'How many apartments on this floor' on a model with no apartment objects: the spaces numbered <flat>-<room>
+    (Esplanades: '3-1 ELUTUBA+KOOK', '3-2 ESIK', '3-3 TUALETTRUUM') counted by distinct flat number. Needs at least
+    two flats with two or more rooms each; otherwise the model does not say (abstain, so no image guess is made)."""
+    spaces = [s for s in M.entities("room") if storey is None or M.storey_of(s) == storey]
+    where = f"on storey {storey.Name}" if storey is not None else "in the model"
+    flats: dict[str, list] = {}
+    for s in spaces:
+        m = FLAT_ROOM_NO.match(str(s.Name or ""))
+        if m:
+            flats.setdefault(m.group(1), []).append(s)
+    if len(flats) < 2 or sum(len(v) >= 2 for v in flats.values()) < 2:
+        return {"why": f"the model has no apartment objects and its space numbers {where} do not follow a "
+                       f"<flat>-<room> numbering, so apartments cannot be counted from it"}
+    nos = sorted(flats, key=int)
+    return {"used": [(v[0], None) for k, v in sorted(flats.items(), key=lambda kv: int(kv[0]))], "value": len(flats),
+            "note": f"{len(flats)} distinct flat numbers in the IfcSpace numbering <flat>-<room> {where} "
+                    f"(flats {', '.join(nos)}; {sum(len(v) for v in flats.values())} spaces)",
+            "estimate": "apartments counted from the space numbering (<flat>-<room>, e.g. '3-1'); the model has no "
+                        "apartment objects"}
+
+
 def space_display(sp) -> str:
     n, ln = sp.Name or "", getattr(sp, "LongName", None) or ""
     return f"{ln} ({n})" if ln and n and ln != n else (ln or n)
@@ -631,8 +656,9 @@ def answer(ctx, q) -> Answer:
         if storey is None:
             return abstain(ROUTE, f"storey '{q.level}' not in model")
     sheet_note = ""
-    counted = q.obj in CLASSES or q.obj in ROOM_COUNTS or q.obj in SINK_OBJS
-    if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or counted and sheet_scope_applies(ctx, q)):
+    counted = q.obj in CLASSES or q.obj in ROOM_COUNTS or q.obj in SINK_OBJS or q.obj == "apartment"
+    if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or counted and sheet_scope_applies(ctx, q)
+                           or q.variant == "max" and sheet_scope_applies(ctx, q)):
         # a plan sheet shows one storey: find it from the storey name and space labels printed on the sheet
         storey, sheet_note = sheet_storey(M, ctx)
         if storey is None:
@@ -663,6 +689,22 @@ def answer(ctx, q) -> Answer:
         used, value, unit = [(e, None) for e in ents], len(ents), "count"
         note = (f"{len(ents)} x IfcSanitaryTerminal of sink / washbasin type {where}"
                 + (f" (the model has {len(here)} other sanitary fixture(s) {where}, none of them a sink)" if not ents and here else ""))
+    elif q.measure == "count" and q.obj == "storey":
+        # "How many floors does the building have?": the storeys that hold rooms; foundation and roof levels are named
+        with_rooms = {M.storey_of(s).id() for s in M.entities("room") if M.storey_of(s) is not None}
+        floors = [s for s in M.storeys if s.id() in with_rooms]
+        if not floors:
+            return abstain(ROUTE, "no storey of this model holds an IfcSpace, so floors cannot be told from other levels")
+        others = [s.Name for s in M.storeys if s.id() not in with_rooms]
+        used, value, unit = [(s, None) for s in floors], len(floors), "count"
+        note = (f"{len(floors)} floors with rooms ({floors[0].Name} to {floors[-1].Name})"
+                + (f"; the model also has {', '.join(others)} (levels without rooms, e.g. foundation or roof), "
+                   f"{len(M.storeys)} IfcBuildingStorey in all" if others else ""))
+    elif q.measure == "count" and q.obj == "apartment":
+        fl = flats_from_space_numbers(M, storey)
+        if fl.get("why"):
+            return abstain(ROUTE, fl["why"])
+        used, value, unit, note, tier_reason = fl["used"], fl["value"], "count", fl["note"], fl["estimate"]
     elif q.measure == "count":
         if q.obj not in CLASSES:
             return abstain(ROUTE, f"no IFC class for {q.obj}")
@@ -735,12 +777,20 @@ def answer(ctx, q) -> Answer:
                     srcs.add(src)
             if not used:
                 return abstain(ROUTE, "no space areas")
-            why = single_room_problem(q, [s for s, _ in used], lambda s: space_display(s) + (
+            if q.variant == "max":              # "biggest room?": the one space with the largest area
+                big = max(used, key=lambda t: t[1])
+                where = f"on storey {storey.Name}" if storey is not None else "in the model"
+                used = [big]
+                value, unit = round(big[1], 2), "m2"
+                note = f"largest of the {len(spaces)} IfcSpace areas {where}: {space_display(big[0])}"
+                spaces = []
+            why = None if q.variant == "max" else single_room_problem(q, [s for s, _ in used], lambda s: space_display(s) + (
                 f" on {M.storey_of(s).Name}" if M.storey_of(s) is not None else ""))
             if why:
                 return ambiguous_room(ROUTE, why)
-            value, unit = round(sum(a for _, a in used), 3), "m2"
-            note = f"sum of {len(used)} IfcSpace areas ({', '.join(sorted(srcs))})"
+            if q.variant != "max":
+                value, unit = round(sum(a for _, a in used), 3), "m2"
+                note = f"sum of {len(used)} IfcSpace areas ({', '.join(sorted(srcs))})"
         elif (q.obj, q.measure) in QTO_KEYS:
             ents = M.entities(q.obj)
             if storey is not None:

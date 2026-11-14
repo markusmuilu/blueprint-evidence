@@ -114,3 +114,51 @@ NAMED_EXTRA = [
     ("de", "Fläche des Raums 'Lager 2' bitte", {"name": "Lager 2"}),
     ("de", "gib mir die Größe von Raum 'Kopierraum' im Geschoss 'EG'", {"name": "Kopierraum", "level": "EG"}),
 ]
+
+# QA stress test on the live app, 14 Nov: the casual questions that were read wrong or not at all. Written after the
+# fix, so they are tune cases (never reported as held-out). expected = the canonical parse; extra keys:
+#   whole_model: the question asks for the whole building; apartment_scope: rooms counted inside one apartment;
+#   blocked: the question names a room type no route filters by, so the router abstains instead of counting all rooms
+_TK = {"measure": "area", "obj": "room", "variant": "type_sum", "material": None, "surface": "floor"}
+QA_NOV14 = [
+    ("en", "windows whole house", "count_window", {"measure": "count", "obj": "window", "whole_model": True}),
+    ("fi", "ikkunat koko talo", "count_window", {"measure": "count", "obj": "window", "whole_model": True}),
+    ("de", "wie viele Fenster im ganzen Haus", "count_window", {"measure": "count", "obj": "window", "whole_model": True}),
+    ("sv", "hur många fönster i hela huset", "count_window", {"measure": "count", "obj": "window", "whole_model": True}),
+    ("en", "how many offices", "count_office", {"measure": "count", "obj": "office"}),
+    ("en", "area of meeting rooms", "area_rooms_of_type", {**_TK, "types": ["meeting"]}),
+    ("en", "area of lab rooms", "other", {"blocked": True}),
+    ("en", "how many server rooms", "other", {"blocked": True}),
+    ("fi", "paljonko ikkunoita", "count_window", {"measure": "count", "obj": "window"}),
+    ("fi", "keittiön koko", "area_rooms_of_type", {**_TK, "types": ["kitchen"]}),
+    ("fi", "kuinka iso kylpyhuone on", "area_rooms_of_type", {**_TK, "types": ["bathroom"]}),
+    ("en", "how big r the bedrooms", "area_rooms_of_type", {**_TK, "types": ["bedroom"]}),
+    ("en", "biggest room?", "area_room_largest", {"measure": "area", "obj": "room", "variant": "max"}),
+    ("en", "how many rooms in apartment A", "count_room",
+     {"measure": "count", "obj": "room", "apartment": "A", "apartment_scope": True}),
+    ("de", "Wieviele Zimmer hat die Wohnung?", "count_room", {"measure": "count", "obj": "room", "apartment_scope": True}),
+    ("en", "floor area of the whole floor", "area_room_total", {"measure": "area", "obj": "room", "variant": "total"}),
+    ("en", "how many dooors in the ground floor", "count_door", {"measure": "count", "obj": "door"}),
+    ("en", "how many apartments on this floor", "count_apartment", {"measure": "count", "obj": "apartment"}),
+    ("fi", "ulko-ovet?", "count_door", {"measure": "count", "obj": "door"}),
+    ("fi", "Kuinka monta ulko-ovea?", "count_door", {"measure": "count", "obj": "door"}),
+    ("en", "bedrooms?", "count_bedroom", {"measure": "count", "obj": "bedroom"}),
+    ("en", "doors?", "count_door", {"measure": "count", "obj": "door"}),
+    ("en", "how big is the lounge", "area_rooms_of_type", {**_TK, "types": ["living"]}),
+    ("en", "how many bathrooms", "count_bathroom", {"measure": "count", "obj": "bathroom"}),
+    # box user-journey round 1
+    ("en", "count doors", "count_door", {"measure": "count", "obj": "door"}),
+    ("en", "windows?", "count_window", {"measure": "count", "obj": "window"}),
+    ("fi", "ikkunat", "count_window", {"measure": "count", "obj": "window"}),
+    ("en", "Show me the toilets", "count_toilet", {"measure": "count", "obj": "toilet"}),
+    ("en", "WCs", "count_toilet", {"measure": "count", "obj": "toilet"}),
+    ("fi", "laske pesualtaat", "count_washbasin", {"measure": "count", "obj": "washbasin"}),
+    ("de", "Fensteranzahl bitte", "count_window", {"measure": "count", "obj": "window"}),
+    ("fi", "kerro montako huonetta", "count_room", {"measure": "count", "obj": "room"}),
+    # QA priority round (the storey itself is resolved by the router on plan sheets, bpqa/router.py named_storey)
+    ("fi", "Kuinka motna ikkunaa koko talossa on?", "count_window",
+     {"measure": "count", "obj": "window", "whole_model": True}),
+    ("en", "How many doors are on the 3rd floor?", "count_door", {"measure": "count", "obj": "door"}),
+    ("fi", "Kuinka monta ovea 5. kerroksessa on?", "count_door", {"measure": "count", "obj": "door"}),
+    ("en", "How many floors does the building have?", "count_storey", {"measure": "count", "obj": "storey"}),
+]

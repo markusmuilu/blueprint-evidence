@@ -108,7 +108,9 @@ def test_policy_rules_first():
 
 def test_policy_weak_parses():
     p = RuleParser()
-    assert P.weak(p.parse("sinks please"), "sinks please")                            # no measure: no parse
+    assert P.weak(p.parse("tell me about the sinks"), "tell me about the sinks")      # no measure: no parse
+    s = p.parse("sinks please")                         # a fragment that starts with a plural noun: a count (QA 14 Nov)
+    assert (s.measure, s.obj) == ("count", "sink") and P.weak(s, "sinks please") is None
     q = "how many cubic metres of walls are there"
     assert "units" in P.weak(p.parse(q), q)                                           # a count read for a volume
     q = "wall tiles for the bathroom up to 1.2 m"
@@ -189,3 +191,46 @@ def test_parse_call_has_its_own_deadline_and_failures_are_not_cached(monkeypatch
     q = P.llm_parse("doors pls?")                                         # served from the cache, no third call
     assert q.ok() and len(seen) == 2 and seen == [4.0, 4.0]
     assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+def test_room_type_never_dropped_qa_nov14():
+    # an LLM reading that drops the named room type is typed from the question, or rejected
+    r, _ = P.normalise({"intent": "count_room"}, "how many offices")
+    assert r["intent"] == "count_office"
+    assert P.normalise({"intent": "count_room"}, "how many hallways")[0] is None          # no count route for halls
+    assert P.normalise({"intent": "count_room"}, "how many server rooms")[0] is None      # unknown room type
+    r, _ = P.normalise({"intent": "area_room_total"}, "area of the meeting rooms")
+    assert r["intent"] == "area_rooms_of_type" and r["types"] == ["meeting"]
+    r, _ = P.normalise({"intent": "area_room_named", "name": "kylpyhuone"}, "kuinka iso kylpyhuone on")
+    assert r["intent"] == "area_rooms_of_type" and r["types"] == ["bathroom"]
+    # a rule parse that would sum all rooms for an unknown room type is blocked (the router abstains)
+    q = P.read("area of lab rooms", use_llm=False)
+    assert q.extra.get("blocked")
+    assert not P.read("total area of all rooms", use_llm=False).extra.get("blocked")
+
+
+def test_casual_phrasings_qa_nov14():
+    assert P.casual("how big r the bedrooms") == "how big are the bedrooms"
+    assert P.casual("how many dooors in the ground floor") == "how many doors in the ground floor"
+    assert P.casual("What is the total area of all rooms?") == "What is the total area of all rooms?"
+    for text, obj in [("bedrooms?", "bedroom"), ("doors?", "door"), ("ulko-ovet?", "door"),
+                      ("paljonko ikkunoita", "window"), ("windows whole house", "window")]:
+        q = P.read(text, use_llm=False)
+        assert (q.measure, q.obj) == ("count", obj), text
+    assert P.read("windows whole house", use_llm=False).extra.get("whole_model")
+    assert P.read("hur många fönster i hela huset", use_llm=False).extra.get("whole_model")
+    q = P.read("biggest room?", use_llm=False)
+    assert (q.measure, q.obj, q.variant) == ("area", "room", "max")
+    q = P.read("how many rooms in apartment A", use_llm=False)
+    assert (q.obj, q.apartment, q.extra.get("apartment_scope")) == ("room", "A", True)
+
+
+def test_count_word_typos_and_storey_phrases():
+    assert P.casual("Kuinka motna ikkunaa koko talossa on?") == "Kuinka monta ikkunaa koko talossa on?"
+    q = P.read("Kuinka motna ikkunaa koko talossa on?", use_llm=False)
+    assert (q.measure, q.obj, bool(q.extra.get("whole_model"))) == ("count", "window", True)
+    from bpqa.router import STOREY_NAMED
+    for s in ("how many doors are on the 3rd floor?", "doors on 3.korrus", "kuinka monta ovea 5. kerroksessa on",
+              "doors on the second floor", "doors on level 2"):
+        assert STOREY_NAMED.search(s), s
+    assert not STOREY_NAMED.search("how many doors are on this floor plan?")

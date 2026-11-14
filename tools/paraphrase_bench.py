@@ -94,6 +94,10 @@ def build() -> int:
         rows.append({"id": f"{intent}-{lang}-x{seen[(intent, lang)]:02d}", "text": text, "lang": lang, "intent": intent,
                      "expected": _expected(intent, text, slots), "split": "tune" if j % 7 == 3 else "heldout",
                      "set": "extra"})
+    from paraphrase_cases_extra import QA_NOV14
+    for k, (lang, text, intent, exp) in enumerate(QA_NOV14):
+        rows.append({"id": f"qa1114-{lang}-{k:02d}", "text": text, "lang": lang, "intent": intent, "expected": exp,
+                     "split": "tune", "set": "qa"})
     DATA.parent.mkdir(parents=True, exist_ok=True)
     with DATA.open("w", encoding="utf-8") as f:
         for r in rows:
@@ -142,10 +146,17 @@ def signature(q, question: str) -> dict | None:
 
 
 def matches(case: dict, q) -> bool:
-    exp = case["expected"]
+    exp = dict(case["expected"] or {})
+    if exp.pop("blocked", False):              # a room type no route filters by: the router abstains
+        return bool(q.extra.get("blocked"))
     if case["intent"] == "other":
-        return (not q.ok() or q.extra.get("compound") or q.extra.get("unresolved_scope")
+        return (not q.ok() or q.extra.get("compound") or q.extra.get("unresolved_scope") or q.extra.get("blocked")
                 or (q.measure == "text" and q.obj != "scale"))
+    if q.extra.get("blocked"):
+        return False
+    for flag in ("whole_model", "apartment_scope"):     # checked only where a case states them
+        if flag in exp and bool(q.extra.get(flag)) != exp.pop(flag):
+            return False
     got = signature(q, case["text"])
     if got is None:
         return False

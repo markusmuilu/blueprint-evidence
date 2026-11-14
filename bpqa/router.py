@@ -6,13 +6,17 @@ Order of preference, cheapest and most verifiable first:
   3. the PDF's own vector linework (pdf-vector), when no DXF/IFC twin exists or twins are ignored
   4. raster computer vision (classical, no model)
   5. nemotron (bpqa/routes/nemotron.py): a vision-language model, only when nothing above can answer;
-     its answer must carry boxes of what it relied on, is validated and marked tier "estimate"
+     its answer must carry boxes of what it relied on, is validated and marked tier "estimate". Scans only (and
+     scanned PDFs): on vector drawings it was rarely right where the file's own data could not answer
+     (NEMO_ESTIMATE_VECTOR=1 turns it back on there)
 
 A route returns an Answer or abstains with a reason; the router then tries the next route.
 Routes 1 to 4 cost $0 in model calls; route 5 is the only one that calls a model.
 """
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -141,6 +145,102 @@ def calibrate(a: Answer, query: Query) -> Answer:
 
 
 def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
+    query, a = _solve(ctx, query)
+    if a.answered and query.measure == "area" and isinstance(a.value, float):
+        a.value = round(a.value, 2)     # areas are stated to the centimetre squared (QA 14 Nov: "536.718")
+    if a.answered and query.extra.get("scope_resolved"):
+        a.explanation = f"{query.extra['scope_resolved']}. {a.explanation or ''}".strip()
+    return query, a
+
+
+# The ground floor named without quotes on a plan sheet whose storey is the ground floor: the sheet's own storey
+GROUND_Q = re.compile(r"\b(ground floor|ground level|erdgeschoss|pohjakerros|maantasokerros|bottenvaningen?|"
+                      r"stueetage|rez-de-chaussee|piano terra|pianterreno|esimene korrus)\b")
+GROUND_STOREY = re.compile(r"erdgeschoss|^eg\b|ground|grundplan|stue|pohjakerros|bottenv|rez-de|terra|^0+$|level 0|"
+                           r"^1\.? ?korrus")
+
+
+def sheet_names_ground(ctx: Context, query: Query) -> str:
+    """The storey name when the question names the ground floor and the plan sheet shows it, else ''."""
+    from .query import fold, strip_quoted
+    if ctx.q.ext not in ("pdf", "svg") or ctx.model_ifc() is None or query.extra.get("compound"):
+        return ""
+    f = fold(strip_quoted(ctx.q.question))
+    if not GROUND_Q.search(f) or re.search(r"\b(first|second|upper|top|basement|attic|level \d)\b", f):
+        return ""
+    try:
+        from .routes import ifc_route
+        st, _ = ifc_route.sheet_storey(ifc_route.load(str(ctx.model_ifc())), ctx)
+    except Exception:
+        return ""
+    return st.Name if st is not None and GROUND_STOREY.search(fold(st.Name or "").strip()) else ""
+
+
+# A storey named without quotes: "on the 3rd floor", "on 3.korrus", "5. kerroksessa", "level 2", "2. Sal"
+_ORD = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8,
+        "ninth": 9, "tenth": 10}
+STOREY_NAMED = re.compile(
+    r"\b(?P<n1>\d{1,2})(?:st|nd|rd|th)?\.? ?(?:floor|level|storey|story)\b"
+    r"|\b(?P<w>first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth) (?:floor|level|storey|story)\b"
+    r"|\b(?P<n2>\d{1,2})\. ?(?:korrus\w*|kerro\w*|sal\b|og\b|obergeschoss\w*|etage\w*|stock\w*|vaning\w*|plan\b)"
+    r"|\b(?:level|floor|storey|kerros|korrus|etage|geschoss) (?P<n3>\d{1,2})\b")
+
+
+def named_storey(ctx: Context, query: Query) -> tuple[str, str, bool] | None:
+    """(storey name, note, resolved) for an IFC-backed drawing whose question names a storey by number without
+    quotes; None when no storey is named (or the question quotes one, which the rules already read)."""
+    from .query import fold, strip_quoted
+    if query.level or ctx.model_ifc() is None or ctx.q.ext not in ("pdf", "svg"):
+        return None                     # plan sheets only: a question on the .ifc keeps its own scope handling
+    f = fold(strip_quoted(ctx.q.question))
+    m = STOREY_NAMED.search(f)
+    if not m:
+        return None
+    n = int(m.group("n1") or m.group("n2") or m.group("n3") or _ORD[m.group("w")])
+    phrase = m.group(0)
+    from .routes import ifc_route
+    M = ifc_route.load(str(ctx.model_ifc()))
+    names = [s.Name or "" for s in M.storeys]
+    hits = [s for s in names if re.search(rf"(?<!\d){n}(?!\d)", fold(s)) and not re.search(r"\d{3,}", fold(s))]
+    if len(hits) != 1:
+        return "", (f"the question names '{phrase}', which matches {'no storey' if not hits else 'several storeys'} of "
+                    f"this model (storeys: {', '.join(names)})"), False
+    # a ground storey with a name and no number (Grundplan, Erdgeschoss) shifts the count by one: say so. Where the
+    # ground storey is itself numbered (1.korrus) the number is unambiguous
+    ground = [s for s in names if GROUND_STOREY.search(fold(s).strip()) and not re.search(r"\d", s)]
+    note = f"'{phrase}' read as storey {hits[0]} (by its number)"
+    if ground:
+        note += f"; counted from the ground floor ({ground[0]}) it could also mean the storey below"
+    return hits[0], note, True
+
+
+def _image_estimate_allowed(ctx: Context) -> bool:
+    """The Nemotron image estimate as a last resort: kept for scans, skipped for vector drawings (IFC sheets, CAD,
+    vector PDFs) unless NEMO_ESTIMATE_VECTOR=1. Measured on dev, 14 Nov: see CHANGELOG (it was rarely right there, and
+    every such 'cannot' waited about 16 s for it)."""
+    if os.environ.get("NEMO_IMAGE_ESTIMATE", "1").lower() in ("0", "off", "false", "no"):
+        return False                    # the live app (deploy/web.py) drops the image estimate entirely
+    if ctx.q.ext in RASTER_EXT:
+        return True
+    if os.environ.get("NEMO_ESTIMATE_VECTOR", "0").lower() in ("1", "on", "true", "yes"):
+        return True
+    if ctx.q.ext == "pdf" and ctx.sibling("dxf") is None and ctx.model_ifc() is None:
+        return not _pdf_is_vector(str(ctx.file))     # a scanned PDF keeps the estimate
+    return False
+
+
+@lru_cache(maxsize=64)
+def _pdf_is_vector(path: str) -> bool:
+    """True when the first page carries linework (a CAD export), False for a scan embedded as an image."""
+    try:
+        import pymupdf
+        with pymupdf.open(path) as doc:
+            return len(doc[0].get_drawings()) >= 50
+    except Exception:
+        return False
+
+
+def _solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     use_nemo = ctx.nemotron and nemo_client.enabled()
     if query is None:
         # rules first; the language model reads the question only when the rules read nothing, read something no
@@ -149,6 +249,31 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         query = phrasing.read(ctx.q.question, use_llm=use_nemo)
     if not query.ok():
         return query, _try_text(ctx, query, "question not understood by the rule parser (language-model parse off, or it found no measurable question)")
+    ns = None if query.extra.get("compound") or query.obj == "storey" else named_storey(ctx, query)
+    if ns is not None:
+        # "doors on the 3rd floor" asked on the 1.korrus sheet: never the sheet's storey (QA 14 Nov: 46 proven)
+        name, note, ok = ns
+        if not ok:
+            a = abstain("parser", f"not answered: {note}; ask with the storey name")
+            a.final = True
+            return query, a
+        query.level, query.scope = name, "level"
+        query.extra.pop("unresolved_scope", None)
+        query.extra["scope_resolved"] = note
+        from .query import attach_qualifier
+        query = attach_qualifier(ctx.q.question, query)
+    if query.extra.get("unresolved_scope") and not query.extra.get("takeoff", {}).get("scope_named"):
+        st = sheet_names_ground(ctx, query)
+        if st:      # "doors in the ground floor" asked on the Erdgeschoss sheet: the sheet's storey
+            query.extra.pop("unresolved_scope", None)
+            query.extra["scope_resolved"] = f"'ground floor' read as this sheet's storey {st}"
+            from .query import attach_qualifier
+            query = attach_qualifier(ctx.q.question, query)    # qualifiers are not read under an unresolved scope
+    if query.extra.get("blocked") and not (query.extra.get("compound") or query.extra.get("unresolved_scope")):
+        a = abstain("parser", f"not answered: {query.extra['blocked']}. Ask for a room type the drawings name "
+                              f"(bedroom, kitchen, bathroom, WC, office, meeting room ...) or for all rooms")
+        a.final = True
+        return query, a
     if query.extra.get("compound") or query.extra.get("unresolved_scope"):
         return query, _try_text(ctx, query, "compound question or unresolved scope")
     tk = query.extra.get("takeoff")
@@ -165,6 +290,12 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     if ctx.evidence and no_derivatives(ctx):
         ctx.evidence = False   # answer still given; the JSON items list is the evidence
     for fn in candidate_routes(ctx, query):
+        if query.extra.get("apartment_scope") and fn is not dxf_swiss.answer:
+            # "rooms in apartment A": only the Swiss DXF route assigns rooms to apartments; any other would count
+            # every room on the floor
+            ctx.tried.append(qualifiers.route_module(fn))
+            reasons.append(f"{qualifiers.route_module(fn)}: cannot assign rooms to one apartment")
+            continue
         qwhy = qualifiers.cannot_honour(fn, query)   # a qualifier ("fire doors") is never dropped silently
         if qwhy:
             ctx.tried.append(qualifiers.route_module(fn))
@@ -207,6 +338,12 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
             return query, a
     if qualifiers.kinds(query):         # a model looking at the image cannot filter by the qualifier either
         return query, qualifiers.final_abstention(skipped, reasons, query)
+    if use_nemo and not _image_estimate_allowed(ctx):
+        reasons.append("nemotron-estimate: image estimate switched off (NEMO_IMAGE_ESTIMATE=0)"
+                       if os.environ.get("NEMO_IMAGE_ESTIMATE", "1").lower() in ("0", "off", "false", "no") else
+                       "nemotron-estimate: not tried on a vector drawing (an image estimate is rarely right where the "
+                       "file's own data cannot answer)")
+        use_nemo = False
     if use_nemo:                        # last resort: every route above abstained
         try:
             a = nemotron.answer(ctx, query)

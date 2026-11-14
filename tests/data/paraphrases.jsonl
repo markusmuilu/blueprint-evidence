@@ -610,3 +610,39 @@
 {"id": "area_room_named-sv-x01", "text": "hur många kvm är rummet 'Kontor 3'", "lang": "sv", "intent": "area_room_named", "expected": {"measure": "area", "obj": "room", "label": "Kontor 3"}, "split": "heldout", "set": "extra"}
 {"id": "area_room_named-de-x01", "text": "Fläche des Raums 'Lager 2' bitte", "lang": "de", "intent": "area_room_named", "expected": {"measure": "area", "obj": "room", "label": "Lager 2"}, "split": "heldout", "set": "extra"}
 {"id": "area_room_named-de-x02", "text": "gib mir die Größe von Raum 'Kopierraum' im Geschoss 'EG'", "lang": "de", "intent": "area_room_named", "expected": {"measure": "area", "obj": "room", "label": "Kopierraum", "level": "EG"}, "split": "heldout", "set": "extra"}
+{"id": "qa1114-en-00", "text": "windows whole house", "lang": "en", "intent": "count_window", "expected": {"measure": "count", "obj": "window", "whole_model": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-01", "text": "ikkunat koko talo", "lang": "fi", "intent": "count_window", "expected": {"measure": "count", "obj": "window", "whole_model": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-de-02", "text": "wie viele Fenster im ganzen Haus", "lang": "de", "intent": "count_window", "expected": {"measure": "count", "obj": "window", "whole_model": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-sv-03", "text": "hur många fönster i hela huset", "lang": "sv", "intent": "count_window", "expected": {"measure": "count", "obj": "window", "whole_model": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-04", "text": "how many offices", "lang": "en", "intent": "count_office", "expected": {"measure": "count", "obj": "office"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-05", "text": "area of meeting rooms", "lang": "en", "intent": "area_rooms_of_type", "expected": {"measure": "area", "obj": "room", "variant": "type_sum", "material": null, "surface": "floor", "types": ["meeting"]}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-06", "text": "area of lab rooms", "lang": "en", "intent": "other", "expected": {"blocked": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-07", "text": "how many server rooms", "lang": "en", "intent": "other", "expected": {"blocked": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-08", "text": "paljonko ikkunoita", "lang": "fi", "intent": "count_window", "expected": {"measure": "count", "obj": "window"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-09", "text": "keittiön koko", "lang": "fi", "intent": "area_rooms_of_type", "expected": {"measure": "area", "obj": "room", "variant": "type_sum", "material": null, "surface": "floor", "types": ["kitchen"]}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-10", "text": "kuinka iso kylpyhuone on", "lang": "fi", "intent": "area_rooms_of_type", "expected": {"measure": "area", "obj": "room", "variant": "type_sum", "material": null, "surface": "floor", "types": ["bathroom"]}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-11", "text": "how big r the bedrooms", "lang": "en", "intent": "area_rooms_of_type", "expected": {"measure": "area", "obj": "room", "variant": "type_sum", "material": null, "surface": "floor", "types": ["bedroom"]}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-12", "text": "biggest room?", "lang": "en", "intent": "area_room_largest", "expected": {"measure": "area", "obj": "room", "variant": "max"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-13", "text": "how many rooms in apartment A", "lang": "en", "intent": "count_room", "expected": {"measure": "count", "obj": "room", "apartment": "A", "apartment_scope": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-de-14", "text": "Wieviele Zimmer hat die Wohnung?", "lang": "de", "intent": "count_room", "expected": {"measure": "count", "obj": "room", "apartment_scope": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-15", "text": "floor area of the whole floor", "lang": "en", "intent": "area_room_total", "expected": {"measure": "area", "obj": "room", "variant": "total"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-16", "text": "how many dooors in the ground floor", "lang": "en", "intent": "count_door", "expected": {"measure": "count", "obj": "door"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-17", "text": "how many apartments on this floor", "lang": "en", "intent": "count_apartment", "expected": {"measure": "count", "obj": "apartment"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-18", "text": "ulko-ovet?", "lang": "fi", "intent": "count_door", "expected": {"measure": "count", "obj": "door"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-19", "text": "Kuinka monta ulko-ovea?", "lang": "fi", "intent": "count_door", "expected": {"measure": "count", "obj": "door"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-20", "text": "bedrooms?", "lang": "en", "intent": "count_bedroom", "expected": {"measure": "count", "obj": "bedroom"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-21", "text": "doors?", "lang": "en", "intent": "count_door", "expected": {"measure": "count", "obj": "door"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-22", "text": "how big is the lounge", "lang": "en", "intent": "area_rooms_of_type", "expected": {"measure": "area", "obj": "room", "variant": "type_sum", "material": null, "surface": "floor", "types": ["living"]}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-23", "text": "how many bathrooms", "lang": "en", "intent": "count_bathroom", "expected": {"measure": "count", "obj": "bathroom"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-24", "text": "count doors", "lang": "en", "intent": "count_door", "expected": {"measure": "count", "obj": "door"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-25", "text": "windows?", "lang": "en", "intent": "count_window", "expected": {"measure": "count", "obj": "window"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-26", "text": "ikkunat", "lang": "fi", "intent": "count_window", "expected": {"measure": "count", "obj": "window"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-27", "text": "Show me the toilets", "lang": "en", "intent": "count_toilet", "expected": {"measure": "count", "obj": "toilet"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-28", "text": "WCs", "lang": "en", "intent": "count_toilet", "expected": {"measure": "count", "obj": "toilet"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-29", "text": "laske pesualtaat", "lang": "fi", "intent": "count_washbasin", "expected": {"measure": "count", "obj": "washbasin"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-de-30", "text": "Fensteranzahl bitte", "lang": "de", "intent": "count_window", "expected": {"measure": "count", "obj": "window"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-31", "text": "kerro montako huonetta", "lang": "fi", "intent": "count_room", "expected": {"measure": "count", "obj": "room"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-32", "text": "Kuinka motna ikkunaa koko talossa on?", "lang": "fi", "intent": "count_window", "expected": {"measure": "count", "obj": "window", "whole_model": true}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-33", "text": "How many doors are on the 3rd floor?", "lang": "en", "intent": "count_door", "expected": {"measure": "count", "obj": "door"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-fi-34", "text": "Kuinka monta ovea 5. kerroksessa on?", "lang": "fi", "intent": "count_door", "expected": {"measure": "count", "obj": "door"}, "split": "tune", "set": "qa"}
+{"id": "qa1114-en-35", "text": "How many floors does the building have?", "lang": "en", "intent": "count_storey", "expected": {"measure": "count", "obj": "storey"}, "split": "tune", "set": "qa"}

@@ -17,11 +17,11 @@ import re
 
 # part regexes per room type, matched against an upper-cased, accent-folded part
 ROOM_PATTERNS = {
-    "bedroom": r"MH\d?|MHH|MAKUUH(UONE)?\d?|SOVRUM|SOV\d?",
+    "bedroom": r"MH\d?|MHH|MAKUUH(UONE)?\d?|SOVRUM|SOV\d?|BR\d?",   # BR, BR1: English listing plans
     "kitchen": r"K|KK|KT|KEI?T+I*O?|KETT+IO|KEITTOKOMERO|AVOK|AVOKEITTIO|TUPAK|TUPAKEITTIO|APUK|APUKEITTIO|KOK|KOKSVRA",
     "sauna": r"S|SAUNA|LH|LOYLYH(UONE)?|BASTU",
     "wc_room": r"WC\d?",
-    "bathroom": r"KH\d?|KPH\d?|PH\d?|PE|PESUH(UONE)?\d?|SH\d?|KYLPYH(UONE)?|SUIHKUH(UONE)?|BADRUM|BAD|DUSCH",
+    "bathroom": r"KH\d?|KPH\d?|PH\d?|PE|PESUH(UONE)?\d?|SH\d?|KYLPYH(UONE)?|SUIHKUH(UONE)?|BADRUM|BAD|DUSCH|BA|BATH",   # BA, BATH: listing plans
     "balcony": r"PARVEKE\d?|PARV|LASIT(ETTU)?PARVEKE|LPARVEKE|BALKONG",
 }
 

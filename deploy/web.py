@@ -35,6 +35,9 @@ from fastapi import Request                      # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse, Response   # noqa: E402
 from starlette.routing import Mount              # noqa: E402
 
+# live app: no Nemotron image estimate (QA 14 Nov: 5 right, 5 wrong among judgeable live answers, 8 to 104 s waits);
+# the language-model question reading stays on
+os.environ.setdefault("NEMO_IMAGE_ESTIMATE", "0")
 os.environ.setdefault("NEMO_DEADLINE_S", "15")   # live app: Nemotron gets 15 s per call, then an honest "cannot prove"
 from app import server                           # noqa: E402
 

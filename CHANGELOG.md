@@ -3,6 +3,63 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: casual phrasings, branch `phrasing-2`
+
+QA asked 50 casual questions on the live app: 30 fine, 3 wrong proven, the rest not understood. Fixed in general ways.
+
+- **A named room type is never dropped.** "How many offices" on Molio Grundplan was 13 proven (every IfcSpace, the
+  model parse read count_room); "area of meeting rooms" was 536.718 proven (every space, the rules read the total).
+  New room types office (Kontor, Büro, toimisto ...) and meeting room (Møde / Møderum, conference, neuvotteluhuone ...),
+  with count intents. Grundplan has neither: 0 offices proven, and "none on this floor: 0 m2" (2. Sal: 7 offices, one
+  Møderum 67.51 m2). The normaliser turns a count_room / area_room_total reading into the typed intent when the question
+  names a type, and rejects it when the type has no route. A room word the vocabulary does not know ("lab rooms",
+  "locker rooms", "X-RAY rooms") makes the rule parse a final abstention instead of all rooms.
+- **Whole house** ("whole house", "koko talo", "im ganzen Haus", "hela huset") means the whole building: FZK
+  Erdgeschoss "windows whole house" 9 -> 11 proven.
+- **Casual forms** read by the rules: a bare plural with a question mark ("bedrooms?", "doors?", "ulko-ovet?") or a short
+  fragment that starts with one ("windows whole house") is a count; "paljonko ikkunoita"; "keittiön koko" (genitive +
+  koko); "kuinka iso kylpyhuone on"; "how big r the bedrooms" and stretched letters ("dooors") through a small
+  normaliser (`phrasing.casual`, changes none of the 6,789 dataset questions); "biggest room?" (new intent
+  area_room_largest: Swiss DXF and IFC); "floor area of the whole floor" (Swiss DXF now answers the room total).
+- **Rooms per apartment** on Swiss DXF: "how many rooms in apartment A" = rooms labelled living room, bedroom or
+  generic room inside the outline (4 on site3387, estimate, the others listed); "die Wohnung" on a floor with two flats
+  is a final abstention that gives both counts.
+- **Apartments on an IFC storey** from the space numbering <flat>-<room> (Esplanades 1.korrus: 10, estimate).
+- **"in the ground floor"** on an IFC plan sheet whose storey is the ground floor is the sheet's storey (was
+  "unresolved scope").
+- **A storey named in the question is used on a plan sheet** (wrong proven before: Esplanades 1.korrus sheet "How
+  many doors are on the 3rd floor?", "on 3.korrus", "5. kerroksessa" all gave the sheet's 46). "3rd floor", "third
+  floor", "3.korrus", "5. kerroksessa", "2. Sal", "level 2" are matched to the model's storey by number and the answer
+  says which storey was taken (3.korrus: 42 doors; 5.korrus: 39; fire doors on 4.korrus: 21). Where the ground storey
+  has a name and no number (Molio Grundplan), "2nd floor" is read as 2. Sal and the answer says it could mean the
+  storey below. A number that matches no storey, or several, is a final abstention. Plan sheets only; questions on the
+  .ifc itself keep their scope handling.
+- **Floor count on IFC**: "How many floors does the building have?" counts the storeys that hold rooms and names the
+  others (Esplanades: 5, 1.korrus to 5.korrus, plus Vundament and Katus; it was 7 from the property lookup).
+- **Typos in count words**: motna, kuinak, montaako, how mnay.
+- **NEMO_IMAGE_ESTIMATE=0** turns the Nemotron image estimate off entirely (the question reading stays); the live app
+  (deploy/web.py) sets it.
+- **Box user-journey round 1**: "count doors", "windows?", "ikkunat", "WCs", "Show me the toilets", "laske
+  pesualtaat", "Fensteranzahl bitte" are counts (one-word plurals; count / laske / zähle / show me / -anzahl as count
+  cues for an object that is counted). English listing abbreviations are room labels as whole tokens: BR / BR 1
+  (bedroom), LR (living), DR (dining), BA / BATH (bathroom).
+- **Lounge, sitting room** are living-room labels (Tyneside "how big is the lounge" now finds the label; the plan has no
+  printed areas or scale, so it still cannot answer).
+- **Areas are rounded to 2 decimals** in answers.
+- **No image estimate on vector drawings.** On dev (Swiss, IFC, IFC-Bench, OpeningDesign PDFs), 38 questions had every
+  rule route abstain; the Nemotron image estimate answered 13 of them and 3 were right (8% of the 38, 23% of its
+  answers). The router now skips it for IFC sheets, CAD and vector PDFs (kept for scans and scanned PDFs;
+  NEMO_ESTIMATE_VECTOR=1 restores it), so those "cannot" answers return in about a second instead of about 16 s.
+
+Dataset parses (all 6,789 distinct full-set questions, through `phrasing.read` without the model): 5 parses changed,
+all IFC-Bench / OpeningDesign text questions (meeting and office rooms now typed; "largest room ... first floor" and the
+office questions keep their compound or unresolved-scope route), and 4 more now abstain instead of summing every room
+(X-RAY, locker, sterilization rooms, "rooms named OFFICE" in a schedule). Dev (swiss_dwellings, ifc_models, ifc_bench,
+cubicasa5k, 5,245 questions, after merging main): 0 answers changed correctness, accuracy 85.2% and precision 86.2%
+before and after. Area values are rounded to 2 decimals; two scan answers (high_quality_architectural-11769, showers
+and bathtubs) went 3 -> 4, gold 1, wrong both times: a printed BATH next to a tub now reads as a bathroom label, the
+reason BATH had been left out. Kept because it changed no dev result; watch it.
+
 ## 2026-11-14: qualifiers follow-up, branch `qualifiers-2`
 
 QA retest of the qualifier rule (20 of 24 phrasings passed). Four fixes.
