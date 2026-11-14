@@ -75,6 +75,40 @@ Where estimates are weak (dev, cubi2 + TTA): kitchens (104 estimates, 23% right)
 questions right 93% and 91% of the time, but it is a constant, not a reading of the plan, so it is not
 used. Shower/bath counts are all estimates (48% right on dev, the constant gets 76%).
 
+### Full set, test split, all CubiCasa questions with the checking layer (cubi2, before the tiled model)
+
+The OCR cache for the 1,510 full-set test images was filled overnight, so the label routes and checks
+could run on the full test split too (27,160 CubiCasa questions in all languages). "Before" is main's
+behaviour: `--no-tiers` with main's cubi2 thresholds (on dev this reproduces main's numbers exactly).
+The other sources are unchanged by this branch (12,647 questions, 12,032 right, 99.0% precise), so the
+overall line adds them to both columns.
+
+| object | n | before: exact | before: precision | after: exact | proven: n / precision | estimate: n / precision | dev-majority baseline |
+|---|---|---|---|---|---|---|---|
+| storey | 3020 | 89.4% | 92.2% | 90.5% | 2928 / 92.2% | 92 / 37.0% | 81.5% |
+| balcony | 942 | 71.8% | 87.6% | 85.8% | 772 / 87.6% | 170 / 77.6% | 51.4% |
+| WC room | 1450 | 72.3% | 82.0% | 81.2% | 1278 / 82.0% | 172 / 75.6% | 55.0% |
+| bedroom | 1914 | 57.6% | 86.4% | 75.1% | 1276 / 86.4% | 638 / 52.7% | 31.5% |
+| kitchen | 2090 | 55.3% | 98.8% | 64.0% | 1170 / 98.8% | 920 / 19.8% | 96.1% |
+| bathroom | 1484 | 53.2% | 96.8% | 79.0% | 816 / 96.8% | 668 / 57.2% | 88.8% |
+| sauna | 2152 | 19.7% | 81.9% | 63.6% | 518 / 81.9% | 1634 / 57.8% | 56.8% |
+| toilet | 3016 | 80.3% | 85.0% | 84.9% | 2870 / 86.8% | 146 / 46.6% | 62.5% |
+| sink | 2982 | 57.5% | 74.5% | 69.7% | 2394 / 77.9% | 588 / 36.1% | 52.8% |
+| door | 2274 | 23.2% | 76.3% | 52.0% | 1150 / 68.5% | 1124 / 35.1% | 12.0% |
+| window | 3020 | 24.9% | 64.2% | 39.7% | 1092 / 68.1% | 1928 / 23.5% | 12.9% |
+| shower/bath | 2816 | 0% | - | 50.2% | 0 / - | 2816 / 50.2% | 77.3% |
+| **CubiCasa** | 27160 | 49.0% | 84.4% | 68.0% | 16264 / 84.8% | 10896 / 43.0% | |
+| **all sources** | 39807 | 63.7% | | 76.6% | | | |
+
+One more check came out of the dev analysis: a shower or bathtub found by the detector means at least one
+bathroom, so a zero bathroom count becomes an estimate of 1 (on dev, of the bathroom questions with no
+label read, the 14 with a detected shower all had one bathroom). Bathrooms on dev 60.8% -> 79.7%, on
+the full test split 53.2% -> 79.0% (the estimates are 57% right).
+
+Still below the constant answer: kitchens (estimates 20% right: no label or two labels read while the plan
+has one kitchen), bathrooms and showers/baths. Those are the places where the plan's own evidence is
+missing or misread; the constant is not used because it does not read the plan.
+
 ### Test-time augmentation (`tta` per object in the thresholds file)
 
 The detector runs on the eight rotations and mirrors of the image; boxes are mapped back and either
