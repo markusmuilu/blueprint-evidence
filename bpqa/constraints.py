@@ -20,7 +20,7 @@ import re
 from .answer import Answer, abstain
 from .query import fold
 
-UNIT_AFTER = r"\s*(?:mm|cm|m2|m²|m\^2|m3|m³|m\b|metres?|meters?|sq|square|%|percent|prosent|neli\w*|kpl|pcs|x\b)"
+UNIT_AFTER = r"\s*(?:mm|cm|m2|m²|m\^2|m3|m³|m\b|metres?|meters?|metri\w*|millimet\w*|senttimet\w*|sq|square|%|percent|prosent|neli\w*|kpl|pcs|x\b)"
 
 GROUP = re.compile(r"\b(apartment|flat|unit|wohnung|whg\.?|huoneisto|asunto|korter|appartement|appartamento|"
                    r"lagenhet|lejlighed)\s+(?:no\.?\s*|nr\.?\s*|number\s+)?([A-Z]|\d{1,3})(?![\w.])")
@@ -33,6 +33,15 @@ COMPARE = re.compile(r"\b(wider|narrower|taller|higher|shorter|longer|larger|big
                      r"more|less|over|under|above|below|at least|at most|exceeding|breiter|schmaler|hoher|grosser|"
                      r"kleiner|leveampi|leveampia|korkeampi|korkeampia|suurempi|suurempia|pienempi|pienempia|yli|alle)"
                      r"\s+(?:than\s+|als\s+|kuin\s+)?(\d+(?:[.,]\d+)?)" + UNIT_AFTER)
+# "wider than 0.9", "leveämpi kuin 0.9": a comparison even without a unit, never a room number (QA 14 Nov, box round 2)
+COMPARE_BARE = re.compile(r"\b(wider|narrower|taller|higher|shorter|longer|larger|bigger|smaller|greater|thicker|thinner|"
+                          r"more|less|breiter|schmaler|hoher|grosser|kleiner|leveampi|leveampia|kapeampi|kapeampia|"
+                          r"korkeampi|korkeampia|matalampi|matalampia|suurempi|suurempia|pienempi|pienempia)"
+                          r"\s+(?:than|als|kuin)\s+(\d+(?:[.,]\d+)?)(?![\d.,])")
+# steps of a stair are their own object: a count of IfcStair does not answer "how many steps" (QA 14 Nov, box round 2)
+STEPS = re.compile(r"\bsteps?\b|\brisers?\b|\btreads?\b|\baskel\w*|\bporrasaskel\w*|\bportaan ?askel\w*|\bstufen?\b|"
+                   r"\bsteigungen\b|\bauftritte?\b|\btrappsteg\w*|\bnousu(?:ja|t|a)?\b|\bmarches\b|\bgradini\b")
+STEPS_ANSWERED = re.compile(r"riser|tread|NumberOf|steps", re.I)
 FIRE_CLASS = re.compile(r"\b(R?EI|EW|E|T|F)\s?-?(\d{2,3})\b")
 FIRE_CTX = re.compile(r"fire|palo|brand|feuer|rating|class|luokk|klasse|resist")
 WHO = re.compile(r"\bfor (men|women|ladies|gentlemen|males|females|staff|employees|children|the disabled|disabled)\b|"
@@ -109,6 +118,13 @@ def detect(question: str) -> list[dict]:
     for m in COMPARE.finditer(f):
         out.append({"kind": "compare", "value": m.group(2).replace(",", "."), "phrase": m.group(0).strip()})
         taken.append(m.span())
+    for m in COMPARE_BARE.finditer(f):
+        if free(m):
+            out.append({"kind": "compare", "value": m.group(2).replace(",", "."), "phrase": m.group(0).strip()})
+            taken.append(m.span())
+    m = STEPS.search(f)
+    if m:
+        out.append({"kind": "steps", "value": m.group(0), "phrase": m.group(0)})
     for m in STOREY.finditer(f):
         out.append({"kind": "storey", "value": m.group(0), "phrase": m.group(0)})
         taken.append(m.span())
@@ -267,6 +283,11 @@ def unused(ctx, query, ans: Answer, cons: list[dict] | None = None) -> list[dict
                                                                                r"smaller|more than|less than|over|under|>|<|at least", text):
                 continue
             out.append({**c, "why": f"the question filters by '{c['phrase']}', and the answer did not apply that filter"})
+        elif k == "steps":
+            if ans.unit != "count" or STEPS_ANSWERED.search(text):
+                continue
+            out.append({**c, "why": f"the question asks for the steps of a stair ('{c['phrase']}'), and the answer "
+                                    f"counts other objects (stairs, not their steps)"})
         elif k == "fire_class":
             if _norm(v) in tn:
                 continue

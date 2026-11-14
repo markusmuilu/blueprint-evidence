@@ -29,7 +29,7 @@ REBAR_WORDS = re.compile(
     r"\bstab(?:stahl|e)\b|\bstahl\b|\bbetonistee\w*|\bteraks\w*|\bferraillage\b|\barmature\b")
 BREAKDOWN = re.compile(r"\bby types?\b|\bper types?\b|\beach types?\b|\bevery types?\b|\bby thickness\b|\bper thickness\b|\bbreakdown\b|"
                        r"\bgrouped?\b|\bbroken down\b|\bnach typ\w*|\bpro typ\w*|\btyypeittain\b|\btyypin mukaan\b|\bper typ\b|\bpar type\b|"
-                       r"\bslab types?\b")
+                       r"\bslab types?\b|\bpaksuuksittain\b|\bpaksuuden mukaan\b|\bpaksuuksien mukaan\b|\btyypeittain\b|\bnach dicke\b")
 GROSS = re.compile(r"\bgross\b|\bbrutto\b|\bbruttoala\b|\bbrut\b")
 KINDS = [("BASESLAB", r"\bbase ?slabs?\b|\bfoundation slabs?\b|\bslabs? on grade\b|\bground slabs?\b|\bbodenplatte\w*|\balapohja\w*|\bbottenplatt\w*"),
          ("ROOF", r"\broof slabs?\b|\bylapohja\w*|\bdachdecke\w*|\btakplatt\w*"),
@@ -43,7 +43,9 @@ def parse_slab(question: str) -> dict | None:
     area / quantity (or for reinforcement) are read here; the slab volume and slab type text questions keep their routes."""
     f = fold(strip_quoted(question))
     if not SLAB_WORDS.search(f):
-        return None
+        from .query import fi_slab
+        if not fi_slab(f):          # "laattojen pinta-ala paksuuksittain": Finnish laatta with a slab context
+            return None
     rebar = bool(REBAR_WORDS.search(f))
     if not (AREA_WORDS.search(f) or rebar):
         return None

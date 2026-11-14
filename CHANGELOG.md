@@ -3,6 +3,20 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: IFC hunt (QA box round 2), branch `ifc-hunt`
+
+Two wrong proven answers on the FZK EG sheet fixed: "laattojen pinta-ala paksuuksittain" was the sum of 6 IfcSpace areas
+(98.83, proven) and is now the slab report (120.00 m2, 200 mm, proven, as the English question); Finnish laatta reads as
+slab only next to paksuus / betoni / kantava / välipohja / alapohja / holvi, so tiling takeoffs keep it as tile. "How many
+steps does the staircase have" / "porras askelta" counted IfcStair (1, proven); steps are now their own object, read
+from IfcStairFlight NumberOfRisers / Pset_StairFlightCommon (FZK records none: a cannot), and the guard withdraws any
+stair count given for a steps question. Door / window size filters ("wider than 0.9 m", "leveämpi kuin 0.9 metriä")
+filter IfcDoor / IfcWindow by OverallWidth / OverallHeight (estimate: no dev question measures them); the guard reads
+"kuin 0.9 metriä" as a comparison, not room 0.9. "How wide are the doors" lists the widths with counts (estimate).
+"Paljonko betonia on laatoissa" is the slab volume; the IFC route now filters by material name (estimate). Colloquial
+fillers (kuinkas, sitten, nyt, siis) are dropped before parsing. Demo gate: 0 of 979 answers differ. Dev unchanged per
+question: ifc_models proven 1689 at 99.8% (2224 q), ifc_bench proven 8 at 25.0% (439 q).
+
 ## 2026-11-14: text lookups calibrated like scan routes, branch `ifc-text-tiers`
 
 Free-text / property lookups (ifc-props, pdf-text, piping via router._try_text) were proven whenever they answered;

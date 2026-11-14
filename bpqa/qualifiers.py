@@ -24,7 +24,8 @@ NEEDS = {
     "material": "the element material", "orientation": "facade orientation",
 }
 # qualifier kinds each route filters by (routes are named by their module)
-HONOURS = {"ifc_route": {"fire", "external", "internal", "sliding", "double", "loadbearing", "emergency", "entrance"}}
+HONOURS = {"ifc_route": {"fire", "external", "internal", "sliding", "double", "loadbearing", "emergency", "entrance",
+                          "material"}}
 # the typed-lookup routes after the numeric ones read interior / exterior themselves (IsExternal, layer names)
 FALLBACK_HONOURS = {"external", "internal"}
 SOURCES = {"dxf_swiss": "CAD drawing", "dxf_generic": "CAD drawing", "pdf_text": "sheet text",
@@ -134,6 +135,33 @@ def _names(e) -> str:
     return f"{getattr(e, 'Name', '') or ''} {_props().type_name(e)}"
 
 
+# material word in the question -> pattern on the model's material / type names
+MATERIAL_RX = [(r"concrete|beton", r"beton|concrete|betong|\bC\d{2}/\d{2}"),
+               (r"steel|stahl|teras|acier", r"stahl|steel|teras|stal\b|acier|\bS\d{3}\b"),
+               (r"wood|timber|holz|puu|bois|trae|tra", r"holz|wood|timber|puu|bois|trae|\btra\b|kiefer|fichte|eiche|pine|oak"),
+               (r"brick|tegel|masonry|brique", r"brick|ziegel|tegel|tiili|masonry|mauerwerk|brique")]
+
+
+def material_names(e) -> str:
+    """The element's material names (layers, constituents, profiles) and its type name, one string."""
+    names = []
+    try:
+        import ifcopenshell.util.element as E
+        for m in E.get_materials(e) or []:
+            if getattr(m, "Name", None):
+                names.append(str(m.Name))
+        t = E.get_type(e)
+        if t is not None:
+            for m in E.get_materials(t) or []:
+                if getattr(m, "Name", None):
+                    names.append(str(m.Name))
+    except Exception:
+        pass
+    if names:
+        names.append(_props().type_name(e))
+    return " ".join(names)
+
+
 def filter_ifc(M, ents, q, storey):
     """Apply the non-exterior qualifiers to `ents` (already narrowed to the storey).
 
@@ -218,6 +246,18 @@ def filter_ifc(M, ents, q, storey):
             else:
                 return ents, "", "", (f"cannot prove: this model records no operation type for its {label}s and no "
                                       f"{label} name says {kind} ({len(everything)} {label}s in the model)")
+        elif kind == "material":
+            raw = next((x["raw"] for x in qualifiers(q) if x["kind"] == "material"), "")
+            rx = next((r for k, r in MATERIAL_RX if re.match(k, raw)), None)
+            if rx is None:
+                return ents, "", "", (f"cannot prove: the question narrows the {label}s by {describe(q, [kind])}, which the "
+                                      f"model reader does not match ({total} {label}s{where} in total)")
+            if not any(material_names(e) for e in everything):
+                return ents, "", "", (f"cannot prove: no {label} in this model records a material "
+                                      f"({len(everything)} {label}s in the model)")
+            ents = [e for e in ents if re.search(rx, material_names(e), re.I)]
+            notes.append(f"{len(ents)} of {total} {label}s whose material or type name reads as {raw}")
+            reason = f"the material '{raw}' was matched by name against the model's material and type names"
         else:
             return ents, "", "", (f"cannot prove: the question narrows the {label}s by {describe(q, [kind])}, which the "
                                   f"model reader does not filter by ({total} {label}s{where} in total)")

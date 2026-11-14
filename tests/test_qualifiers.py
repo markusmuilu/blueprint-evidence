@@ -86,7 +86,9 @@ def test_routes_that_cannot_filter_are_refused():
 
 def test_ifc_route_does_not_honour_what_it_cannot_filter():
     assert qualifiers.cannot_honour(ifc_route.answer, parse("How many glazed doors are there?"))
-    assert qualifiers.cannot_honour(ifc_route.answer, parse("How many steel beams are there?"))
+    assert qualifiers.cannot_honour(ifc_route.answer, parse("How many accessible doors are there?"))
+    # material is filtered by the model's material / type names since the IFC hunt (14 Nov), as an estimate
+    assert qualifiers.cannot_honour(ifc_route.answer, parse("How many steel beams are there?")) is None
 
 
 def test_unqualified_question_is_never_refused():
