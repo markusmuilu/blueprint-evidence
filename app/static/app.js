@@ -2853,6 +2853,13 @@ window.addEventListener("hashchange", async () => {
   if (moved) await selectDrawing(p.get("path"));
   if (p.get("mode") === "3d") setMode("3d");
   if (p.get("q") && (moved || p.get("q") !== $("#question").value)) { $("#question").value = p.get("q"); ask(); }
+  else if (!p.get("q") && !moved && state.answer && !state.askingQ) {
+    // Back to the drawing before a question was asked: show it without that answer (Mac QA 14 Nov)
+    state.answer = null;
+    renderAnswer(null);
+    showDrawing();
+    $("#question").value = "";
+  }
 });
 
 
