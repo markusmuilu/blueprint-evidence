@@ -70,6 +70,16 @@ question themselves, and they missed:
   now 12.60).
 - **One room type, several rooms, on scans** (`raster_area.py`): "How big is the WC?" on 10372 sums WC 2.50 + WC 1.80 and
   said so, but stayed proven; now an estimate with that reason, as on the IFC, DXF and PDF routes.
+- **Room counts on scans without a summary line** (`raster_summary.label_rooms`, called from `raster.py` after the summary):
+  high_quality-10241 "Kuinka monta huonetta tässä on" was "no raster method for room"; now "3 rooms by the Finnish
+  convention (MH, OH, H ... as in a '3H+K' summary), plus kitchen K; 9 labelled spaces in total: ...", an estimate. A
+  lone "H" label is a room here (`labels.parts` drops it, as "3H" in a summary is not a room); English plans count
+  living rooms and bedrooms and say so. The printed summary ("3H+KT+S") still answers first, proven. No dataset question
+  asks this on a scan.
+- **AI calls agree** (`app/static/app.js`, `aiCalls`): the Model calls row and the used line count the same calls. A
+  question reading by the language model is a call whenever it was made and paid for, also when the rule reading was
+  kept and the answer is a cannot (the fast-cannot retry copies its cost onto the rule reading, so the row said "yes"
+  and the line "none"). The line then says "rules (the language model was also asked; the rule reading was kept)".
 - Not reproduced: Tyneside "how many bathrooms" is 1 (estimate, adopted from the shower check), on AY's own branch too
   with today's caches; AY reported 2. The detector's two bathroom boxes now hold Bedroom labels (scores 0.77, 0.32), so
   the label filter drops both.

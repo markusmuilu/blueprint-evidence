@@ -279,3 +279,62 @@ def largest_room(ctx, q) -> Answer:
                                  f"{len(rooms)} printed room areas read.",
                                  extra_boxes=[r.area_box for r in rooms if r is not top and r.area_box is not None])
     return ans
+
+
+# ----------------------------------------------------------------------------------------------- rooms from labels
+
+# The rooms a Finnish "3H+K" counts: the living room and the other rooms named "huone" (OH, MH, H, TYOH ...). The
+# English and German words are the same rooms (living and sleeping rooms). The kitchen is named separately, and
+# bathrooms, WCs, halls, storage, saunas and balconies are spaces, not rooms.
+ROOM_LABEL = re.compile(r"(?:OH|OLOHUONE|MH|MHH|MAKUUH(?:UONE)?|H|HUONE|TYOH(?:UONE)?|ASKH|AH|LIVINGROOM|LIVING|LOUNGE|"
+                        r"SITTINGROOM|FAMILYROOM|DRAWINGROOM|BEDROOM|BEDRM|BR|WOHNEN|WOHNZIMMER|SCHLAFZIMMER|"
+                        r"KINDERZIMMER|ELTERNZIMMER|GASTZIMMER|ZIMMER|VARDAGSRUM|SOVRUM|SOV)\d?\.?")
+
+
+FI_ROOM = re.compile(r"(?:OH|OLOHUONE|MH|MHH|MAKUUH(?:UONE)?|H|HUONE|TYOH(?:UONE)?|ASKH|AH)\d?\.?")
+
+
+def label_rooms(ctx, q) -> Answer:
+    """'How many rooms?' on a scan without a summary line: the room labels read, counted by the Finnish "3H+K"
+    convention (living room and other rooms; the kitchen separately), every labelled space listed. An estimate:
+    a label the OCR did not read is a room not counted, and no dev question measures this."""
+    from .labels import dedupe, exact, is_word, norm, parts, quad_box, _plan_word
+    from .ocr import ocr_image
+    toks = ocr_image(Path(ctx.file)) or []
+    if not toks:
+        return abstain(ROUTE, "no text read on the plan, so no room labels to count")
+    skip = summary_tokens(toks)
+    rooms, kitchens, spaces, boxes = [], [], [], []
+    for t in dedupe([t for t in toks if id(t) not in skip], prefer=is_word):
+        bare = norm(t["text"]).strip(" .")
+        # a lone "H" (huone) is a room label; parts() drops it, as "3H" in a summary line is not a room
+        for p in ([bare] if re.fullmatch(r"H\d?", bare) else parts(t["text"])):
+            if ROOM_LABEL.fullmatch(p):
+                rooms.append(p)
+                boxes.append(quad_box(t["quad"]))
+            elif exact("kitchen", p):
+                kitchens.append(p)
+            elif any(exact(o, p) for o in ("bathroom", "wc_room", "sauna", "balcony", "bedroom")) or _plan_word(p):
+                spaces.append(p)
+    if not rooms:
+        return abstain(ROUTE, "no living room or bedroom label read on the plan"
+                              + (f" (labels read: {', '.join(kitchens + spaces)})" if kitchens or spaces else ""))
+    n = len(rooms)
+    total = n + len(kitchens) + len(spaces)
+    kit = f", plus kitchen {', '.join(kitchens)}" if kitchens else ""
+    fi = any(FI_ROOM.fullmatch(r) for r in rooms)
+    conv = (f"by the Finnish convention ({', '.join(rooms)}: the living room and the other rooms, as in a '{n}H+K' "
+            f"summary; the kitchen is named separately)" if fi else
+            f"counting living rooms and bedrooms ({', '.join(rooms)}; the kitchen separately)")
+    expl = (f"{n} room{'s' if n != 1 else ''} {conv}{kit}; {total} labelled spaces in "
+            f"total: {', '.join(rooms + kitchens + spaces)}. Bathrooms, WCs, halls, storage, saunas and balconies are not "
+            f"counted as rooms. No apartment summary is printed on this plan; a room whose label was not read is not counted.")
+    ans = Answer(value=n, unit="rooms", route=ROUTE, confidence=0.5, explanation=expl,
+                 items=[{"n": i + 1, "label": r, "xyxy": [round(v) for v in b]} for i, (r, b) in enumerate(zip(rooms, boxes))]
+                       + [{"label": x, "counted": False} for x in kitchens + spaces])
+    estimate(ans, "rooms counted from the labels read, by the '3H+K' convention; no printed summary to confirm it")
+    if ctx.evidence:
+        ans.evidence = _evidence(ctx, q, boxes, f"Answer: {n} rooms (estimate)   route: {ROUTE} (cost €0)",
+                                 f"Room labels counted (boxed): {', '.join(rooms)}{kit}. Other labelled spaces: "
+                                 f"{', '.join(spaces) or 'none'}.")
+    return ans

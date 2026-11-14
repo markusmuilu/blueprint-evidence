@@ -59,6 +59,12 @@ def answer(ctx, q) -> Answer:
         a = (raster_summary.largest_room(ctx, q) if q.variant == "max" else raster_summary.answer(ctx, q))
         if a.answered or q.measure == "area":
             return a
+        if q.measure == "count" and not q.extra.get("apartment_scope"):
+            # no summary line: the room labels read, by the "3H+K" convention, as an estimate
+            b = raster_summary.label_rooms(ctx, q)
+            if b.answered:
+                return b
+            a.abstain = f"{a.abstain}; {b.abstain}"
     if q.measure != "count":
         return abstain(ROUTE, "raster route only counts (and room-type area takeoffs)")
     img = cv2.imread(str(ctx.file))

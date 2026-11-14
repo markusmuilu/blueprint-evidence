@@ -59,3 +59,20 @@ def test_one_error_label_does_not_replace_a_shower_count():
     assert c.status == "fail" and c.suggest is None
     F["labels_exact"]["bathroom"] = ["KH"]
     assert check_fixture_bounds(F, "shower_or_bath", 0)[0].suggest == 1
+
+
+def test_named_room_read_without_the_reader():
+    q = P.read("What is the area of the cafe?", use_llm=False)
+    assert (q.measure, q.obj, q.label) == ("area", "room", "cafe") and q.extra["label_from_text"]
+    assert P.read("how big is MEETING 01", use_llm=False).label == "MEETING 01"
+    k = P.read("How big is the kitchen?", use_llm=False)          # a room type stays a takeoff
+    assert k.variant == "type_sum" and k.label is None and "single_room" not in k.extra
+    for s in ("What is the area of the facade?", "How big is this plan?", "What is the area of the apartment?"):
+        assert not P.read(s, use_llm=False).label, s
+
+
+def test_room_labels_by_the_finnish_convention():
+    from bpqa.routes.raster_summary import FI_ROOM, ROOM_LABEL
+    assert all(ROOM_LABEL.fullmatch(p) for p in ("OH", "MH2", "H", "OLOHUONE", "HUONE", "BEDROOM", "LOUNGE"))
+    assert not any(ROOM_LABEL.fullmatch(p) for p in ("K", "KPH", "WC", "ET", "VH", "S", "KITCHEN", "HALLWAY"))
+    assert FI_ROOM.fullmatch("MH") and not FI_ROOM.fullmatch("BEDROOM")

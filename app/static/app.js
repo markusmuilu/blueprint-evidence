@@ -1614,7 +1614,7 @@ function renderAnswer(a) {
         ${gold}
         <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
         <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>
-        <dt>Model calls</dt><dd>${a.cost_usd ? "yes" : "none"}</dd>
+        <dt>Model calls</dt><dd>${aiCalls(a).length ? `yes (${aiCalls(a).length})` : "none"}</dd>
       </dl>
       ${usedLine(a)}
       ${costMeter(a)}
@@ -1728,6 +1728,18 @@ function costMeter(a) {
 
 /* BEGIN used-line: a plain "what was used" line on every answer, with the AI calls counted (his request, 14 Nov) */
 const USED_PART = { "dxf-geometry": "CAD geometry", "dxf-generic": "CAD geometry", ifc: "IFC model", "ifc-props": "IFC model", "pdf-text": "PDF text", "pdf-vector": "PDF linework", "pdf-generic": "PDF linework", "raster-detector": "object detector", "raster-ocr-labels": "OCR (room labels)", "raster-area": "OCR (room labels)", "raster-cv": "object detector", "raster-cv-fixtures": "object detector", "raster-rooms": "room detector", "sheet-scale": "sheet scale", "nemotron-estimate": "Nemotron image estimate", nemotron: "Nemotron image estimate", "raster-prior": "baseline prior" };
+/* the AI calls this answer made, one list for the used line and the Model calls row: a question reading by the language
+   model counts whenever it was made and paid for (also when its reading was dropped and the answer is a cannot); a cached
+   reading costs nothing and is not a call */
+function aiCalls(a) {
+  const ex = (a.query || {}).extra || {};
+  const second = (a.checks || []).some((k) => k.name === "nemotron-second-opinion" && k.status !== "error");
+  const imageEst = String(a.route || "").split("+").includes("nemotron-estimate") || second;
+  const calls = [];
+  if (!ex.parse_cached && (ex.parse_cost_orig_usd || ex.parse_cost_usd)) calls.push("question reading");
+  if (imageEst) calls.push(second ? "Nemotron second opinion" : "Nemotron image estimate");
+  return calls;
+}
 function usedLine(a) {
   const q = a.query || {}, ex = q.extra || {}, c = a.compute || {};
   const llm = q.parser === "llm";
@@ -1741,14 +1753,12 @@ function usedLine(a) {
   }
   const second = (a.checks || []).some((k) => k.name === "nemotron-second-opinion" && k.status !== "error");
   if (second && !parts.includes("Nemotron image estimate")) parts.push("Nemotron second opinion");
-  const imageEst = String(a.route || "").split("+").includes("nemotron-estimate") || second;
-  const readCall = llm && !ex.parse_cached && (ex.parse_cost_orig_usd || ex.parse_cost_usd) ? 1 : 0;
-  const calls = [];
-  if (readCall) calls.push("question reading");
-  if (imageEst) calls.push(second ? "Nemotron second opinion" : "Nemotron image estimate");
-  const callTxt = calls.length ? `${calls.length} (${calls.join(", ")})` : (llm && ex.parse_cached ? "none (question reading cached)" : "none");
+  const calls = aiCalls(a);
+  const asked = !!(ex.parse_cost_orig_usd || ex.parse_cost_usd);     /* the reader was asked, also when its reading was not used */
+  const callTxt = calls.length ? `${calls.length} (${calls.join(", ")})` : (asked && ex.parse_cached ? "none (question reading cached)" : "none");
   const per = c.usd_per_1000 != null ? `${fmtUsd(c.usd_per_1000)} per 1,000 questions like this` : "";
-  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${llm ? "language model" : "rules"}</span><span><b>${answered ? "Answered with" : "Tried"}:</b> ${esc(answered ? (parts.join(" and ") || "-") : (parts.join(", ") || "-") + "; none could prove it")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}</p>`;
+  const readBy = llm ? "language model" : (asked ? "rules (the language model was also asked; the rule reading was kept)" : "rules");
+  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${readBy}</span><span><b>${answered ? "Answered with" : "Tried"}:</b> ${esc(answered ? (parts.join(" and ") || "-") : (parts.join(", ") || "-") + "; none could prove it")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}</p>`;
 }
 /* END used-line */
 
