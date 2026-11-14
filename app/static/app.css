@@ -370,7 +370,7 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .dis { position: absolute; border: 2.5px solid oklch(0.66 0.16 60); border-radius: 50%; }
 .dis.missed { border-style: dashed; }
 .pin span {
-  position: absolute; left: -1.5px; bottom: 100%; transform: scale(var(--inv, 1)); transform-origin: 0 100%;
+  position: absolute; left: -1.5px; bottom: 100%; transform: scale(var(--tag, var(--inv, 1))); transform-origin: 0 100%;
   padding: 0 4px; background: var(--tone); color: oklch(0.18 0.02 245); border-radius: 0;
   font: 600 12px/16px var(--mono); white-space: nowrap;
 }
@@ -933,6 +933,47 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .used-line span { white-space: nowrap; }
 .used-line b { font-weight: 500; color: var(--muted); }
 /* END used-line */
+/* BEGIN answer-panel-light (14 Nov): (i) fine print, plain cannot reason, order check folded at the bottom */
+.ans-head { position: relative; }
+.info-btn { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; margin-left: auto; border: 1px solid var(--border-strong); border-radius: 50%;
+  background: transparent; color: var(--fg-2); font: italic 600 11px/1 var(--font); cursor: pointer; align-self: center; }
+.info-btn:hover, .info-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.info-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fine-pop { position: absolute; left: var(--s4); right: var(--s4); top: calc(100% - var(--s3)); z-index: 30; display: grid; gap: var(--s2);
+  padding: var(--s3); background: var(--raised); border: 1px solid var(--border-strong); box-shadow: 0 8px 24px oklch(0 0 0 / 0.35); }
+.fine-pop[hidden] { display: none; }
+.fine-pop .note { margin: 0; }
+.cannot-reason .plain-reason { margin: 0; color: var(--fg); font-size: var(--fs-sm); line-height: 1.45; }
+.reason-more { margin-top: 4px; }
+.reason-more > summary { cursor: pointer; color: var(--muted); font-size: var(--fs-xs); width: max-content; }
+.reason-more > summary:hover { color: var(--fg); }
+.reason-more > p { margin: 4px 0 0; }
+.order-fold { border-bottom: 0; }
+.order-fold > summary { cursor: pointer; list-style: revert; }
+.order-fold #orderSec { display: grid; gap: var(--s2); }
+.order-fold #orderSec[hidden] { display: none; }
+.order-fold #orderSec > .sec-head { display: none; }
+/* short screens (1280x800 and similar) with an answer shown: the viewer keeps a usable height. The examples row folds
+   away until the question field is used, an empty progress slot takes no room, and the strip crops are smaller. */
+@media (max-height: 940px) {
+  .work.answered .workbar { gap: var(--s2); padding-top: var(--s2); padding-bottom: var(--s2); }
+  .work.answered .workbar:not(:focus-within) .chips-block { display: none; }
+  .work.answered .drawing-head .read-status:empty { height: 0; }
+  .strip { padding-top: var(--s1); padding-bottom: var(--s2); gap: var(--s1); }
+  .strip-head { min-height: 28px; flex-wrap: wrap; }
+  .thumb-cell { width: 88px; }
+  .thumb { width: 88px; height: 67px; }
+  .thumb canvas { width: 84px; height: 63px; }
+  .strip-list { gap: var(--s2); }
+}
+/* a narrowed answer panel reflows instead of sliding under its edge (his request, 14 Nov) */
+#detailBody, #detailBody .ans-head, #detailBody .sec, #detailBody .kv > dd { min-width: 0; }
+#detailBody { overflow-wrap: anywhere; }
+#detailBody .btn { overflow-wrap: normal; white-space: nowrap; }
+.oc .ask-row .btn { flex: none; }
+.used-line > span { white-space: normal; min-width: 0; }
+.meter-row { grid-template-columns: minmax(0, 140px) minmax(24px, 1fr) auto; }
+/* END answer-panel-light */
 
 /* approximations on scans that print no areas (scale from doors / WC pans): where the number comes from, said first */
 .ans-value .about { font-size: var(--fs-base); color: var(--warn); font-weight: 500; margin-right: 0.4em; align-self: center; }

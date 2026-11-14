@@ -654,6 +654,8 @@ const viewer = (() => {
     stage.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
     stage.classList.toggle("pixel", k > 2.5);
     stage.style.setProperty("--inv", String(1 / k));
+    /* number tags: constant size from 60% up, smaller when zoomed further out, so they do not cover a fitted plan */
+    stage.style.setProperty("--tag", String(Math.max(0.45, Math.min(1, Math.sqrt(k / 0.6))) / k));
     $("#zoomLvl").textContent = Math.round(k * 100) + "%";
     syncButtons();
   }
@@ -679,7 +681,16 @@ const viewer = (() => {
     apply();
   }
   function center() { const r = vp.getBoundingClientRect(); return [r.width / 2, r.height / 2]; }
-  function focusRect(rx, ry, rw, rh) {
+  /* a short eased move for jumps the person did not drag (selecting an item); off under reduced motion */
+  let glideT = null;
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function glide() {
+    if (still.matches) return;
+    clearTimeout(glideT);
+    stage.style.transition = "transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1)";
+    glideT = setTimeout(() => { stage.style.transition = ""; }, 320);
+  }
+  function focusRect(rx, ry, rw, rh, smooth = false) {
     const r = vp.getBoundingClientRect();
     [rx, ry, rw, rh] = rectToView([rx, ry, rw, rh]);
     const want = Math.min(r.width / (rw * 6), r.height / (rh * 6), 4);
@@ -687,16 +698,18 @@ const viewer = (() => {
     x = r.width / 2 - (rx + rw / 2) * k;
     y = r.height / 2 - (ry + rh / 2) * k;
     atFit = false;
+    if (smooth) glide();
     apply();
   }
 
   /* zoom a rect (image pixels) to fill `fill` of a part of the viewport {l, t, w, h} and centre it there */
-  function focusIn(r, box, fill = 0.7, maxK = 4) {
+  function focusIn(r, box, fill = 0.7, maxK = 4, smooth = false) {
     const [rx, ry, rw, rh] = rectToView(r);
     k = Math.max(0.02, Math.min((box.w * fill) / Math.max(rw, 1), (box.h * fill) / Math.max(rh, 1), maxK));
     x = box.l + box.w / 2 - (rx + rw / 2) * k;
     y = box.t + box.h / 2 - (ry + rh / 2) * k;
     atFit = false;
+    if (smooth) glide();
     apply();
   }
 
@@ -1001,7 +1014,7 @@ function clearFocus() {
 function focusRect(r, i, focus) {
   if (state.mode === "3d") {                    // in 3D the strip and item list select the element in the model
     const it = state.answer ? answerItems(state.answer)[+i] : null;
-    if (focus && it && it.guid && window.Viewer3D) Viewer3D.select(it.guid);
+    if (focus && it && it.guid && window.Viewer3D) { mark3dItem(i); Viewer3D.select(it.guid); }
     return;
   }
   if (!r || state.layer !== "evidence") return;
@@ -1015,8 +1028,16 @@ function focusRect(r, i, focus) {
     Object.assign(ret.style, { left: v[0] - pad + "px", top: v[1] - pad + "px", width: v[2] + pad * 2 + "px", height: v[3] + pad * 2 + "px" });
     ret.hidden = false;
   }
-  if (focus) viewer.focusRect(...r);
+  if (focus) viewer.focusRect(...r, true);
   if (focus) openSteps(i);                     // evidence layers: the Steps card for the clicked item
+  /* the same item in the strip and in the answer's list: bring the other one into view too (his request, 14 Nov) */
+  if (focus && i != null) document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"]`).forEach((el) => {
+    const box = el.closest("#itemList, #stripList");
+    if (!box) return;
+    const b = box.getBoundingClientRect(), e = el.getBoundingClientRect();
+    if (box.id === "stripList") { if (e.left < b.left || e.right > b.right) box.scrollBy({ left: e.left - b.left - (b.width - e.width) / 2, behavior: "smooth" }); }
+    else if (e.top < b.top || e.bottom > b.bottom) box.scrollBy({ top: e.top - b.top - (b.height - e.height) / 2, behavior: "smooth" });
+  });
 }
 /* click the selected item again, click empty drawing or press Escape: back to the plain answer (his request) */
 function isSelected(i) { return layers.sel != null && String(layers.sel.i) === String(i); }
@@ -1025,9 +1046,14 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || e.defaultPrevented || e.target?.closest?.("input, textarea, select")) return;
   if (layers.sel != null || lastFocus) deselect();
 });
+/* in 3D: the selected element is marked in both the strip and the Items list */
+function mark3dItem(i) {
+  document.querySelectorAll("#itemList .item.on, #stripList .thumb.on").forEach((b) => b.classList.remove("on"));
+  document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
+}
 function markItem(btn, it, a, n, focus) {
   if (state.mode === "3d" && it && it.guid && window.Viewer3D) {
-    if (focus) { document.querySelectorAll("#itemList .item.on").forEach((b) => b.classList.remove("on")); btn.classList.add("on"); Viewer3D.select(it.guid); }
+    if (focus) { mark3dItem(btn.dataset.i); Viewer3D.select(it.guid); }
     return;
   }
   if (focus && isSelected(btn.dataset.i)) { deselect(); return; }
@@ -1132,8 +1158,9 @@ function focusSteps() {
   const [, , vw, vh] = viewer.rectToView(r);
   const fitK = (b) => (b.w < 120 || b.h < 80 ? 0 : Math.min(b.w / vw, b.h / vh));    // the side where the item can be largest
   const box = fitK(right) >= fitK(above) ? right : above;
-  if (!fitK(box)) return;
-  viewer.focusIn(r, box, 0.8);
+  /* no room beside or above the card (a short viewer): centre the item in the whole viewer instead */
+  if (!fitK(box)) { viewer.focusIn(r, { l: gap, t: Math.min(top, v.height / 4), w: v.width - 2 * gap, h: v.height - Math.min(top, v.height / 4) - gap }, 0.6, 4, true); return; }
+  viewer.focusIn(r, box, 0.8, 4, true);
 }
 function closeSteps() {
   stopStepPlay();
@@ -1652,6 +1679,7 @@ function itemLabel(it, obj, route) {
 
 function renderAnswer(a) {
   const body = $("#detailBody");
+  document.querySelector(".work")?.classList.toggle("answered", !!a);   // short screens fold the examples away (CSS)
   $("#detailEmpty").hidden = !!a;
   body.hidden = !a;
   if (!a) { body.innerHTML = ""; return; }
@@ -1689,18 +1717,18 @@ function renderAnswer(a) {
       <p class="note corr-note" id="corrNote" hidden></p>
       <dl class="kv facts">
         <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span>${a.cached ? `<span class="cache-tag" title="Served from the answer cache: this question was asked before on this drawing. Time and cost are from the first run; Run again recomputes them.">Cached</span>` : ""}</dd>
-        ${a.status === "cannot" ? `<dd class="wide cannot-reason">${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</dd>` : ""}
+        ${a.status === "cannot" ? `<dd class="wide cannot-reason"><p class="plain-reason">${esc(plainReason(a))}</p><details class="reason-more"><summary>Details</summary><p>${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</p></details></dd>` : ""}
         ${gold}
         <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
-        <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>
-        <dt>Model calls</dt><dd>${modelCallsText(a)}</dd>
+        <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}</dd>
       </dl>
-      ${a.cached ? `<p class="note cache-note"><span class="cache-tag">Cached</span>Served from the answer cache: this question was asked before on this drawing. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
       ${usedLine(a)}
-      ${costMeter(a)}
+      <div class="fine-pop" id="finePrint" role="region" aria-label="Time and cost details" hidden>
+        <p class="note">Model calls: ${modelCallsText(a)}. CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}.</p>
+        ${a.cached ? `<p class="note cache-note"><span class="cache-tag">Cached</span>Served from the answer cache: this question was asked before on this drawing. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
+        ${costMeter(a)}
+      </div>
     </div>
-
-    <section class="sec" id="orderSec" aria-labelledby="hOrder" hidden></section>
 
     <section class="sec" id="witSec" aria-labelledby="hWit" hidden>
       <div class="sec-head"><h3 class="h-panel" id="hWit">Witnesses</h3><span class="meta" id="witMeta"></span></div>
@@ -1713,16 +1741,6 @@ function renderAnswer(a) {
         ${(a.where || []).map((w) => `<dt>${esc(w.k)}</dt><dd>${esc(w.v)}${w.code ? `<span class="code">${esc(w.code)}</span>` : ""}</dd>`).join("")}
         ${a.tried && a.tried.length > 1 ? `<dt>Tried</dt><dd class="mono" style="font-size:var(--fs-xs)">${esc(a.tried.join(" > "))}</dd>` : ""}
       </dl>
-    </section>
-
-    <section class="sec" aria-labelledby="hWhy">
-      <h3 class="h-panel" id="hWhy">Why</h3>
-      <ol class="why">
-        ${why.map((w, i) => `<li><span class="cite">${i + 1}</span><span class="txt">${whyText(w)}</span></li>`).join("")}
-        ${itemsCite ? `<li><span class="cite">${itemsCite}</span><span class="txt"><span class="kind">Items</span>${items.length} item${items.length > 1 ? "s" : ""} ${a.unit === "count" ? "counted" : "used"}, numbered on the drawing and in the strip under it.${checkItems(a).some((r) => r.rect) ? " Select one to find it." : ""}</span></li>` : ""}
-        <li><span class="cite">${(itemsCite || nWhy) + 1}</span><span class="txt"><span class="kind">Status</span>${esc(a.status_rule || "")}</span></li>
-      </ol>
-      ${a.no_overlay_reason ? `<p class="note">${esc(a.no_overlay_reason)}</p>` : ""}
     </section>
 
     ${items.length ? `<section class="sec" aria-labelledby="hItems">
@@ -1738,11 +1756,26 @@ function renderAnswer(a) {
       </ul>
     </section>` : ""}
 
+    <section class="sec" aria-labelledby="hWhy">
+      <h3 class="h-panel" id="hWhy">Why</h3>
+      <ol class="why">
+        ${why.map((w, i) => `<li><span class="cite">${i + 1}</span><span class="txt">${whyText(w)}</span></li>`).join("")}
+        ${itemsCite ? `<li><span class="cite">${itemsCite}</span><span class="txt"><span class="kind">Items</span>${items.length} item${items.length > 1 ? "s" : ""} ${a.unit === "count" ? "counted" : "used"}, numbered on the drawing and in the strip under it.${checkItems(a).some((r) => r.rect) ? " Select one to find it." : ""}</span></li>` : ""}
+        <li><span class="cite">${(itemsCite || nWhy) + 1}</span><span class="txt"><span class="kind">Status</span>${esc(a.status_rule || "")}</span></li>
+      </ol>
+      ${a.no_overlay_reason ? `<p class="note">${esc(a.no_overlay_reason)}</p>` : ""}
+    </section>
+
+
     <div class="actions">
       <button class="btn" type="button" id="copyCsv">${icon("copy")}Copy as CSV row</button>
       <button class="btn btn-quiet" type="button" id="dlCsv">${icon("download")}Download CSV</button>
       <button class="btn btn-quiet" type="button" id="reask" title="Run the routes again instead of using the cached answer">${icon("refresh")}Run again</button>
-    </div>`;
+    </div>
+
+    <details class="sec order-fold" id="orderFold" hidden><summary class="h-panel">Order check</summary>
+      <section id="orderSec" aria-label="Order check" hidden></section>
+    </details>`;
 
   body.querySelectorAll("button.item").forEach((b) => {
     const it = items[+b.dataset.i];
@@ -1760,7 +1793,54 @@ function renderAnswer(a) {
     changed: () => OrderSheet.mountPanel(a, $("#orderSec"), orderHooks),
   };
   if (window.OrderSheet) OrderSheet.mountPanel(a, $("#orderSec"), orderHooks);
+  $("#orderFold").hidden = $("#orderSec").hidden;   // folded at the bottom: it works, but is not the main path (his call, 14 Nov)
+  bindFinePrint();
   bindScaleCtl(a);                        // scale-assumption block
+}
+
+/* the fine print (CPU time, model calls, cost breakdown and price assumptions) sits behind a small (i) after the used
+   line: hover or focus shows it, a click keeps it open (his request, 14 Nov: a lighter answer panel) */
+function bindFinePrint() {
+  const btn = $("#fineBtn"), pop = $("#finePrint");
+  if (!btn || !pop) return;
+  let pinned = false, hideT = null;
+  const set = (on) => { clearTimeout(hideT); pop.hidden = !on; btn.setAttribute("aria-expanded", String(on)); };
+  const later = () => { clearTimeout(hideT); if (!pinned) hideT = setTimeout(() => set(false), 150); };
+  btn.addEventListener("click", () => { pinned = !pinned || pop.hidden; set(pinned); });
+  btn.addEventListener("mouseenter", () => set(true));
+  btn.addEventListener("mouseleave", later);
+  btn.addEventListener("focus", () => set(true));
+  btn.addEventListener("blur", later);
+  pop.addEventListener("mouseenter", () => clearTimeout(hideT));
+  pop.addEventListener("mouseleave", later);
+  btn.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) { e.preventDefault(); e.stopPropagation(); pinned = false; set(false); } });
+}
+
+/* a cannot answer leads with one plain sentence; the technical reason stays behind Details (his request, 14 Nov).
+   Known reasons are put in plain words; anything else is the first part of the reason, without the route name. */
+function plainReason(a) {
+  const r = String(a.abstain || "");
+  const raw = String(a.query?.obj || "").replace(/_or_/g, " or ").replace(/_/g, " ");
+  const obj = raw ? (/s$/.test(raw) ? raw : raw.replace(/ or (\w+)$/, " or $1s").replace(/^(\w+)( or|$)/, "$1s$2").replace(/ss$/, "s")) : "items";
+  const P = [
+    [/question not understood|no measurable question/i, () => "Could not read this as one thing to count or measure on the drawing. Try asking for one thing, for example: How many doors are there?"],
+    [/compound question|unresolved scope/i, () => "The question asks for several things at once. Ask for one thing at a time."],
+    [/no raster method for|no method for/i, () => `Scanned plans cannot answer questions about ${obj} yet: there is no reliable way to find them on a scan.`],
+    [/could not be measured|not measurable|no closed (?:room|outline)/i, () => `Could not measure the ${obj}: their outlines could not be traced on this plan, and no areas are printed for them.`],
+    [/detector switched off for/i, () => `Could not count the ${obj}: the symbol finder is not reliable enough for them on scanned plans.`],
+    [/(\d+) \w+ detected at score[^;]*?but (\d+) box/i, (m) => `Could not prove the count: ${m[1]} ${+m[1] === 1 ? raw : obj} found for sure, but ${m[2]} more ${+m[2] === 1 ? "is" : "are"} borderline and could go either way.`],
+    [/only \d+ room labels? readable/i, () => "Could not read enough room names on this scan to prove the count."],
+    [/label\(s\) read.*not reliable/i, () => `Could not prove the count: room names for ${obj} are read too unreliably on scans.`],
+    [/not closed|open outline|outline is open/i, () => `Could not measure the ${obj}: their outline is not closed on this plan.`],
+    [/no scale|scale not found|without a scale/i, () => "Could not measure: no scale was found on this drawing."],
+    [/no text-layer rule|no schedule table|measure text not supported/i, () => "Nothing in this drawing's text or model answers this question."],
+    [/not (?:in|found in) (?:the|this) (?:drawing|model|plan)|no \w+ found/i, () => `Could not find any ${obj} on this drawing to prove an answer.`],
+  ];
+  for (const [re, fn] of P) { const m = r.match(re); if (m) return fn(m); }
+  let first = r.split(";")[0].replace(/^[\w+ -]{2,40}:\s+/, "").trim();
+  if (!first) return "No route could prove an answer from this drawing.";
+  if (first.length > 140) first = first.slice(0, 137).replace(/\s+\S*$/, "") + "...";
+  return "Could not prove an answer: " + first.replace(/[.\s]+$/, "") + ".";
 }
 
 function shortReason(a) {
@@ -1846,7 +1926,7 @@ function usedLine(a) {
   const callTxt = calls.length ? `${calls.length} (${calls.join(", ")})` : (asked && ex.parse_cached ? "none (question reading cached)" : "none");
   const per = c.usd_per_1000 != null ? `${fmtUsd(c.usd_per_1000)} per 1,000 questions like this` : "";
   const readBy = llm ? "language model" : (asked ? "rules (the language model was also asked; the rule reading was kept)" : "rules");
-  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${readBy}</span><span><b>${answered ? "Answered with" : "Tried"}:</b> ${esc(answered ? (parts.join(" and ") || "-") : (parts.join(", ") || "-") + "; none could prove it")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}</p>`;
+  return `<p class="used-line" id="usedLine"><span><b>Question read by:</b> ${readBy}</span><span><b>${answered ? "Answered with" : "Tried"}:</b> ${esc(answered ? (parts.join(" and ") || "-") : (parts.join(", ") || "-") + "; none could prove it")}</span><span><b>AI calls:</b> ${callTxt}</span>${per ? `<span>${per}</span>` : ""}<button type="button" class="info-btn" id="fineBtn" aria-expanded="false" aria-controls="finePrint" aria-label="Time and cost details" title="Time and cost details">i</button></p>`;
 }
 /* END used-line */
 
@@ -2496,7 +2576,7 @@ function renderBatch() {
       <div class="batch-prog" role="status">
         <p class="meta">${prog}</p>
         ${run.finished ? "" : `<div class="bar" aria-hidden="true"><span style="width:${Math.round((finished / n) * 100)}%"></span></div>
-        <p class="meta">A drawing seen for the first time takes about 20 s; one already read, about a second.</p>`}
+        <p class="meta">The first question on a new scan can take up to a minute or two while it is read; after that, about a second. CAD, PDF and IFC answer in about a second.</p>`}
       </div>
     </div>
     <section class="sec">
@@ -2906,15 +2986,18 @@ async function compareOpen(x) {
     { id: "ask", el: () => [$("#askForm"), $(".chips-block"), tryBox()], anchor: 2, side: ["bottom", "left"],
       text: () => state.askingQ
         ? "Reading the drawing for your question. The answer appears on the right."
-        : "Ask about this drawing in your own words, in any language: type a question and press Ask. Or press one of the Examples, or one of the Try these questions on the right.",
+        : "Ask about this drawing in your own words, in any language: type a question and press Ask. Or press one of the Examples, which fills in the question, then press Ask; or press one of the Try these questions on the right, which asks at once.",
       wait: () => !!state.askingQ,
       done: () => !!state.answer && !state.askingQ },
-    { id: "item", el: () => [$("#detail")], side: ["left", "right"], scrollTo: () => $("#itemList"),
-      text: () => "This is the answer: the number, its status and the steps behind it. A question asked again comes from the answer cache and is marked Cached. Press any item in its list to see it on the drawing.",
+    /* the strip under the drawing is always on screen; the answer's own Items list can sit below the fold of the panel */
+    { id: "item", el: () => (shown($("#strip")) && stripItems().length ? [$("#strip"), $("#detail")] : [$("#detail")]), side: ["top", "left"],
+      scrollTo: () => (shown($("#strip")) && stripItems().length ? null : $("#itemList")),
+      text: () => "This is the answer on the right: the number, its status and the steps behind it. A question asked again comes from the answer cache and is marked Cached. "
+        + (shown($("#strip")) && stripItems().length ? "Press a numbered item in the strip under the drawing, or in the answer's Items list: the drawing zooms to it." : "Press any item in its Items list to see it on the drawing."),
       can: () => answerItems().length > 0,
       done: () => did.item || did.strip },
     { id: "strip", el: () => [$("#strip")], side: ["top", "left"],
-      text: () => "Every counted item is numbered on the drawing and in this strip. Press one to see step by step how it was read.",
+      text: () => "Every counted item is numbered on the drawing and in this strip. Press one to zoom to it and see step by step how it was read.",
       can: () => shown($("#strip")) && stripItems().length > 0,
       done: () => did.strip },
     { id: "compare", el: () => [$('.rail-btn[data-view="compare"]')], side: ["right", "bottom"],
@@ -3025,7 +3108,7 @@ async function compareOpen(x) {
     const step = STEPS[idx], waiting = !!step.wait?.();
     const hadFocus = bubble.contains(document.activeElement) || document.activeElement === document.body;
     bubble.innerHTML = `<p>${esc(step.text())}</p>
-      ${waiting ? '<p class="meta tour-wait">Answering... the first question on a drawing takes about 15 s.</p>' : ""}
+      ${waiting ? '<p class="meta tour-wait">Answering... the first question on a new scan can take up to a minute or two while it is read; after that, about a second. CAD, PDF and IFC answer in about a second.</p>' : ""}
       <div class="tour-act"><span class="tour-step">Step ${idx + 1} of ${STEPS.length}</span>
         <button type="button" class="btn btn-quiet" data-a="skip">Skip tour</button></div>`;
     bubble.setAttribute("aria-label", `Tour, step ${idx + 1} of ${STEPS.length}`);
