@@ -1207,8 +1207,18 @@ function correctedValue(a) {
   const c = state.corr;
   if (a.value == null || typeof a.value !== "number") return a.value;
   if (isCount(a)) return a.value - c.removed.size + c.added.length;
+  // a removed room takes out its own floor and wall area plus the waste on them (QA 14 Nov: a tiling total did
+  // not change after "Not this one" because the value includes walls and waste, not just the floor area)
+  const tot = (a.items || []).find((it) => it && it.totals)?.totals || null;
+  const w = tot && tot.waste_pct ? tot.waste_pct / 100 : 0;
+  const floorCounts = !tot || tot.floor_m2 == null || tot.floor_m2 > 0;
   let v = a.value;
-  for (const r of checkItems(a)) if (c.removed.has(r.n) && typeof r.area === "number") v -= r.area;
+  for (const r of checkItems(a)) {
+    if (!c.removed.has(r.n)) continue;
+    const it = r.it && typeof r.it === "object" ? r.it : {};
+    const floor = floorCounts ? (it.floor_m2 ?? it.area_m2 ?? (typeof r.area === "number" ? r.area : 0)) : 0;
+    v -= (floor + (it.net_wall_m2 || 0)) * (1 + w);
+  }
   return Math.round(v * 100) / 100;
 }
 function corrected() { return state.corr.removed.size > 0 || state.corr.added.length > 0; }
