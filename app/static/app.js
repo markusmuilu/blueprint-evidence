@@ -359,7 +359,6 @@ $("#search").addEventListener("input", (e) => {
 
 /* ---------------------------------------------------------------- upload */
 const drop = $("#drop");
-renderUploads();
 ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove("over")));
 drop.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); });
@@ -398,6 +397,7 @@ function renderUploads() {
     ul.appendChild(li);
   }
 }
+renderUploads();      // after uploadStore exists (a call above it stopped the whole script, 14 Nov)
 
 async function upload(fileList) {
   const files = [...fileList];
