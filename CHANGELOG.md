@@ -128,6 +128,41 @@ every image answered):
 TTA won on every object for both models, so the route uses it for all five (eight detector passes per
 image instead of one; still $0; the full-set run took under 1 s per image on the RTX 5070 while it was also training).
 
+### Tiled, pretrained, larger detector (`detector_tiles.pt`, run `tiles_s`)
+
+Dataset `ds_tiles` (`tools/build_tile_dataset.py`): exactly the plans of `ds_cubi`'s train and val
+lists, each checked again against the overlap lists (a plan not in `train_clean.txt` or matching a test
+image is refused; none was). CubiCasa plans are re-read from the public `F1_original.png` at native
+resolution (`ds_cubi` had capped the long side at 2,048 px), resized 2x (long side capped at 4,096 px)
+and cut into 1,024 px tiles with 192 px overlap; edge tiles are padded white so YOLO never rescales a
+tile. A box stays in a tile when at least 40% of it is inside. Empty tiles are kept 25% of the time when
+they hold drawing. Half of the synthetic Swiss renders are tiled at their own scale. 17,596 training
+tiles, 251 validation tiles. In native pixels the objects' long side is 9-20 px at the 10th percentile
+and 17 px (showers) to 51 px (windows) at the median (300 sampled training plans); 2x doubles that.
+
+Model: `yolo26s` from Ultralytics' official pretrained weights (`yolo26s.pt`, downloaded once), imgsz
+1,024, batch 8, the same augmentation as before (flips, no colour jitter, mosaic 0.5, scale 0.3),
+trained with a wall-clock budget (`--time`) from 01:35 to about 06:50, RTX 5070. At inference the image
+gets the same resize and tiling, tiles go through the model in batches, and boxes found twice in the
+overlap are merged (same class, IoU >= 0.5 or the smaller box 60% inside the larger).
+
+Mid-training check (weights after epoch 22 of about 58, tune images, 2-fold cross-validated exact-count
+accuracy, every image answered):
+
+| object | cubi2 | cubi2 + TTA | tiles e22 | tiles e22 + TTA |
+|---|---|---|---|---|
+| toilet | 81.7% | 82.7% | 87.0% | 89.3% |
+| sink | 65.5% | 70.2% | 79.8% | 81.8% |
+| shower/bath | 36.2% | 41.5% | 72.8% | 74.5% |
+| door | 48.8% | 51.9% | 54.6% | 57.3% |
+| window | 41.7% | 43.8% | 45.8% | 48.6% |
+
+The epoch-22 tiles + TTA policy on the full set's test split, detector questions, same flags as the
+baseline: toilets 89.3%, sinks 78.1%, showers/baths 74.1%, doors 54.1%, windows 46.6%; all 69.1%
+(baseline 38.6%, cubi2 + tiers + TTA 57.9%). Close to what the tune images predicted, so the tune-image
+comparison transfers. Showers and baths get a proven tier for the first time (the policy is right more
+often than wrong).
+
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 
 Problem: Swiss questions were answered from the DXF twin of each PDF. A judge may hand over only the
