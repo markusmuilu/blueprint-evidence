@@ -2030,8 +2030,19 @@ function scaleStatus(base, vals, phase) {
   }
   const still = scaleKind(base) === "objects" ? notInMedian(base, vals) : [];
   if (still.length) what += `. The ${still.join(" and ")} ${still.length > 1 ? "are" : "is"} not one of the middle values of the median, so the scale does not move`;
-  const tail = phase === "preview" ? `. Preview: areas x${(scaleCtl.k ** 2).toFixed(2)}, lengths x${scaleCtl.k.toFixed(2)}; measuring again on the drawing.`
+  let tail = phase === "preview" ? `. Preview: areas x${(scaleCtl.k ** 2).toFixed(2)}, lengths x${scaleCtl.k.toFixed(2)}; measuring again on the drawing.`
     : phase === "busy" ? ". Measuring again on the drawing." : ".";
+  if (!phase && !scaleIsDefault(base, vals)) {
+    // against the default sizes (the rooms stay as traced, so every area moves by exactly this factor)
+    const def = scaleKind(base) === "ratio" ? { ratio: s.read_ratio, sheet: s.read_sheet }
+      : Object.fromEntries(Object.keys(vals).map((k) => [k, s.defaults[k]]));
+    const kd = 1 / scaleFactor(base, def);
+    // one size changed and the scale moved less than that size: the other objects hold the median back
+    const changed = scaleKind(base) === "objects" ? Object.keys(vals).filter((k) => !sameVal(vals[k], s.defaults[k])) : [];
+    const mixed = changed.length === 1 && Math.abs(kd - vals[changed[0]] / s.defaults[changed[0]]) > 0.002;
+    tail = `: areas x${(kd * kd).toFixed(2)}, lengths x${kd.toFixed(2)} against the default` +
+      (mixed ? ` (the scale is the median of all ${s.candidates.length} objects, so it moves less than one size alone)` : "") + ".";
+  }
   return `${esc(what + tail)}${scaleIsDefault(base, vals) ? "" : ` <button class="btn btn-quiet sc-reset" type="button" id="scReset">Reset</button>`}`;
 }
 

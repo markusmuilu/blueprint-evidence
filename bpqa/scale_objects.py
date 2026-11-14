@@ -599,6 +599,45 @@ def assume_payload(sc, asked: dict | None = None) -> dict:
     return out
 
 
+def keep_regions(pa, file, assume: dict, allow_run: bool = True):
+    """The default analysis (raster_area.PlanAreas) with the person's sizes: the same rooms, traced regions and
+    pixel areas, converted with the scale from the same candidates measured with the new sizes, so every area
+    scales by exactly k^2 and every perimeter by k (k = new metres per pixel / default). Measuring again from
+    scratch would let the new scale pick another wall-gap setting and change the outlines too (QA 14 Nov:
+    10241 bedrooms 11.16 m2 at 0.70 m where the conversion alone gives 10.21). None when the default analysis
+    has no scale (the assumption then gets the full analysis); `pa` itself when its scale assumes no size
+    (printed areas, printed door sizes)."""
+    import copy
+    from dataclasses import replace
+    from .routes.raster_area import Scale
+    sc = pa.scale
+    if not sc.known:
+        return None
+    if getattr(sc, "source", "") != "objects":
+        return pa
+    comb = combine(candidates(detections(Path(file), allow_run=allow_run), objects_with(assume)))
+    rooms = []
+    for r in pa.rooms:
+        r2 = copy.copy(r)
+        r2.extra = dict(r.extra or {})
+        rooms.append(r2)
+    if not comb.known:
+        return replace(pa, rooms=rooms, scale=Scale(None, [], comb.iqr, "none",
+                                                    f"with your sizes the standard objects no longer agree on a scale: {comb.why}"))
+    used = tag_objects(comb.used)
+    m2 = comb.m_per_px ** 2
+    sc2 = Scale(m2, [], comb.iqr, sc.method,
+                f"OBJECT SCALE (weaker than printed areas): median of {comb.n} standard objects, {summary(used)}; "
+                f"{1 / comb.m_per_px:.1f} px per m, objects agree within an interquartile range of {comb.iqr:.0%}; "
+                f"rooms as traced for the default sizes, only the conversion changed")
+    sc2.objects, sc2.source = used, "objects"
+    sc2.assumed = {k: v for k, v in assume.items() if k in ASSUME and any(c["cls"] == ASSUME[k]["cls"] for c in used)}
+    for r in rooms:
+        if r.region_ok and r.pixels:
+            r.measured = round(r.pixels * m2, 2)
+    return replace(pa, rooms=rooms, scale=sc2)
+
+
 def median_m_per_px(cands: list[dict], sizes: dict) -> float:
     """The scale the app recomputes: median of size / px over the candidates, each with the size set for its class
     ({"door_m": 0.9}); the same median as combine() (numpy: the mean of the middle two for an even count)."""
