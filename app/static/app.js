@@ -1817,3 +1817,15 @@ function renderObjTable(d) {
   }
   if (p.get("view") === "results") showView("results");
 })();
+/* a pasted link or back/forward in the same tab changes only the hash: load what it names (QA 14 Nov). The app's
+   own URL updates use history.replaceState, which fires no hashchange, so this does not loop. */
+window.addEventListener("hashchange", async () => {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get("view") === "results") { showView("results"); return; }
+  if (!p.get("path")) return;
+  showView("ask");
+  const moved = !state.drawing || state.drawing.path !== p.get("path");
+  if (moved) await selectDrawing(p.get("path"));
+  if (p.get("mode") === "3d") setMode("3d");
+  if (p.get("q") && (moved || p.get("q") !== $("#question").value)) { $("#question").value = p.get("q"); ask(); }
+});
