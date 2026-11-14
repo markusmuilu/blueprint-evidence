@@ -337,6 +337,13 @@ async function selectDrawing(path, keepAnswer = false) {
     renderDrawingQuestions(d);
     renderExamples();
     if (!keepAnswer) {
+      if (state.drawing && state.askTicket) {      // a question still running on the previous drawing is abandoned
+        state.askTicket += 1;
+        clearInterval(busyT);
+        $("#viewerBusy").hidden = true;
+        $("#askBtn").disabled = false;
+        $("#askBtn").removeAttribute("aria-busy");
+      }
       state.answer = null;
       renderAnswer(null);
       showDrawing();
@@ -1300,12 +1307,16 @@ async function ask(refresh = false) {
   const t0 = performance.now();
   const tick = () => { $("#busyText").textContent = `Reading the drawing  ${((performance.now() - t0) / 1000).toFixed(1)} s`; };
   tick();
+  clearInterval(busyT);
   busyT = setInterval(tick, 100);
+  const asked = state.drawing.path, ticket = (state.askTicket = (state.askTicket || 0) + 1);
   try {
     const a = await api("/api/ask", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: state.drawing.path, question: q, pdf_only: $("#pdfOnly").checked, refresh }),
+      body: JSON.stringify({ path: asked, question: q, pdf_only: $("#pdfOnly").checked, refresh }),
     });
+    // a slow answer that comes back after another drawing or question was opened is dropped, never shown on it
+    if (ticket !== state.askTicket || !state.drawing || state.drawing.path !== asked) return;
     state.answer = a;
     state.corr = { removed: new Set(), added: [] };
     state.witnesses = null;
@@ -1318,10 +1329,12 @@ async function ask(refresh = false) {
   } catch (e) {
     toast("The question failed: " + e.message, true);
   } finally {
-    clearInterval(busyT);
-    $("#viewerBusy").hidden = true;
-    btn.disabled = false;
-    btn.removeAttribute("aria-busy");
+    if (ticket === state.askTicket) {         // only the latest question owns the busy state
+      clearInterval(busyT);
+      $("#viewerBusy").hidden = true;
+      btn.disabled = false;
+      btn.removeAttribute("aria-busy");
+    }
   }
 }
 
