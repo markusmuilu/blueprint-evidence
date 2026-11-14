@@ -47,6 +47,29 @@ What the boxes are, by eye:
 
 The checks of open doorways and of the other rules are below; none of them won on the tune images.
 
+### Counting rules tried (step 2), none kept
+
+Each rule was fitted on the tune images together with the threshold and measured by the same 2-fold
+cross-validation as `tune_detector.py` (fit on one half, count on the other), against the plain
+threshold fitted the same way. Gains under about 2 points on 445-624 images are within the noise of
+the split, and none of these reached that.
+
+| rule | object | cv exact: rule | cv exact: plain threshold |
+|---|---|---|---|
+| door leaf check: a counted box needs a drawn swing arc or straight leaf next to the opening unless it scores high (thresholds tuned) | door | 58.4% | 58.2% |
+| cross-model support: a tiled box without a whole-image `cubi2` box on it needs a higher score | door | 59.8% | 58.2% |
+| the same with `cubi2` over eight rotations and mirrors | door | 58.2% | 58.2% |
+| the same | window | 49.7% | 49.4% |
+| split a window box longer than f x the plan's median window length (f tuned) | window | 49.4% | 49.4% |
+| seam merging only across tiles (same-tile boxes merged only at IoU >= 0.7) | door, window | no change (first 230 images) | |
+
+Why the leaf check fails: the annotation (and so Stoa) counts many openings drawn with no leaf at all,
+and many Finnish plans draw the leaf as a short diagonal without an arc; 2.3% of correctly counted
+doors have no leaf evidence against 15% of the false positives, so dropping them costs about as many
+right answers as it fixes. The window pane convention goes both ways (merge 58 images, split 44), so a
+split rule fixes some plans and breaks others. The off-unit false positives are real doors and windows;
+a counting rule cannot tell which unit the annotation covers.
+
 ## 2026-11-14 morning: English and German room labels, evidence colours, app tiers and results, branch `polish`
 
 Problem: on the unseen-drawing set the room-label route read only Finnish and Swedish words, so the two
