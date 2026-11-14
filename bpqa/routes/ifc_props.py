@@ -37,7 +37,7 @@ ROUTE = "ifc-props"
 CLASS_WORDS: list[tuple[str, list[str], str]] = [
     (r"curtain ?walls?", ["IfcCurtainWall"], "curtain wall"),
     (r"pipe fittings?", ["IfcPipeFitting"], "pipe fitting"),
-    (r"pipes?|pipe segments?", ["IfcPipeSegment"], "pipe"),
+    (r"pipes?|piping|pipe segments?", ["IfcPipeSegment"], "pipe"),
     (r"duct fittings?", ["IfcDuctFitting"], "duct fitting"),
     (r"ducts?|duct segments?", ["IfcDuctSegment"], "duct"),
     (r"air terminals?|diffusers?", ["IfcAirTerminal"], "air terminal"),
@@ -66,6 +66,9 @@ FIRE = re.compile(r"fire ?rating|fire ?resist|feuerwiderstand|brandklasse|brannk
                   r"fireproof|palo(luokka|osasto)|ei\d{2}", re.I)
 FIRE_Q = re.compile(r"fire ?rat|fire ?resist|fire ?protect|feuerwiderstand|brandschutz|palo")
 LOADBEAR_KEY = re.compile(r"^(loadbearing|tragend|baerende|kantava)$", re.I)
+# intents whose mapping from the question is narrow (one element, one attribute, the storey list): "proven";
+# broad keyword-mapped intents (type breakdowns, property search, systems) answer as "estimate"
+PROVEN_INTENTS = {"extreme", "storeys", "fire", "element", "meta", "project"}
 NUM_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "ten": 10}
 
 
@@ -452,6 +455,18 @@ def plan(M, question) -> Lookup | None:
     if re.search(r"\b(software|application|authoring|ifc (version|schema|standard)|modell?ing standards?|"
                  r"which standards?|ifc standards?)\b", f):
         return Lookup(intent="meta")
+    if re.search(r"\b(project (information|info|name|data)|building name|location|coordinates|address|"
+                 r"where is (it|the building) (situated|located)|building'?s? type|type of building|usage)\b", f) and \
+            (not classes or classes == ["IfcSpace"]):
+        return Lookup(intent="project")
+    if re.search(r"\b(mep|hvac|heating|cooling|ventilation|plumbing|electrical|sanitary|drainage|water|lighting|"
+                 r"fire protection|sprinkler)\b.*\b(systems?|components?|sub-systems?)\b|\bsystems? (types?|installed)\b", f):
+        return Lookup(intent="systems", prop=" ".join(re.findall(r"\b(mep|hvac|heating|cooling|ventilation|plumbing|"
+                                                                 r"electrical|sanitary|drainage|water|lighting|sprinkler)\b", f)))
+    if re.search(r"\bstructural (elements?|components?|members?|system)\b", f) and not re.search(r"material", f):
+        return Lookup(intent="structural", by_level=by_level)
+    if re.search(r"\bheights?\b.*\b(levels|storeys|stories|floors)\b", f) and not classes:
+        return Lookup(intent="storeys")
     if re.search(r"\b(load[- ]?bearing|tragend|structural walls?)\b", f) and "IfcWall" in classes:
         return Lookup(intent="absent", prop="LoadBearing", **base)
     if FIRE_Q.search(f) and classes:
@@ -512,9 +527,20 @@ def plan(M, question) -> Lookup | None:
         classes = ["IfcSpace"]
         base.update(classes=classes, label="space")
         base.update(by_level=base["by_level"] or bool(re.search(r"\b(level|storey|floor)s?\b.*\b(breakdown|by)\b|\bby (level|storey|floor)", f)))
-    if (classes == ["IfcSpace"] or (not classes and re.search(r"\bspaces?\b|\brooms?\b", f))) and not unknown_terms(f, M):
+    from ..takeoff import Q_TYPE_RE as _QT
+    if not classes and any(re.search(rx, f) for rx in _QT.values()) and re.search(r"\bhow many\b|\bwhich\b|\blist\b|\barea", f):
+        classes = ["IfcSpace"]
+    if (classes == ["IfcSpace"] or (not classes and re.search(r"\bspaces?\b|\brooms?\b", f))) and \
+            (not unknown_terms(f, M) or any(re.search(rx, f) for rx in _QT.values())):
         base.update(classes=["IfcSpace"], label="space")
         grp = "function" if re.search(r"function|usage|use\b|purpose|grouped", f) else "none"
+        from ..takeoff import Q_TYPE_RE, GROUPS
+        rtypes = [t for t, rx in Q_TYPE_RE.items() if re.search(rx, f)]
+        if rtypes and room is None:
+            want = []
+            for t in rtypes:
+                want += list(GROUPS.get(t, (t,)))
+            return Lookup(intent="spaces", group=grp, attr="area", prop="types:" + ",".join(want), **dict(base, by_level=True))
         if room is not None:
             return Lookup(intent="element", element=room, prop=prop, **base)
         return Lookup(intent="spaces", group=grp, attr="area", **base)
@@ -523,6 +549,8 @@ def plan(M, question) -> Lookup | None:
     terms = unknown_terms(f, M)
     if terms and classes:
         return Lookup(intent="search", prop=" ".join(terms), **base)
+    if classes and re.search(r"^\s*(what|which)\b", f) and not terms:
+        return Lookup(intent="types", **base)
     if classes and re.search(r"\btypes?\b|how many|quantit|distribution|breakdown|count|which .*(are|is) (used|installed|present)|"
                              r"what .*(are|is) (used|installed|present)|\bpresent\b|\binstalled\b|\bused\b|\blist\b", f):
         return Lookup(intent="types", **base)
@@ -627,6 +655,88 @@ def run(M, L):
         if mvd:
             lines.append(f"File description (model view): {mvd}")
         return "\n".join(lines), [], [], "file header and IfcApplication"
+    if L.intent == "project":
+        lines, cited = [], []
+        for cls in ("IfcProject", "IfcSite", "IfcBuilding"):
+            for e in M.m.by_type(cls):
+                bits = [f"{cls[3:]}: {e.Name or '-'}"]
+                for a in ("LongName", "Description", "ObjectType", "Phase"):
+                    v = getattr(e, a, None)
+                    if v:
+                        bits.append(f"{a} {v}")
+                if cls == "IfcSite":
+                    for a in ("RefLatitude", "RefLongitude"):
+                        v = getattr(e, a, None)
+                        if v:
+                            dms = list(v)
+                            dec = dms[0] + (dms[1] if len(dms) > 1 else 0) / 60 + (dms[2] if len(dms) > 2 else 0) / 3600
+                            bits.append(f"{a} {dec:.5f}")
+                    if getattr(e, "RefElevation", None) is not None:
+                        bits.append(f"RefElevation {e.RefElevation}")
+                addr = getattr(e, "BuildingAddress", None) or getattr(e, "SiteAddress", None)
+                if addr is not None:
+                    parts = [*(getattr(addr, "AddressLines", None) or []), getattr(addr, "PostalCode", None),
+                             getattr(addr, "Town", None), getattr(addr, "Region", None), getattr(addr, "Country", None)]
+                    parts = [p for p in parts if p]
+                    if parts:
+                        bits.append("address " + ", ".join(parts))
+                lines.append("; ".join(bits))
+                cited.append(e)
+        lines.append(f"Storeys: {len(M.storeys)}; spaces: {len(ents(M, ['IfcSpace']))}")
+        return "\n".join(lines), [], cited, "IfcProject, IfcSite, IfcBuilding attributes and addresses"
+
+    if L.intent == "systems":
+        words = L.prop.split() if L.prop else []
+        syss = []
+        for cls in ("IfcDistributionSystem", "IfcSystem", "IfcBuildingSystem"):
+            try:
+                syss += [x for x in M.m.by_type(cls) if x not in syss]
+            except RuntimeError:
+                pass
+        hit = []
+        for x in syss:
+            txt = fold(" ".join(str(getattr(x, a, "") or "") for a in ("Name", "ObjectType", "PredefinedType", "Description", "LongName")))
+            if not words or "mep" in words or any(w[:5] in txt for w in words):
+                n = sum(len(r.RelatedObjects) for r in getattr(x, "IsGroupedBy", []) or [])
+                hit.append((x, n))
+        dist = Counter(e.is_a() for e in M.m.by_type("IfcDistributionElement")) if _has(M, "IfcDistributionElement") else Counter()
+        lines = []
+        if hit:
+            lines.append(f"{len(hit)} systems (IfcSystem) in the model" + (f" matching {', '.join(words)}" if words and 'mep' not in words else "") + ":")
+            for x, n in sorted(hit, key=lambda t: -t[1])[:40]:
+                pt = getattr(x, "PredefinedType", None) or getattr(x, "ObjectType", None) or ""
+                lines.append(f"- {x.Name or '-'}" + (f" ({pt})" if pt else "") + f": {n} elements")
+        else:
+            lines.append(f"No system (IfcSystem / IfcDistributionSystem) " + (f"matching {', '.join(words)} " if words else "")
+                         + "is defined in this model.")
+        if dist:
+            lines.append(f"Distribution elements by class ({sum(dist.values())}): " + "; ".join(f"{k[3:]}: {v}" for k, v in dist.most_common(15)))
+        else:
+            lines.append("The model contains no distribution (MEP) elements.")
+        return "\n".join(lines), [{"key": x.Name, "count": n} for x, n in hit], [x for x, _ in hit], \
+            "IfcSystem groupings (IfcRelAssignsToGroup) and IfcDistributionElement classes"
+
+    if L.intent == "structural":
+        lines, rows, cited = [], [], []
+        for cls in ("IfcBeam", "IfcColumn", "IfcSlab", "IfcWall", "IfcFooting", "IfcMember", "IfcPlate", "IfcPile", "IfcRoof"):
+            es_c = ents(M, [cls])
+            if cls == "IfcWall":
+                lb = [e for e in es_c if common_flag(M, e, "LoadBearing") is True]
+                if lb:
+                    es_c = lb
+                    cls = "IfcWall (LoadBearing = True)"
+                else:
+                    cls = "IfcWall (all; no LoadBearing flag set)" if es_c else cls
+            if not es_c:
+                rows.append({"key": cls, "count": 0})
+                lines.append(f"- {cls[3:]}: 0")
+                continue
+            c = Counter(type_name(e) for e in es_c)
+            lines.append(f"- {cls[3:]}: {len(es_c)} (" + "; ".join(f"{t}: {n}" for t, n in c.most_common(6)) + (" ..." if len(c) > 6 else "") + ")")
+            rows.append({"key": cls, "count": len(es_c)})
+            cited += es_c
+        return "Structural elements by class:\n" + "\n".join(lines), rows, cited[:400], "entity counts by class, types from IfcRelDefinesByType"
+
     if L.intent == "storeys":
         sts = sorted(M.storeys, key=lambda s: float(getattr(s, "Elevation", 0) or 0))
         lines, rows = [f"{len(sts)} storeys (IfcBuildingStorey):"], []
@@ -786,6 +896,16 @@ def run(M, L):
     if L.intent == "spaces":
         if L.room is not None:
             es = [L.room]
+        if L.prop and L.prop.startswith("types:"):
+            from .. import takeoff as _tk
+            from .ifc_route import space_type_label
+            want = set(L.prop[6:].split(","))
+            es = [e for e in es if _tk.room_types(space_type_label(e)) & want]
+            scope = f" typed {', '.join(sorted(want))} from their names"
+            if not es:
+                names = sorted({space_type_label(e) for e in ents(M, ["IfcSpace"])} - {""})
+                return (f"No space whose name reads as {', '.join(sorted(want))} in this model (space names: "
+                        f"{', '.join(names[:25])}{' ...' if len(names) > 25 else ''})."), [], [], "space names"
         rows, total = [], 0.0
         groups = OrderedDict()
         srcs = set()
@@ -797,7 +917,7 @@ def run(M, L):
             groups.setdefault(key, []).append((e, a))
             total += a or 0
         where = f"on storey {L.storey.Name}" if L.storey is not None else "in the model"
-        lines = [f"{len(es)} spaces {where}, total area {_fmt(total)} sq m."]
+        lines = [f"{len(es)} spaces{scope if L.prop and L.prop.startswith('types:') else ''} {where}, total area {_fmt(total)} sq m."]
         if L.storey is None:
             per = OrderedDict()
             for e in es:
@@ -914,6 +1034,14 @@ def run(M, L):
     raise LookupError(f"intent {L.intent} not implemented")
 
 
+def _has(M, cls):
+    try:
+        M.m.by_type(cls)
+        return True
+    except RuntimeError:
+        return False
+
+
 def contained_in_space(M, sp):
     out = []
     for rel in getattr(sp, "ContainsElements", []) or []:
@@ -1011,6 +1139,10 @@ def answer(ctx, q) -> Answer:
                  items=items + [{"cited_guids": guids}], explanation=expl, cost_usd=cost)
     if L.mapper != "rules":
         ans.tier, ans.tier_reason = "estimate", "the question was mapped to the lookup by Nemotron; values are from the file"
+    elif L.intent not in PROVEN_INTENTS:
+        ans.tier = "estimate"
+        ans.tier_reason = (f"every value is read from the file, but the question was matched to a broad '{L.intent}' "
+                           f"lookup by keyword rules; check that the lookup line answers what was asked")
     if ctx.evidence:
         try:
             ans.evidence = render(ctx, M, L, text, cited)
