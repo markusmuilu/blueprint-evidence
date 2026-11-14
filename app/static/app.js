@@ -1591,10 +1591,12 @@ async function ask(refresh = false) {
   const q = $("#question").value.trim();
   if (!state.drawing) { toast("Pick a drawing first", true); return; }
   if (!q) { $("#question").focus(); return; }
+  if (state.askingQ === q && !refresh) return;   // the same question again while it runs: one request (double submit)
   leaveBatchView();                       // ask-several block: a single question shows its own answer
   window.dispatchEvent(new Event("bpe-ask"));   // the first-visit tour offer steps aside
   const btn = $("#askBtn");
-  btn.disabled = true;
+  // the button stays enabled while answering, so a different question replaces the running one instead of being
+  // dropped by the browser (a disabled submit button blocks Enter too; Mac QA 14 Nov)
   btn.setAttribute("aria-busy", "true");
   $("#viewerBusy").hidden = false;
   /* answer panel busy block: show the question while it runs */
