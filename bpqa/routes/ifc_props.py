@@ -146,6 +146,12 @@ def psets(e) -> dict:
         return {}
 
 
+def placeholder(k, v) -> bool:
+    """Exporters write the property's own name as its value when it is empty ('Fire Rating')."""
+    n = lambda x: re.sub(r"[\s_\-]", "", fold(str(x)))
+    return n(v) == n(k)
+
+
 def flat_props(e):
     """(pset, name, value) for every simple property and quantity of the element and its type."""
     for ps, vals in psets(e).items():
@@ -781,7 +787,7 @@ def run(M, L):
         by_type = OrderedDict()
         for e in pool:
             for ps, k, v in flat_props(e):
-                if FIRE.search(str(k)) and v not in (None, "", " ") and str(v) != str(k):
+                if FIRE.search(str(k)) and v not in (None, "", " ") and not placeholder(k, v):
                     by_type.setdefault(type_name(e), {"values": Counter(), "guids": []})
                     by_type[type_name(e)]["values"][str(v)] += 1
                     by_type[type_name(e)]["guids"].append(e.GlobalId)
@@ -812,7 +818,7 @@ def run(M, L):
             found = []
             for ps, k, v in flat_props(e):
                 kn = fold(str(k))
-                if any(st in kn for st in stems) and v not in (None, "", " ") and str(v) != str(k):
+                if any(st in kn for st in stems) and v not in (None, "", " ") and not placeholder(k, v):
                     found.append((ps, k, v))
             for m, t in materials_of(e):
                 if m and any(st in fold(m) for st in stems):
@@ -946,10 +952,13 @@ def run(M, L):
             scope = f" ({lab} {L.element.Name})"
         by_mat = OrderedDict()
         for e in es:
+            seen_m = set()
             for m, t in materials_of(e) or [("(no material assigned)", None)]:
                 d = by_mat.setdefault(m, {"n": 0, "types": Counter(), "thick": set()})
-                d["n"] += 1
-                d["types"][type_name(e)] += 1
+                if m not in seen_m:          # a material in two layers of one wall counts that wall once
+                    seen_m.add(m)
+                    d["n"] += 1
+                    d["types"][type_name(e)] += 1
                 if t:
                     d["thick"].add(round(float(t) * M.len_scale * 1000))
         lines = [f"Materials of {len(es)} {lab}s{scope}, {len([m for m in by_mat if not m.startswith('(')])} distinct:"]
@@ -1139,7 +1148,7 @@ def answer(ctx, q) -> Answer:
                  items=items + [{"cited_guids": guids}], explanation=expl, cost_usd=cost)
     if L.mapper != "rules":
         ans.tier, ans.tier_reason = "estimate", "the question was mapped to the lookup by Nemotron; values are from the file"
-    elif L.intent not in PROVEN_INTENTS:
+    elif L.intent not in PROVEN_INTENTS and not (L.intent in ("materials", "types") and (L.room is not None or L.element is not None)):
         ans.tier = "estimate"
         ans.tier_reason = (f"every value is read from the file, but the question was matched to a broad '{L.intent}' "
                            f"lookup by keyword rules; check that the lookup line answers what was asked")

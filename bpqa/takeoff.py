@@ -164,7 +164,8 @@ def parse_takeoff(question: str) -> dict | None:
     types = list(dict.fromkeys(types))
     if not types:
         return None
-    walls, ceiling = bool(WALLS.search(f)), bool(CEILING.search(f))
+    f_surf = re.sub(r"ceiling heights?|room heights?|huonekorkeus|raumhohe", " ", f)   # an input, not a surface
+    walls, ceiling = bool(WALLS.search(f_surf)), bool(CEILING.search(f_surf))
     surface = "walls" if walls and not re.search(r"\bfloors?\b|lattia", f) else ("ceiling" if ceiling else "floor")
     if walls and re.search(r"\bfloors?\b|lattia", f):
         surface = "floor+walls"
