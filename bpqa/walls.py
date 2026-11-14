@@ -207,8 +207,9 @@ def ring_length(poly) -> float:
     return sum(p.exterior.length + sum(r.length for r in p.interiors) for p in geoms if hasattr(p, "exterior"))
 
 
-def draw_rooms(cv, rooms, color_room, color_wall, color_open, label_fn):
-    """Room outlines filled, wall segments (the outline) drawn thick, openings marked as boxes on the wall."""
+def draw_rooms(cv, rooms, color_room, color_wall, color_open, label_fn, label_at=None):
+    """Room outlines filled, wall segments (the outline) drawn thick, openings marked as boxes on the wall.
+    `label_at(i, r)` -> (x, y) places a room's label (default: its representative point)."""
     for i, r in enumerate(rooms):
         poly = r["poly"]
         for p in getattr(poly, "geoms", [poly]):
@@ -233,4 +234,4 @@ def draw_rooms(cv, rooms, color_room, color_wall, color_open, label_fn):
                 if o.get("deducted") is not None:
                     cv.text(((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), f"{o['kind']} -{o['deducted']:.2f}", size=10)
         c = poly.representative_point()
-        cv.text((c.x, c.y), label_fn(i, r), size=12)
+        cv.text(label_at(i, r) if label_at else (c.x, c.y), label_fn(i, r), size=12)

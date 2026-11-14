@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PIL import Image  # noqa: E402
 
-from bpqa.evidence import AMBER, BLUE, GREY, ImageCanvas, VectorCanvas, finish, marks_path  # noqa: E402
+from bpqa.evidence import AMBER, BLUE, GREY, ImageCanvas, VectorCanvas, finish, marks_path, record_steps  # noqa: E402
 
 
 def test_vector_canvas_world_to_pixels():
@@ -48,6 +48,32 @@ def test_image_canvas_resized_and_tones():
     print("ok test_image_canvas_resized_and_tones")
 
 
+def test_steps_scaled_with_the_marks():
+    """Per-item reasoning steps (label box, value box, region) are written beside the marks, in the same pixels."""
+    img = Image.new("RGB", (3200, 1600), "white")
+    cv = ImageCanvas(img)
+    cv.box((100, 100, 300, 200), n=1, color=BLUE)
+    record_steps(cv.img, 1, [
+        {"kind": "label", "title": "Label read", "text": "MH 1", "note": "read as bedroom", "rect": (300, 200, 100, 100)},
+        {"kind": "value", "title": "Size printed", "text": "11,0 m2", "note": "size 11.0 m2", "rect": (100, 220, 300, 260)},
+        {"kind": "region", "title": "Room region", "text": "outlined", "pts": [(0, 0), (800, 0), (800, 800)]},
+        None,
+    ])
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "c.png"
+        finish(cv.img, out, "q", "Answer: 3")
+        m = json.loads(marks_path(out).read_text())
+    st = m["steps"]["1"]
+    assert [x["kind"] for x in st] == ["label", "value", "region"]
+    assert st[0]["rect"] == [50.0, 50.0, 150.0, 100.0]               # normalised (x0 < x1) and halved like the marks
+    assert st[1]["text"] == "11,0 m2" and st[1]["rect"] == [50.0, 110.0, 150.0, 130.0]
+    assert st[2]["pts"][1] == [400.0, 0.0] and st[2]["rect"] == [0.0, 0.0, 400.0, 400.0]
+    # older readers: the marks themselves are unchanged
+    assert [x["kind"] for x in m["marks"]] == ["box"]
+    print("ok test_steps_scaled_with_the_marks")
+
+
 if __name__ == "__main__":
     test_vector_canvas_world_to_pixels()
     test_image_canvas_resized_and_tones()
+    test_steps_scaled_with_the_marks()

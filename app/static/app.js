@@ -485,6 +485,16 @@ const viewer = (() => {
     apply();
   }
 
+  /* zoom a rect (image pixels) to fill `fill` of a part of the viewport {l, t, w, h} and centre it there */
+  function focusIn(r, box, fill = 0.7, maxK = 4) {
+    const [rx, ry, rw, rh] = rectToView(r);
+    k = Math.max(0.02, Math.min((box.w * fill) / Math.max(rw, 1), (box.h * fill) / Math.max(rh, 1), maxK));
+    x = box.l + box.w / 2 - (rx + rw / 2) * k;
+    y = box.t + box.h / 2 - (ry + rh / 2) * k;
+    atFit = false;
+    apply();
+  }
+
   /* rotate and mirror about the middle of the viewport: the point under the middle stays there, zoom is kept */
   function setOrient(nr, nf, silent = false) {
     nr = ((nr % 4) + 4) % 4;
@@ -605,7 +615,7 @@ const viewer = (() => {
     $("#viewerEmpty").innerHTML = `<p class="empty-title">${esc(msgTitle)}</p><p class="meta">${esc(msg)}</p>`;
   }
   return {
-    load, clear, fit, focusRect, rectToView, pointToView, resetOrient, matrix: mat,
+    load, clear, fit, focusRect, focusIn, rectToView, pointToView, resetOrient, matrix: mat,
     onOrient: (fn) => orientListeners.push(fn),
     fitIfNeeded: () => { if (img.naturalWidth && !fitted) fit(); }, img,
   };
@@ -759,9 +769,10 @@ function drawPins(a) {
     return `<div class="dis ${d.kind}" title="${esc(tip)}" style="left:${vx - R}px;top:${vy - R}px;width:${2 * R}px;height:${2 * R}px"></div>`;
   }).join("") : "";
   $("#marks").innerHTML = rooms + html + added + dis + '<div class="reticle" hidden></div>';
+  drawLayers();                                 // evidence layers of the selected item, in the new view space
 }
 let lastFocus = null;            // the selected item's rect and index, so a rotation can redraw its reticle
-function clearMarks() { $("#marks").innerHTML = ""; clearFocus(); lastFocus = null; }
+function clearMarks() { closeSteps(); $("#marks").innerHTML = ""; clearFocus(); lastFocus = null; }
 function clearFocus() {
   document.querySelectorAll(".item.on, .pin.on, .thumb.on, .room-outlines polygon.on").forEach((b) => b.classList.remove("on"));
   const ret = $("#marks .reticle");
@@ -785,6 +796,7 @@ function focusRect(r, i, focus) {
     ret.hidden = false;
   }
   if (focus) viewer.focusRect(...r);
+  if (focus) openSteps(i);                     // evidence layers: the Steps card for the clicked item
 }
 function markItem(btn, it, a, n, focus) {
   if (state.mode === "3d" && it && it.guid && window.Viewer3D) {
@@ -793,6 +805,284 @@ function markItem(btn, it, a, n, focus) {
   }
   focusRect(itemRect(it, a, +btn.dataset.i), btn.dataset.i, focus);
 }
+
+/* ---------------------------------------------------------------- evidence layers: the Steps card */
+/* Selecting an item (strip crop, item list, or the number on a pin) opens a small card over the drawing with
+   the reasoning for that item, one numbered step per layer: the text that was read, how it was interpreted,
+   the value, and the region it covers. Each step with a place on the drawing is drawn in the marks layer (view
+   space, so rotation and mirroring keep it aligned); hovering or clicking a step shows only that layer.
+   Steps come from the marks sidecar (`steps`, keyed by item number, written by the routes through
+   bpqa/evidence.record_steps); routes that do not write them get steps derived from the item and its mark. */
+const layers = { sel: null, solo: null, held: false, playT: null };
+
+function layerSteps(a, row) {
+  const off = headerOff(a);
+  const rec = a.marks?.steps?.[String(row.n)];
+  if (rec && rec.length) {
+    return rec.map((st) => ({ ...st,
+      r: st.rect ? [st.rect[0], st.rect[1] + off, Math.max(st.rect[2] - st.rect[0], 2), Math.max(st.rect[3] - st.rect[1], 2)] : null,
+      pts: st.pts && st.pts.length > 2 ? st.pts.map(([x, y]) => [x, y + off]) : null }));
+  }
+  return deriveLayerSteps(a, row);
+}
+/* routes without recorded steps: what the item and its mark already say */
+function deriveLayerSteps(a, row) {
+  const it = row.it && typeof row.it === "object" ? row.it : null;
+  const off = headerOff(a);
+  const poly = row.mark?.kind === "poly" && row.mark.pts?.length > 2 ? row.mark.pts.map(([x, y]) => [x, y + off]) : null;
+  const obj = String(a.query?.obj || "item").replace(/_/g, " ");
+  const unit = fmtUnit(a.unit);
+  const S = [];
+  if (it && it.guid) {                                     // IFC: the element, its quantity, its outline, the model
+    S.push({ kind: "label", title: "Element", text: it.name || it.label || it.room || "element", note: `GUID ${it.guid}`, cap: "element" });
+    const v = it.value ?? it.area_m2 ?? it.area;
+    if (typeof v === "number") S.push({ kind: "value", title: "Value read", text: `${v} ${unit}`.trim(), note: "quantity taken from the model" });
+    if (poly || row.rect) S.push({ kind: "region", title: "On the plan", text: poly ? "outline" : "box", note: "drawn from the model geometry",
+      cap: poly ? "outline from the model" : "element", pts: poly, r: poly ? null : row.rect });
+    if (state.has3d) S.push({ kind: "model", title: "In 3D", text: "", note: "", guid: it.guid });
+    return S;
+  }
+  if (it && it.ocr_conf != null) {                         // scan room labels: the text read, then what it counts as
+    S.push({ kind: "label", title: "Text read", text: it.label || it.text || it.match || "", note: `OCR confidence ${Number(it.ocr_conf).toFixed(2)}`,
+      cap: `read as ${obj}`, r: row.rect });
+    S.push({ kind: "count", title: "Counted as", text: obj, note: it.match && it.match !== it.label ? `matched ${it.match}` : `item ${row.n} of the count` });
+    return S;
+  }
+  if (it && (it.score != null || it.cls != null || it.class != null)) {   // scan symbols: the detected box, class and score
+    const cls = String(it.class ?? it.cls ?? obj).replace(/_/g, " ");
+    S.push({ kind: "detect", title: "Symbol found", text: cls, note: it.score != null ? `detector score ${Number(it.score).toFixed(2)}` : "",
+      cap: it.score != null ? `${cls} ${Number(it.score).toFixed(2)}` : cls, r: row.rect });
+    const total = answerItems(a).length;
+    S.push({ kind: "count", title: "Counted", text: `#${row.n} of ${total}`, note: row.tone === "amber" ? "uncertain: check it on the drawing" : "in the answer" });
+    return S;
+  }
+  S.push({ kind: "label", title: "Item", text: row.label || "", note: row.extra || "" });
+  if (poly) S.push({ kind: "region", title: "Region", text: "outline", note: row.area != null ? `${Number(row.area).toFixed(2)} m2` : "", cap: "region", pts: poly });
+  else if (row.rect) S.push({ kind: "region", title: "On the drawing", text: "box", note: "", cap: obj, r: row.rect });
+  return S;
+}
+const m2 = (s) => String(s ?? "").replace(/(\d)\s?m2\b/g, "$1 m²");
+function layerRow(a, i) { return checkItems(a).find((r) => String(r.i) === String(i)) || null; }
+
+function openSteps(i, zoom = true) {
+  const a = state.shown;
+  if (!a || state.mode === "3d" || state.layer !== "evidence") return;
+  const row = layerRow(a, i);
+  if (!row) return;
+  stopStepPlay();
+  layers.sel = { a, i: row.i, row, steps: layerSteps(a, row) };
+  layers.solo = null;
+  layers.held = false;
+  renderStepsCard();
+  drawLayers();
+  if (zoom) focusSteps();
+}
+/* zoom so every layer of the item is readable, in the part of the viewer the card leaves free */
+function focusSteps() {
+  const s = layers.sel, card = $("#stepsCard");
+  if (!s || !card || card.hidden) return;
+  const bb = [Infinity, Infinity, -Infinity, -Infinity];
+  const add = (x, y) => { bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); };
+  for (const st of s.steps) {
+    if (st.r) { add(st.r[0], st.r[1]); add(st.r[0] + st.r[2], st.r[1] + st.r[3]); }
+    (st.pts || []).forEach(([x, y]) => add(x, y));
+  }
+  if (s.row.rect) { add(s.row.rect[0], s.row.rect[1]); add(s.row.rect[0] + s.row.rect[2], s.row.rect[1] + s.row.rect[3]); }
+  if (!isFinite(bb[0])) return;
+  const pad = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * (s.steps.some((st) => st.pts) ? 0.08 : 1.2);   // a lone symbol keeps its surroundings
+  bb[0] -= pad; bb[1] -= pad; bb[2] += pad; bb[3] += pad;
+  const v = $("#viewer").getBoundingClientRect(), c = card.getBoundingClientRect();
+  const top = 56, gap = 16;                        // under the floating toolbar
+  const right = { l: c.right - v.left + gap, t: top, w: v.right - c.right - 2 * gap, h: v.height - top - gap };
+  const above = { l: gap, t: top, w: v.width - 2 * gap, h: c.top - v.top - top - gap };
+  const r = [bb[0], bb[1], Math.max(bb[2] - bb[0], 8), Math.max(bb[3] - bb[1], 8)];
+  const [, , vw, vh] = viewer.rectToView(r);
+  const fitK = (b) => (b.w < 120 || b.h < 80 ? 0 : Math.min(b.w / vw, b.h / vh));    // the side where the item can be largest
+  const box = fitK(right) >= fitK(above) ? right : above;
+  if (!fitK(box)) return;
+  viewer.focusIn(r, box, 0.8);
+}
+function closeSteps() {
+  stopStepPlay();
+  layers.sel = null;
+  layers.solo = null;
+  layers.held = false;
+  $("#marks .layers")?.remove();
+  $("#marks").querySelectorAll(".lcap").forEach((c) => c.remove());
+  $("#marks").removeAttribute("data-solo");
+  $("#marks").classList.remove("stepping");
+  $("#marks").querySelectorAll(".steps-of").forEach((el) => el.classList.remove("steps-of"));
+  const card = $("#stepsCard");
+  if (card) card.hidden = true;
+}
+
+/* every step with a place on the drawing, in view space; called again by drawPins after any redraw */
+function drawLayers() {
+  const box = $("#marks");
+  box.querySelector(".layers")?.remove();
+  box.querySelectorAll(".lcap").forEach((c) => c.remove());
+  const s = layers.sel;
+  if (!s || s.a !== state.shown || state.layer !== "evidence") { box.classList.remove("stepping"); return; }
+  let svg = "", caps = "";
+  const vr = s.steps.map((st) => (st.r && !st.pts ? viewer.rectToView(st.r) : null));
+  const mids = vr.filter(Boolean).map((v) => v[1] + v[3] / 2).sort((p, q) => p - q);
+  const split = mids.length > 1 ? (mids[Math.floor((mids.length - 1) / 2)] + mids[Math.floor(mids.length / 2)]) / 2 : Infinity;
+  s.steps.forEach((st, k) => {
+    const cap = esc(m2(st.cap || st.note || st.text || st.title).slice(0, 48));
+    if (st.pts) {
+      const vp = st.pts.map(([x, y]) => viewer.pointToView(x, y));
+      svg += `<polygon data-k="${k}" class="lk-${esc(st.kind)}" points="${vp.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ")}"/>`;
+      st.hole = "M" + vp.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z";
+      const [bx, by] = vp.reduce(([ax, ay], [x, y]) => (y > ay + 0.5 || (Math.abs(y - ay) <= 0.5 && x < ax) ? [x, y] : [ax, ay]), [Infinity, -Infinity]);
+      caps += `<div class="lcap below" data-k="${k}" style="left:${bx}px;top:${by}px"><span><b>${k + 1}</b>${cap}</span></div>`;
+    } else if (st.r) {
+      const v = vr[k];
+      svg += `<rect data-k="${k}" class="lk-${esc(st.kind)}" x="${v[0] - 2}" y="${v[1] - 2}" width="${v[2] + 4}" height="${v[3] + 4}"/>`;
+      const p = 4;
+      st.hole = `M${v[0] - p},${v[1] - p}H${v[0] + v[2] + p}V${v[1] + v[3] + p}H${v[0] - p}Z`;
+      const below = v[1] + v[3] / 2 > split;              // stacked label and value: the upper captioned above, the lower below
+      caps += `<div class="lcap${below ? " below" : ""}" data-k="${k}" style="left:${v[0] - 2}px;top:${below ? v[1] + v[3] + 2 : v[1] - 2}px"><span><b>${k + 1}</b>${cap}</span></div>`;
+    }
+  });
+  box.insertAdjacentHTML("beforeend", `<svg class="layers" aria-hidden="true"><path class="veil" d=""/>${svg}</svg>${caps}`);
+  box.classList.add("stepping");
+  box.querySelectorAll(`.pin[data-i="${s.i}"], .room-outlines polygon[data-i="${s.i}"]`).forEach((el) => el.classList.add("steps-of"));
+  applySolo();
+}
+function applySolo() {
+  const k = layers.solo;
+  const box = $("#marks");
+  if (k == null) box.removeAttribute("data-solo"); else box.setAttribute("data-solo", layers.sel?.steps[k]?.kind || "");
+  box.querySelectorAll(".layers [data-k], .lcap").forEach((el) => el.classList.toggle("dim", k != null && +el.dataset.k !== k));
+  const hole = k != null ? layers.sel?.steps[k]?.hole : null;          // a step shown alone: the rest of the drawing is veiled
+  const veil = box.querySelector(".layers .veil");
+  if (veil) veil.setAttribute("d", hole ? `M-99999,-99999H99999V99999H-99999Z${hole}` : "");
+  document.querySelectorAll("#stepsCard .sc-step").forEach((b) => {
+    b.setAttribute("aria-pressed", String(layers.held && +b.dataset.k === k));
+    b.classList.toggle("on", +b.dataset.k === k);
+  });
+}
+function setSolo(k, held = layers.held) {
+  layers.solo = k;
+  layers.held = held;
+  applySolo();
+}
+
+function renderStepsCard() {
+  let card = $("#stepsCard");
+  if (!card) {
+    card = document.createElement("section");
+    card.id = "stepsCard";
+    card.className = "steps-card";
+    card.setAttribute("aria-label", "Steps for the selected item");
+    $("#viewer").appendChild(card);
+    bindStepsCard(card);
+  }
+  const s = layers.sel;
+  if (!s) { card.hidden = true; return; }
+  const geo = s.steps.filter((st) => st.r || st.pts).length;
+  const raw = (st) => st.kind === "value" || st.kind === "label" || st.kind === "detect";   // text as read: not reformatted
+  card.innerHTML = `
+    <div class="sc-head">
+      <h3 class="h-panel"><span class="mono sc-n">#${esc(s.row.n)}</span>${esc(s.row.label || "")}</h3>
+      <span class="sc-gap"></span>
+      ${geo > 1 ? `<button type="button" class="btn btn-quiet sc-play" aria-pressed="false" title="Show the layers one at a time">Step through</button>` : ""}
+      <button type="button" class="tool sc-close" aria-label="Close the steps">${icon("close")}</button>
+    </div>
+    <ol class="sc-list">
+      ${s.steps.map((st, k) => `<li><button type="button" class="sc-step${st.r || st.pts ? "" : " flat"}" data-k="${k}" aria-pressed="false">
+        <span class="cite">${k + 1}</span><span class="k">${esc(st.title)}</span>
+        <span class="v">${st.kind === "model" ? `<span class="sc-3d">Select in 3D</span>`
+          : `${st.text ? `<span class="mono">${esc(raw(st) ? st.text : m2(st.text))}</span>` : ""}${st.note ? `${st.text ? " → " : ""}<span class="note">${esc(m2(st.note))}</span>` : ""}`}</span>
+      </button></li>`).join("")}
+    </ol>
+    ${geo ? `<p class="sc-foot">Hover or click a step to show only its layer.</p>` : ""}`;
+  card.hidden = false;
+}
+function bindStepsCard(card) {
+  ["pointerdown", "pointerup", "wheel", "dblclick"].forEach((ev) => card.addEventListener(ev, (e) => e.stopPropagation()));
+  card.addEventListener("click", (e) => {
+    if (e.target.closest(".sc-close")) { closeSteps(); return; }
+    if (e.target.closest(".sc-play")) { if (layers.playT) stopStepPlay(); else playSteps(); return; }
+    const b = e.target.closest(".sc-step");
+    if (!b) return;
+    const k = +b.dataset.k, st = layers.sel?.steps[k];
+    if (st?.kind === "model") { select3d(st.guid); return; }
+    stopStepPlay();
+    if (layers.held && layers.solo === k) setSolo(null, false); else setSolo(k, true);
+  });
+  card.addEventListener("mouseover", (e) => {
+    const b = e.target.closest(".sc-step");
+    if (b && !layers.held && !layers.playT) setSolo(+b.dataset.k, false);
+  });
+  card.addEventListener("mouseleave", () => { if (!layers.held && !layers.playT) setSolo(null, false); });
+  card.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    const n = layers.sel?.steps.length || 0;
+    if (!n) return;
+    if (e.key === "Escape") { if (layers.solo != null) setSolo(null, false); else closeSteps(); e.preventDefault(); return; }
+    const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    stopStepPlay();
+    const k = layers.solo == null ? (d > 0 ? 0 : n - 1) : layers.solo + d;
+    if (k < 0 || k >= n) { setSolo(null, false); card.querySelector(".sc-close")?.focus(); return; }
+    setSolo(k, true);
+    card.querySelector(`.sc-step[data-k="${k}"]`)?.focus();
+  });
+}
+/* one layer at a time, then all of them again */
+function playSteps() {
+  const s = layers.sel;
+  if (!s) return;
+  const ks = s.steps.map((st, k) => (st.r || st.pts ? k : null)).filter((k) => k != null);
+  let j = 0;
+  $("#stepsCard .sc-play")?.setAttribute("aria-pressed", "true");
+  const tick = () => {
+    if (j >= ks.length) { stopStepPlay(); setSolo(null, false); return; }
+    setSolo(ks[j++], false);
+    layers.playT = setTimeout(tick, 1100);
+  };
+  tick();
+}
+function stopStepPlay() {
+  clearTimeout(layers.playT);
+  layers.playT = null;
+  $("#stepsCard .sc-play")?.setAttribute("aria-pressed", "false");
+}
+function select3d(guid) {
+  if (!state.has3d || !guid) return;
+  closeSteps();
+  setMode("3d");
+  let tries = 0;                     // the model may still be loading: try until its element card shows
+  const go = () => {
+    if (window.Viewer3D) Viewer3D.select(guid);
+    if ((!$("#v3dCard") || $("#v3dCard").hidden) && ++tries < 60 && state.mode === "3d") setTimeout(go, 500);
+  };
+  go();
+}
+/* a rotation or mirror while the card is open: bring the item back into the free part of the viewer */
+viewer.onOrient(() => { if (layers.sel && state.layer === "evidence") focusSteps(); });
+/* the number on a pin selects its item too (the marks layer lets pointer events through, for panning) */
+(function bindPinClicks() {
+  const vp = $("#viewer");
+  let down = null;
+  vp.addEventListener("pointerdown", (e) => {
+    if (state.layer !== "evidence" || state.mode === "3d") { down = null; return; }
+    const hit = (el) => { const b = el.getBoundingClientRect(); return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom; };
+    const tag = [...document.querySelectorAll("#marks .pin[data-i] > span")].find(hit);        // the number tag first,
+    const pin = tag ? tag.parentElement : [...document.querySelectorAll("#marks .pin[data-i]:not(.room)")].filter(hit)   // then the smallest box
+      .sort((p, q) => p.offsetWidth * p.offsetHeight - q.offsetWidth * q.offsetHeight)[0];
+    down = pin ? { i: pin.dataset.i, x: e.clientX, y: e.clientY } : null;
+  }, true);
+  vp.addEventListener("pointerup", (e) => {
+    const d = down;
+    down = null;
+    if (!d || state.addMode || Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 4) return;
+    const a = state.shown, row = a && layerRow(a, d.i);
+    if (row && row.rect) { focusRect(row.rect, row.i, false); openSteps(row.i); }
+  });
+})();
 
 /* ---------------------------------------------------------------- 3D view (IFC models) */
 function has3dFor(d) { return !!d && (d.ext === "ifc" || (d.twins || []).includes("ifc model")); }

@@ -33,7 +33,7 @@ from shapely.strtree import STRtree
 
 from .. import takeoff
 from ..answer import Answer, abstain, estimate
-from ..evidence import AMBER, BLUE, PALETTE, ImageCanvas, evidence_path, finish
+from ..evidence import AMBER, BLUE, PALETTE, ImageCanvas, evidence_path, finish, record_steps
 from ..pdfvec import PT_M, load_page
 from .dxf_swiss import AREA_RE, NUM_RE, OUTDOOR, SHAFT_VOID, UNIT_RE, _window_groups
 from . import pdf_generic
@@ -212,10 +212,12 @@ class PdfFloor:
                 continue
             r = min(cands, key=lambda r: r["poly"].area)
             r["texts"].append(s.text)
+            r.setdefault("spans", []).append(s)          # where each text sits, for the evidence steps
             if NUM_RE.match(s.text):
                 r["number"] = s.text
             elif (mm := AREA_RE.match(s.text)):
                 r["area_label"] = float(mm.group(1))
+                r["area_span"] = s
             elif r["name"] is None:
                 r["name"] = s.text
 
@@ -621,6 +623,41 @@ def answer(ctx, q) -> Answer:
     return ans
 
 
+def _room_steps(fl, r, tr, q) -> list[dict]:
+    """The reasoning for one room: the label text read inside its shape (and the room type it names), where its
+    area comes from (the outline x the sheet's scale; a printed area beside it is shown as the cross-check),
+    and the outline. Pixel boxes on the rendered page."""
+    def px(b):
+        a, c = tr(b[0], b[1]), tr(b[2], b[3])
+        return [min(a[0], c[0]), min(a[1], c[1]), max(a[0], c[0]), max(a[1], c[1])]
+    spans = r.get("spans") or []
+    name = r.get("tname") or r["name"]
+    lab = next((s for s in spans if s.text == name), None) or next((s for s in spans if s.text == r["name"]), None)
+    num = next((s for s in spans if r["number"] and s.text == r["number"]), None)
+    area = fl.room_area(r)
+    steps = []
+    if lab is not None or num is not None:
+        types = sorted(takeoff.room_types(name or ""))
+        if q.variant == "type_sum":
+            types = sorted(takeoff.room_types(name or "") & set(q.extra["takeoff"]["types"])) or types
+        text = " ".join(t for t in (name, f"({r['number']})" if r["number"] and r["number"] != name else "") if t)
+        rects = [px(s.bbox) for s in (lab, num) if s is not None]
+        rect = [min(b[0] for b in rects), min(b[1] for b in rects), max(b[2] for b in rects), max(b[3] for b in rects)]
+        steps.append({"kind": "label", "title": "Label read", "text": text,
+                      "note": f"read as {', '.join(types)}" if types else "room name inside the shape", "rect": rect})
+    if r.get("area_span") is not None:
+        agree = abs(r["area_label"] - area) <= 0.02 * max(r["area_label"], 1e-9)
+        steps.append({"kind": "value", "title": "Size printed", "text": r["area_span"].text,
+                      "note": f"cross-check: {'agrees with' if agree else 'differs from'} the outline's {area:.2f} m2",
+                      "cap": f"printed {r['area_label']:g} m2",
+                      "rect": px(r["area_span"].bbox)})
+    sc = fl.scale
+    steps.append({"kind": "region", "title": "Room outline", "text": f"{area:.2f} m2", "cap": f"outline {area:.2f} m2",
+                  "note": f"computed from the drawn outline x scale ({sc.method})" + ("" if r.get("area_span") is not None else "; no area printed"),
+                  "pts": [tr(x, y) for x, y in r["outline"].exterior.coords]})
+    return steps
+
+
 def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes, route=ROUTE, estimate=False):
     """Overlay drawn from the same shapes that produced the answer, on the rendered PDF page."""
     img, mat = fl.vp.render()
@@ -640,6 +677,8 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes, route=ROUT
         bb = cv.d.textbbox((x, y), lab, font=f, anchor="mm")
         cv.d.rectangle([bb[0] - 2, bb[1] - 1, bb[2] + 2, bb[3] + 1], fill=(255, 255, 255, 220))
         cv.d.text((x, y), lab, fill=(0, 0, 0), font=f, anchor="mm")
+        if q.measure == "area":
+            record_steps(cv.img, i + 1, _room_steps(fl, r, tr, q))
     for i, b in enumerate(boxes):
         a, c = tr(b[0], b[1]), tr(b[2], b[3])
         cv.box((min(a[0], c[0]) - 3, min(a[1], c[1]) - 3, max(a[0], c[0]) + 3, max(a[1], c[1]) + 3), n=i + 1,
