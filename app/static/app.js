@@ -217,11 +217,23 @@ const GROUPS = [
 ];
 const GROUP_FIRST = 8, GROUP_MORE = 30;
 const GROUP_KEY = "bpe-lib-collapsed";
+const TOUR_KEY = "bpe-tour";   // set by the tour block at the end of this file
 const groupStore = {
   read() { try { const a = JSON.parse(localStorage.getItem(GROUP_KEY)); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); } },
   write(set) { try { localStorage.setItem(GROUP_KEY, JSON.stringify([...set])); } catch { /* storage blocked: state lasts for this visit */ } },
 };
-const collapsedGroups = groupStore.read();
+// first visit (the tour has not been answered): every group starts folded, so the tour's first step has something to open
+const collapsedGroups = (() => {
+  let raw = null, tourAnswered = false;
+  try { raw = localStorage.getItem(GROUP_KEY); } catch (_) { /* blocked */ }
+  try { tourAnswered = localStorage.getItem(TOUR_KEY) !== null; } catch (_) { /* blocked: counts as unanswered */ }
+  if (raw === null && !tourAnswered && window.matchMedia("(min-width: 1081px)").matches) {
+    const all = new Set(GROUPS.map((g) => g.id));
+    groupStore.write(all);
+    return all;
+  }
+  return groupStore.read();
+})();
 
 function groupHead(g, r, open, bodyId) {
   const h = document.createElement("h3");
@@ -1898,58 +1910,156 @@ window.addEventListener("hashchange", async () => {
 });
 
 
-/* ================================================================ first-visit guide (onboarding block)
-   Self-contained: a dismissible card at the top of the answer panel, reopened from "How it works" in the app bar.
-   Dismissal is remembered in localStorage (try/catch; without storage the card simply shows on every load).
-   "Show me" reuses TRY[0], selectDrawing, ask, openSteps and playSteps; nothing above depends on this block. */
+/* ================================================================ first-visit tour (onboarding block, v2.6)
+   Replaces the static "How it works" card. On a first visit a small offer asks whether to take a tour; Start walks
+   five steps, each an outline around the real element plus a bubble. "How it works" in the app bar replays it.
+   The choice is kept in localStorage under bpe-tour (try/catch: without storage the offer shows on every load).
+   Only at 1081px and wider: below that the panels float or stack, and CSS hides the offer and the button.
+   Step 4 runs the example the old card ran (a Swiss plan, bathroom area) through selectDrawing and ask.
+   Nothing above depends on this block except the first-visit default of folded library groups (TOUR_KEY). */
 (() => {
-  const KEY = "bpe-guide-seen";
-  const guide = $("#guide"), openBtn = $("#guideOpen"), note = $("#guideNote"), show = $("#guideShow");
-  const seen = () => { try { return localStorage.getItem(KEY) === "1"; } catch (_) { return false; } };
-  const remember = () => { try { localStorage.setItem(KEY, "1"); } catch (_) { /* not stored: shows again next visit */ } };
-  // phones stack the answer panel under the viewer: the guide goes to the top of the page instead
-  const phone = window.matchMedia("(max-width: 760px)");
-  const place = () => { if (phone.matches) $(".work").prepend(guide); else $("#detail").prepend(guide); };
-  place();
-  if (phone.addEventListener) phone.addEventListener("change", place);
-  function setOpen(on, scroll) {
-    guide.hidden = !on;
-    openBtn.setAttribute("aria-expanded", String(on));
-    if (on && scroll) { $("#detail").scrollTop = 0; guide.scrollIntoView({ block: "nearest" }); }
-  }
-  function close() { remember(); setOpen(false); }
-  $("#guideClose").addEventListener("click", () => { close(); openBtn.focus(); });
-  openBtn.addEventListener("click", () => {
-    if (!guide.hidden) { close(); return; }
-    showView("ask");
-    setOpen(true, true);
-  });
-  // the first answer ends the first visit
-  const origRender = renderAnswer;
-  renderAnswer = function (a) { origRender(a); if (a && !guide.hidden) close(); };
+  const wide = window.matchMedia("(min-width: 1081px)");
+  const remember = (v) => { try { localStorage.setItem(TOUR_KEY, v); } catch (_) { /* not stored: offered again next visit */ } };
+  const mk = (cls) => { const e = document.createElement("div"); e.className = cls; return e; };
 
-  let running = false;
-  show.addEventListener("click", async () => {
-    if (running) return;
+  const exampleTarget = () => {
+    const t = $("#detailEmpty .try-list");
+    return t && t.offsetParent ? t.closest(".try") : $("#exampleChips");
+  };
+  const STEPS = [
+    { el: () => $("#drawList"), side: ["right", "left"], text: "Drawings are grouped by type. Open a group to see its drawings." },
+    { el: () => $("#drop"), side: ["right", "left"], text: "Add your own drawing here. Uploads are deleted after 15 minutes." },
+    { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language." },
+    { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
+    { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
+  ];
+
+  let shield, spot, bubble, idx = -1, returnFocus = null, busy = false;
+
+  async function runExample() {
     const t = { path: "data/swiss_dwellings/site3387_bldg5238_floor23498.pdf", q: "What is the floor area of the bathrooms?" };
-    running = true; show.disabled = true;
     try {
-      showView("ask");
-      note.textContent = "Opening a Swiss plan.";
       await selectDrawing(t.path);
-      if (!state.drawing) { note.textContent = "That example drawing is not in this library."; return; }
+      if (!state.drawing) return;
       $("#question").value = t.q;
-      note.textContent = "Asking: " + t.q;
       await ask();
-      if (!state.answer) { note.textContent = ""; return; }
-      remember();
-      const items = checkItems(state.answer);
-      if (items.length && state.layer === "evidence") {
-        openSteps(0);
-        if (layers.sel && layers.sel.steps.length > 1) setTimeout(() => { if (layers.sel) playSteps(); }, 700);
-      }
     } catch (_) { /* the toast from ask already says what failed */ }
-    finally { running = false; show.disabled = false; }
-  });
-  setOpen(!seen());
+  }
+
+  function end(markDone) {
+    if (idx < 0) return;
+    idx = -1;
+    shield.remove(); spot.remove(); bubble.remove();
+    document.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("resize", layout);
+    if (markDone) remember("done");
+    if (returnFocus && returnFocus.focus) returnFocus.focus();
+  }
+
+  function layout() {
+    if (idx < 0) return;
+    const step = STEPS[idx], el = step.el();
+    if (!el || !el.offsetParent) { spot.hidden = true; bubble.style.left = "50%"; bubble.style.top = "40%"; return; }
+    spot.hidden = false;
+    const r = el.getBoundingClientRect(), pad = 4;
+    Object.assign(spot.style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + 2 * pad + "px", height: r.height + 2 * pad + "px" });
+    const W = window.innerWidth, H = window.innerHeight, bw = bubble.offsetWidth, bh = bubble.offsetHeight, m = 14;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
+    const spots = {
+      right: () => [r.right + pad + m, clamp(r.top, 48, H - bh - 8), r.right + pad + m + bw <= W - 8],
+      left: () => [r.left - pad - m - bw, clamp(r.top, 48, H - bh - 8), r.left - pad - m - bw >= 8],
+      bottom: () => [clamp(r.left, 8, W - bw - 8), r.bottom + pad + m, r.bottom + pad + m + bh <= H - 8],
+      top: () => [clamp(r.left, 8, W - bw - 8), r.top - pad - m - bh, r.top - pad - m - bh >= 8],
+    };
+    let pos = null;
+    for (const s of step.side) { const p = spots[s](); if (p[2]) { pos = p; break; } }
+    if (!pos) { const p = spots[step.side[0]](); pos = [clamp(p[0], 8, W - bw - 8), clamp(p[1], 8, H - bh - 8)]; }
+    bubble.style.left = pos[0] + "px"; bubble.style.top = pos[1] + "px";
+  }
+
+  function render() {
+    const step = STEPS[idx], last = idx === STEPS.length - 1;
+    bubble.innerHTML = `<p>${esc(step.text)}</p>
+      <div class="tour-act"><span class="tour-step">${idx + 1} of ${STEPS.length}</span>
+        ${idx > 0 ? '<button type="button" class="btn" data-a="back">Back</button>' : ""}
+        <button type="button" class="btn btn-primary" data-a="next">${esc(last ? "Done" : step.next || "Next")}</button></div>
+      ${last ? "" : '<div class="tour-act"><button type="button" class="btn btn-quiet" data-a="skip">Skip all tips</button></div>'}`;
+    bubble.setAttribute("aria-label", `Tour, step ${idx + 1} of ${STEPS.length}`);
+    bubble.removeAttribute("aria-busy");
+    const el = STEPS[idx].el();
+    if (el && el.offsetParent) el.scrollIntoView({ block: "nearest" });
+    layout();
+    bubble.focus();
+  }
+
+  function go(to) {
+    if (busy || to < 0) return;
+    if (to >= STEPS.length) { end(true); return; }
+    idx = to;
+    render();
+  }
+
+  async function next() {
+    if (busy) return;
+    const step = STEPS[idx];
+    if (step.run) {
+      busy = true;
+      const b = bubble.querySelector('[data-a="next"]'); b.disabled = true; b.textContent = "Working";
+      bubble.setAttribute("aria-busy", "true");
+      await step.run();
+      busy = false;
+      if (idx < 0) return;                       // skipped while it ran
+    }
+    go(idx + 1);
+  }
+
+  function onKey(e) {
+    if (idx < 0) return;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); end(true); return; }
+    if (e.key === "Tab") {                       // keep focus inside the bubble
+      const f = [...bubble.querySelectorAll("button:not([disabled])")];
+      if (!f.length) { e.preventDefault(); return; }
+      const first = f[0], lastB = f[f.length - 1], cur = document.activeElement;
+      if (e.shiftKey && (cur === first || cur === bubble)) { e.preventDefault(); lastB.focus(); }
+      else if (!e.shiftKey && cur === lastB) { e.preventDefault(); first.focus(); }
+      else if (!bubble.contains(cur)) { e.preventDefault(); first.focus(); }
+    }
+  }
+
+  function start() {
+    if (idx >= 0 || !wide.matches) return;
+    const offer = $("#tourOffer"); if (offer) offer.remove();
+    returnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : $("#guideOpen");
+    showView("ask");
+    shield = mk("tour-shield"); spot = mk("tour-spot"); bubble = mk("tour-bubble");
+    bubble.setAttribute("role", "dialog"); bubble.tabIndex = -1;
+    bubble.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-a]"), a = b && b.dataset.a;
+      if (a === "next") next(); else if (a === "back") go(idx - 1); else if (a === "skip") end(true);
+    });
+    document.body.append(shield, spot, bubble);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", layout);
+    idx = 0; render();
+  }
+
+  function offer() {
+    if (!wide.matches) return;
+    let decided = false;
+    try { decided = localStorage.getItem(TOUR_KEY) !== null; } catch (_) { /* no storage: offer it */ }
+    if (decided) return;
+    const o = mk("tour-offer");
+    o.innerHTML = `<p>First time here? Take a 30-second tour</p>
+      <div class="tour-act"><button type="button" class="btn btn-primary" data-a="start">Start</button>
+      <button type="button" class="btn btn-quiet" data-a="no">No thanks</button></div>`;
+    o.id = "tourOffer"; o.setAttribute("role", "region"); o.setAttribute("aria-label", "Tour offer");
+    o.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-a]"), a = b && b.dataset.a;
+      if (a === "start") start(); else if (a === "no") { remember("declined"); o.remove(); }
+    });
+    document.body.appendChild(o);
+  }
+
+  $("#guideOpen").addEventListener("click", start);
+  offer();
 })();
