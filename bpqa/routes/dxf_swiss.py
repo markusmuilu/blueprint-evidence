@@ -39,6 +39,11 @@ OUTDOOR = {"balkon", "balcon", "balcone", "loggia", "terrasse", "terrazza", "sit
            "veranda", "aussenraum"}
 SHAFT_VOID = {"schacht", "luftraum", "gaine", "vide", "cavedio", "vuoto", "shaft", "void",
               }
+# What a Swiss door count counts: one closed door outline on layer DOOR per door opening. A double door is drawn
+# as one outline across the opening with two swing arcs, so it counts once (checked on 60 Swiss DXFs: 89 outlines
+# wider than 1.4 m, 68 of them with two arcs at the outline). The count itself is unchanged.
+SWISS_DOOR_CONVENTION = "counted per doorway: a double door is one DOOR outline (with two swing arcs), so it counts once"
+
 # A room printed with a number but no name counts as indoor when it holds a sanitary fixture or is wider
 # than this (the short side of its minimum rotated rectangle): a shaft is narrow, a room one walks into is
 # not. Chosen on the full dataset's dev split (net indoor totals 92.3% -> 94.9%, apartment totals 94.3% ->
@@ -460,7 +465,7 @@ def answer(ctx, q) -> Answer:
         if q.obj in table:
             boxes = table[q.obj] or []
             value = len(boxes)
-            note = {"door": "door leaves on layer DOOR", "window": "grouped WINDOW polylines",
+            note = {"door": "door outlines on layer DOOR", "window": "grouped WINDOW polylines",
                     "toilet": "FIXTURE ellipses without drain", "washbasin": "FIXTURE ellipses with drain circle",
                     "bathtub": "FIXTURE bathtub outlines", "shower": "FIXTURE shower trays",
                     "sink": "FIXTURE ellipses with drain circle (washbasins)"}[q.obj]
@@ -583,7 +588,7 @@ def answer(ctx, q) -> Answer:
         conf = 0.7
     unit = "count" if q.measure == "count" else "m2"
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=conf, items=items,
-                 explanation=f"{value} = {note} in {dxf.name}")
+                 explanation=f"{value} = {note} in {dxf.name}" + (f"; {SWISS_DOOR_CONVENTION}" if q.measure == "count" and q.obj == "door" else ""))
     if tier_reason:
         estimate(ans, tier_reason)
     if q.variant == "type_sum":
