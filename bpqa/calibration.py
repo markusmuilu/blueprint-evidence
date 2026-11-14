@@ -107,3 +107,44 @@ def apply(ans, obj: str | None, measure: str | None = "count"):
     if why:
         estimate(ans, why)
     return ans
+
+
+# ---------------------------------------------------------------- free-text / property lookups
+# The lookups tried by router._try_text (ifc-props over the IFC model, pdf-text over PDF schedules, the numeric piping
+# reader) read every value from the file, and used to be marked proven whenever they answered. On dev that was wrong
+# often: ifc-props proven answers were right in 37 of 61 ifc_bench questions and in 0 of 16 ifc_models ones (14 Nov),
+# because the value is read correctly but the lookup the question was matched to is not always what was asked. So
+# they are held to the same standard as the scan routes: proven only for a kind of lookup (TEXT_TABLE, written by
+# tools/calibrate_text_tiers.py from dev answers) measured at MIN_PRECISION over MIN_N distinct drawings. The kind is
+# Answer.tier_cell, set by router._try_text: "text:<lookup>|<what was looked up>".
+TEXT_TABLE = Path(__file__).with_name("text_calibration.json")
+TEXT_WORDS = {"ifc_props": "property lookups in the IFC model", "pdf_text": "lookups in the PDF text layer",
+              "piping": "piping lookups in the IFC model"}
+
+
+def text_cells() -> dict:
+    return _load(str(TEXT_TABLE))
+
+
+def text_key(module: str, ans, query) -> str:
+    """The kind of lookup an answer came from: the lookup's own intent and attribute when it names one (ifc-props),
+    else the measure and object that were asked."""
+    kind = ans.tier_cell or f"{query.measure or '?'}:{query.obj or '-'}"
+    return f"text:{module}|{kind}"
+
+
+def text_reason(cell: str) -> str | None:
+    """Why a lookup answer must be an estimate; None when dev measured this kind of lookup as reliable."""
+    if not ENABLED or not cell.startswith("text:"):
+        return None
+    c = text_cells().get(cell)
+    module, kind = cell[5:].split("|", 1)
+    what = TEXT_WORDS.get(module, "lookups")
+    if c and c.get("proven"):
+        return None
+    if not c:
+        return (f"each value is read from the file, but how often {what} of this kind ({kind}) answer the question "
+                f"asked has not been measured on {MIN_N} or more dev drawings; check that the answer covers what was asked")
+    return (f"each value is read from the file, but {what} of this kind ({kind}) answered the question asked in only "
+            f"{c['precision']:.0%} of dev questions ({c['correct']} of {c['n']}, {c['drawings']} drawings), below the "
+            f"{MIN_PRECISION:.0%} over {MIN_N}+ drawings a proven answer needs; check that the answer covers what was asked")

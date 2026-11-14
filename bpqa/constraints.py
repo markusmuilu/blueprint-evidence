@@ -45,6 +45,14 @@ MEASURE_RX = [
     ("area", re.compile(r"square met\w*|\bm2\b|m²|\bsq\.? ?m\b|\bsqm\b|nelio\w*|quadratmet\w*|\barea\b|flache|pinta-ala")),
     ("length", re.compile(r"\blength|linear met\w*|running met\w*|\b(metres|meters) of\b|juoksumet\w*|\bpituu\w*")),
 ]
+UNITS_OF = {"area": ("m2", "sq ft"), "length": ("m",), "volume": ("m3",)}
+# several things asked at once ("the total number of openings, and how many are doors versus windows", "the total
+# tiling, and what is the breakdown by bathroom"): one number answers one part at most (ifc_bench dev, 14 Nov)
+PARTS = re.compile(r"(?:,|\band\b)\s+(?:how many|how much|what (?:is|are)|which|where (?:is|are))\b|\bversus\b|\bvs\.? |\bbreakdown\b|"
+                   r"\brespectively\b")
+PART_NOUN = re.compile(r"\b(?:number of|areas?|lengths?|volumes?|heights?|widths?|counts?)\b")
+# "which sanitary furniture is present in room 110": asks for things by name, never for a number
+WHICH = re.compile(r"^\s*(?:which|what (?:kind|kinds|type|types|sort) of)\b")
 # room numbers: "room 3.05", "kitchen 3.14", "Kontor 213", "room 205", "MH 9.7", "MH 1"
 ROOM_NO = re.compile(r"(?<![\w.])(\d{1,2}\.\d{1,2})(?![\w.])(?!" + UNIT_AFTER + r")")
 ROOM_WORD_NO = re.compile(r"\b(room|rum|raum|zimmer|huone|ruum|piece|nr\.?|no\.?|number|space)\s+(\d{2,4})(?![\w.])", re.I)
@@ -131,6 +139,13 @@ def detect(question: str) -> list[dict]:
     out += nos
     for m in NAMED.finditer(question):
         out.append({"kind": "named", "value": m.group(1).strip(), "phrase": m.group(0)})
+    m = next((m for m in PARTS.finditer(f) if not m.group(0).startswith((",", "and"))
+              or re.search(r"\b(how|what|which)\b", f[:m.start()])), None)   # "On sheet A-801, how many": one ask
+    if m or ("," in f and len(PART_NOUN.findall(f)) >= 3):
+        out.append({"kind": "parts", "value": "", "phrase": m.group(0).strip(" ,") if m else "a list of quantities"})
+    m = WHICH.search(f)
+    if m and not any(rx.search(f) for _, rx in MEASURE_RX) and not re.search(r"\bhow many\b", f):
+        out.append({"kind": "which", "value": "", "phrase": m.group(0).strip()})
     if not any(c["kind"] == "compare" for c in out):
         for meas, rx in MEASURE_RX:
             mm = rx.search(f)
@@ -250,9 +265,20 @@ def unused(ctx, query, ans: Answer, cons: list[dict] | None = None) -> list[dict
                 continue
             out.append({**c, "why": f"the question asks only for rooms '{c['phrase']}', and the answer did not apply that"})
         elif k == "measure":
+            other = next((m for m, units in UNITS_OF.items() if m != v and ans.unit in units), None)
+            if other:       # "the total length of skirting boards" answered with a floor area (ifc_bench dev, 14 Nov)
+                out.append({**c, "why": f"the question asks for {v} ('{c['phrase']}'), and the answer is {'an' if other == 'area' else 'a'} {other}"})
+                continue
             if ans.unit not in ("count", "rooms"):
                 continue
             out.append({**c, "why": f"the question asks for {v} ('{c['phrase']}'), and the answer is a count"})
+        elif k in ("parts", "which"):
+            if not isinstance(ans.value, (int, float)) or isinstance(ans.value, bool):
+                continue        # a lookup's text answer can list several things
+            out.append({**c, "why": ("the question asks for several things at once ('" + c["phrase"] + "'), and the "
+                                     "answer is one number, for one part at most; ask for each part separately")
+                        if k == "parts" else
+                        f"the question asks '{c['phrase']} ...' (things by name), and the answer is a number"})
         elif k == "named":
             if query.label and _norm(query.label) == _norm(v):
                 continue
@@ -472,6 +498,11 @@ def check(ctx, query, ans: Answer, resolve) -> tuple:
     try:
         fixed = _repair(ctx, query, ans, miss, resolve)
     except Exception:
+        fixed = None
+    if (fixed is not None and fixed[1].answered and fixed[1].unit in UNITS_OF["area"] and ans.unit not in UNITS_OF["area"]
+            and query.measure != "area" and not MEASURE_RX[1][1].search(fold(ctx.q.question))):
+        # a repair that turns the question into a room area when no area was asked: "which sanitary furniture is in
+        # room 110" answered 4.07 m2, marked proven (ifc_bench dev, 14 Nov)
         fixed = None
     if fixed is not None:
         q2, a2 = fixed
