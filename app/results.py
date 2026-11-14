@@ -61,7 +61,16 @@ def describe(run_id: str, header: str) -> dict:
 
 
 def _order(run: dict) -> tuple:
-    return ({"test": 0, "dev": 1}.get(run["split"], 2), run["dataset"] != "junction-dataset", len(run["flags"]), run["id"])
+    """This checkout's runs first, plain runs before flagged ones, test before dev, full set before preview."""
+    return (run["where"] != "out", bool(run["flags"]), run["dataset"] is None, {"test": 0, "dev": 1}.get(run["split"], 2),
+            run["dataset"] != "junction-dataset", run["id"])
+
+
+def _where(sub: Path) -> str:
+    try:
+        return str(sub.parent.relative_to(REPO)).replace("\\", "/")
+    except ValueError:
+        return os.path.relpath(sub.parent, REPO).replace("\\", "/")
 
 
 def list_runs() -> list[dict]:
@@ -75,7 +84,8 @@ def list_runs() -> list[dict]:
                 if txt.exists():
                     header = txt.read_text(encoding="utf-8", errors="replace").splitlines()[0][:200]
                 runs.append({"id": sub.name, "dir": str(sub), "header": header,
-                             "mtime": (sub / "summary.json").stat().st_mtime, **describe(sub.name, header)})
+                             "mtime": (sub / "summary.json").stat().st_mtime, "where": _where(sub),
+                             **describe(sub.name, header)})
     runs.sort(key=_order)
     return runs
 
@@ -117,7 +127,7 @@ def load_run(run_id: str) -> dict | None:
                             "coverage": answered / n if n else 0.0,
                             "precision": correct / answered if answered else None})
     data = {"id": run_id, "header": run["header"], "dir": run["dir"], "rows": rows, "objects": objects,
-            **{k: run[k] for k in ("dataset", "dataset_name", "split", "flags", "label", "questions")},
+            **{k: run[k] for k in ("dataset", "dataset_name", "split", "flags", "label", "questions", "where")},
             "routes": dict(sorted(routes.items(), key=lambda kv: -kv[1]))}
     _CACHE[str(sub)] = (mtime, data)
     return data
@@ -132,7 +142,8 @@ def _all_row(run: dict) -> dict | None:
 
 def _find_run(dataset: str, split: str) -> dict | None:
     """The plain run (no flags, every source) of a dataset and split; the newest if there are several."""
-    cands = [r for r in list_runs() if r["dataset"] == dataset and r["split"] == split and not r["flags"]]
+    cands = [r for r in list_runs() if r["dataset"] == dataset and r["split"] == split and not r["flags"]
+             and r["where"] == "out"]
     return max(cands, key=lambda r: r["mtime"]) if cands else None
 
 

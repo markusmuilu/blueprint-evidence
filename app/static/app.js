@@ -471,7 +471,9 @@ function fmtUnit(u) { return u === "count" ? "" : u === "m2" ? "m²" : u === "m3
 
 function itemLabel(it, obj) {
   if (typeof it !== "object" || it === null) return [String(it), ""];
-  let label = (it.number && it.name ? `${it.number} ${it.name}` : "") || it.label || it.class || it.name || it.match || (it.panel != null ? `panel ${it.panel}` : "") || it.guid || "";
+  let label = (it.number && it.name ? `${it.number} ${it.name}` : "") || (it.room ? `${it.room}${it.number ? " " + it.number : ""}` : "")
+    || it.label || it.class || it.name || it.match || it.text || (it.panel != null ? `panel ${it.panel}` : "") || it.guid || "";
+  if (!label && Array.isArray(it.bbox_pt)) label = `${(obj || "item").replace(/_/g, " ")} #${it.n ?? ""}`;
   if (!label && Array.isArray(it.bbox)) {
     const [x0, y0, x1, y1] = it.bbox;
     label = `${(obj || "item").replace(/_/g, " ")} at x ${((x0 + x1) / 2).toFixed(1)}, y ${((y0 + y1) / 2).toFixed(1)} m`;
@@ -641,7 +643,7 @@ async function loadRuns() {
       $("#runHeadline").textContent = "No eval outputs found. Run eval.py; its out/<run>/summary.json files appear here.";
       return;
     }
-    sel.innerHTML = runs.map((r) => `<option value="${esc(r.id)}">${esc(r.label || r.id)}  [out/${esc(r.id)}]</option>`).join("");
+    sel.innerHTML = runs.map((r) => `<option value="${esc(r.id)}">${esc(r.label || r.id)}  [${esc(r.where || "out")}/${esc(r.id)}]</option>`).join("");
     sel.onchange = () => loadRun(sel.value);
     runsLoaded = true;
     loadRun(runs[0].id);
@@ -657,7 +659,7 @@ async function loadRun(id) {
     runData = await api("/api/results/" + encodeURIComponent(id));
   } catch (e) { toast("Could not load run: " + e.message, true); return; }
   const d = runData;
-  $("#runHeader").textContent = `${d.label || d.id}. Source: out/${d.id}/summary.json. ${d.header || ""}`;
+  $("#runHeader").textContent = `${d.label || d.id}. Source: ${d.where || "out"}/${d.id}/summary.json. ${d.header || ""}`;
   const all = d.rows.find((r) => r.source === "ALL" && r.type === "ALL");
   const where = d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
   const flags = d.flags && d.flags.length ? ` (${esc(d.flags.join("; "))})` : "";
@@ -689,7 +691,7 @@ async function loadOverview() {
     else if (it.wrong != null) detail = `${it.correct} correct, ${it.wrong} wrong (${it.proven_wrong} of them proven), ${it.abstain} abstained, ${it.abstain_ok} correctly abstained`;
     else if (it.proven != null) detail = `proven ${num(it.proven)} at ${pct(it.proven_precision)}, estimate ${num(it.estimate)} at ${pct(it.estimate_precision)}`;
     return `<tr><td>${esc(it.set)}</td><td class="num">${num(it.n)}</td><td class="num">${pct(it.accuracy)}</td>
-      <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td><td class="mono dim">${esc(it.source || "")}</td></tr>`;
+      <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td><td class="mono dim src">${esc(it.source || "")}</td></tr>`;
   }).join("");
   $("#overviewTable").innerHTML = head + "<tbody>" + body + "</tbody>";
 }

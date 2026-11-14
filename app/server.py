@@ -199,7 +199,7 @@ def tier(a: dict) -> tuple[str, str]:
     if explicit.startswith("estim"):
         return "estimate", "The route marked this answer as an estimate" + (f": {reason}." if reason else ".")
     if explicit.startswith("proven"):
-        return "proven", "The route marked this answer as proven: its tuned conditions for a provable answer held."
+        return "proven", f"The route marked this answer as proven (confidence {a.get('confidence')})."
     if a.get("route") in PROVEN_ROUTES and (a.get("confidence") or 0) >= 0.8:
         return "proven", "Structured route (CAD, BIM or PDF data) with confidence of at least 0.8."
     return "estimate", "Answer read from pixels or with confidence under 0.8: verify the numbered items."
@@ -378,7 +378,7 @@ def evidence(eid: str, body: int = 0):
 
 @app.get("/api/results")
 def results_list():
-    return {"runs": [{k: r[k] for k in ("id", "header", "label", "dataset", "dataset_name", "split", "flags", "questions")}
+    return {"runs": [{k: r[k] for k in ("id", "header", "label", "dataset", "dataset_name", "split", "flags", "questions", "where")}
                      for r in results_mod.list_runs()]}
 
 
