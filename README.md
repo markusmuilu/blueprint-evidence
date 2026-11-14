@@ -156,9 +156,10 @@ not a change to them.
   or an exclusion clause's room words ("except balconies"); on Stoa's 127,044 questions it changes the
   parse of 2 (ifc_bench takeoff questions), checked by `tests/test_takeoff.py` and a full-file run.
 - **Interpretation, stated in every answer:** the sum of net floor areas of the matching rooms as drawn
-  inside the walls, no allowance for cutting waste. Wall surfaces abstain (they need room heights and
-  openings). "Toilets" means separate WC rooms; bathrooms are not included, and the answer says so.
-  Paint answers the floor area and says walls are not included.
+  inside the walls. Tiles in wet rooms (bathroom, WC, sauna) and any question naming walls add the wall
+  surfaces (next section); "floor tiles" stays floor only. "Toilets" means separate WC rooms; bathrooms
+  are not included, and the answer says so. Paint answers the floor area and says walls are not included
+  unless walls are asked.
 - **Room types from drawing labels** (`room_types`): Swiss (Bad, Kuche, Bain, Bagno, Schlafzimmer ...),
   IFC (Bathroom 1, Toilet, TUALETTRUUM, doucheruimte, Bad - Dame, 1IZQ-BAN ...) and Finnish
   abbreviations. Generic "Zimmer" / "Piece" / "Room" are not typed; they are listed in the answer as
@@ -170,6 +171,51 @@ not a change to them.
   areas (NetFloorArea, else footprint). On an IFC plan sheet without a level in the question, the
   storey is the one whose name and (uniqueness-weighted) space labels are printed on the sheet; no
   clear winner abstains. Zero matching rooms abstains with the labels that were read.
+
+### Wall surfaces: tiles on walls (`bpqa/walls.py`)
+
+Tiles in a bathroom go on the walls too. Wall area of a room = outline length x tiled height - the doors
+and windows in that room's walls, with every input stated in the answer and its source named:
+
+| input | IFC model | Swiss DXF floor |
+|---|---|---|
+| outline | IfcSpace geometry projected to the floor (holes add their ring length) | ROOM_OUTLINE polygon |
+| height | the space's FinishCeilingHeight / ClearHeight / Height quantity, else its geometry's z extent, else the storey height | ASSUMED 2.50 m (a plan has no heights) |
+| tiled height | full height unless the question says "tiles to 1.2 m" | same |
+| openings | IfcDoor / IfcWindow whose footprint lies within 0.2 m of the outline along 30% of its width; width x the part of the opening's own z range inside the tiled band | door leaf width, ASSUMED 2.00 m high; window strips, ASSUMED 1.20 m high on a 0.90 m sill |
+| waste | 10% cutting allowance unless the question gives one ("with 15% waste", "no waste") | same |
+
+Editable from the question: "ceiling height 2.6 m", "tiles to 1.2 m", "tiling height 210 cm", "12% waste",
+"no waste", "full height" (`TAKEOFF_CEILING_M`, `TAKEOFF_WASTE_PCT` change the defaults). The answer lists
+floor, walls, waste and order quantity as separate lines; the value is the order quantity when the question
+asks what to order / buy / need, else the net area. `items` has one line per room with perimeter, height
+and its source, gross wall area, each deducted opening (GlobalId, width, deducted m2) and net wall area;
+when the IFC model carries its own NetWallArea it is shown beside ours as a check (more than 5% apart makes
+the answer an estimate). Answers resting on an assumed height are estimates. Other routes (PDF without a
+twin, scans) still answer floor areas only, so the router withdraws their answer to a wall question.
+
+Evidence: the plan with the rooms filled, their wall outline drawn thick, each deducted opening boxed in
+amber with its deducted area, and floor and net wall area per room.
+
+Validation (`tools/wall_eval.py`): the quantities the authoring tools wrote into the IFC models, which the
+takeoff never reads (it shows NetWallArea only as a check), against what it computes from geometry, every
+IfcSpace that carries them, duplicate copies of a model counted once:
+
+| quantity | reference | spaces | within 2% | within 5% | median error |
+|---|---|---|---|---|---|
+| perimeter | Qto GrossPerimeter, Revit Perimeter, ArchiCAD Umfang (16 models) | 1,470 | 67.3% | 88.7% | 0.0% |
+| gross wall area (perimeter x height) | Qto GrossWallArea (5 models) | 454 | 66.5% | 72.0% | 0.0% |
+| net wall area (minus openings) | Qto NetWallArea (6 models) | 511 | 51.5% | 56.9% | 1.8% |
+
+Per model, net wall area within 2%: KIT institute (ac20) 96%, Smiley West 76%, FZK house 43% (gross 43%: rooms
+under the pitched roof and a gallery open to the floor below, where perimeter x height is not the wall), Molio
+31% (gross 68%; windows in thick external walls are missed by the 0.2 m rule), TU Wien escape-route model 29%
+(its GrossWallArea implies other room heights than its own height quantities), RWTH Digital Hub 11% (net only).
+One model (Gymzaal Amersfoort) stores perimeters about 300x the geometry and is left out as a unit error.
+Variants measured and rejected: counting only outline edges that run along a wall footprint (gross 46%, net
+35% within 2%: space outlines often sit more than 0.1 m off the walls) and wider opening tolerances (0.35 to
+0.7 m: worse on four of five models). There is no reference for the Swiss DXF wall areas: the heights there
+are assumptions, which is why those answers are estimates.
 
 Raster scans (`bpqa/routes/raster_area.py`, route `raster-area`):
 

@@ -402,6 +402,11 @@ def unknown_terms(f: str, M=None) -> list:
             continue
         if any(re.fullmatch(rf"(?:{rx})", w) for rx, _, _ in CLASS_WORDS):
             continue
+        if M is not None:
+            _model_classes(M, "")
+            toks = {t for cw, _ in M._class_words for t in cw.split()}
+            if w in toks or w.rstrip("s") in toks or (w.endswith("es") and w[:-2] in toks):
+                continue
         out.append(w)
     return list(dict.fromkeys(out))
 
@@ -437,9 +442,31 @@ def find_room_by_name(M, question, storey):
     return top[0] if len(top) == 1 else None
 
 
+def _model_classes(M, f):
+    """Classes named by the model itself: an IFC class present in the file whose name, split into words
+    (IfcSpaceHeater -> 'space heater', IfcWasteTerminal -> 'waste terminal'), appears in the question,
+    singular or plural. No word list to maintain: the file says which classes exist."""
+    if not hasattr(M, "_class_words"):
+        present = {e.is_a() for e in M.m.by_type("IfcProduct")}
+        words = []
+        for cls in present:
+            w = re.sub(r"(?<!^)(?=[A-Z])", " ", cls[3:]).lower()
+            if w in ("building element proxy", "opening element", "annotation", "virtual element", "space", "site",
+                     "building", "building storey"):
+                continue
+            words.append((w, cls))
+        M._class_words = sorted(words, key=lambda t: -len(t[0]))
+    for w, cls in M._class_words:
+        if re.search(rf"\b{re.escape(w)}(s|es)?\b", f):
+            return [cls], w
+    return [], ""
+
+
 def plan(M, question) -> Lookup | None:
     f = fold(question)
     classes, label = _classes(f)
+    if not classes:
+        classes, label = _model_classes(M, f)
     storey, snote, asked_storey = find_storey(M, question)
     room = find_room(M, question) or find_room_by_name(M, question, storey)
     ext = None
