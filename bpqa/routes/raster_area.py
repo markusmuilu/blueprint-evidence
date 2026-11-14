@@ -34,6 +34,7 @@ import numpy as np
 
 from .labels import ROOM_PATTERNS, is_word, parts, quad_box, PLAN_WORDS
 from .ocr import _run, cache_path
+from .. import scale_objects as OS
 
 SCALE_TOL = 0.04          # rooms must agree within 4% of the median scale
 MIN_SCALE_ROOMS = 2
@@ -524,6 +525,10 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
             toks = toks + [{"quad": [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], "text": "", "conf": 1.0}]
     hyps = hypotheses(img, toks, proto, others, mode="walls")   # walls beat lines and auto on dev (CHANGELOG)
     name, rooms, sc = choose(hyps)
+    if not sc.known and OS.ENABLED:     # no printed-area scale: standard objects, weaker, estimate only (scale_objects.py)
+        on, orooms, osc = OS.object_scale(f, hyps, allow_run)
+        name, rooms, sc = (on, orooms, osc) if orooms is not None else (name, rooms, sc)
+        sc.detail += "" if orooms is not None else f"; no object scale either: {osc}"
     if rooms is None:
         rooms = hyps[0][2]
     if sc.known:
@@ -654,7 +659,7 @@ def takeoff_answer(ctx, q, img):
                            f"nearly always too small)")
         elif r.measured is not None and sc.known and MEASURED_ANSWERS:
             rows.append({"label": r.label, "area": r.measured, "kind": "measured", "room": r,
-                         "source": f"MEASURED, not printed: region x scale, ESTIMATE ({band_text([r.measured])})"})
+                         "source": f"MEASURED, not printed: region x scale, ESTIMATE ({(OS.band_text if OS.is_object(sc) else band_text)([r.measured])})"})
         else:
             missing.append(f"{r.label}: no printed area and " + ("no pixel scale" if not sc.known else (r.why or "no closed region")))
     if missing:
@@ -683,6 +688,9 @@ def takeoff_answer(ctx, q, img):
     bt = band_text([r["area"] for r in meas_rows]) if meas_rows else ""
     band_note = (f" Measured areas are estimates: {bt}. (Leave-one-out on {BANDS['n']} printed rooms of {BANDS['plans']} plans, "
                  f"dev and test, each measured with a scale from the other printed rooms.)") if meas_rows else ""
+    if OS.is_object(sc):                # object scale: its own description and leave-one-out band
+        scale_txt, bt = sc.detail, OS.band_text([r["area"] for r in meas_rows])
+        band_note = f" Measured areas are estimates from an OBJECT scale: {bt}." if meas_rows else ""
     uncertain = [{"room": r["label"], "area_m2": round(r["area"], 2), "why": "measured, not printed"} for r in meas_rows]
 
     if want_walls:
@@ -757,6 +765,8 @@ def takeoff_answer(ctx, q, img):
         else:
             extra = " Floor area only, no waste allowance."
         sc_note = f"Scale from printed rooms {', '.join(scale_names[:5])}" if sc.known else "No pixel scale"
+        if OS.is_object(sc):
+            sc_note = f"OBJECT scale from {OS.summary(sc.objects)}, boxed amber"; OS.draw(cv, sc, AMBER)
         if meas_rows:
             sc_note += f"; measured rooms amber, {bt}"
         interp = (takeoff.interpretation(tk, [(r["label"], r["area"]) for r in rows]) + " ") if fb else ""
