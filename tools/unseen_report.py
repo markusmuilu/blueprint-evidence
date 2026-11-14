@@ -12,6 +12,8 @@ from collections import OrderedDict, defaultdict
 def tier(r):
     if r["ours"] is None or r["abstain"]:
         return "cannot prove"
+    if r.get("tier"):                     # the answer's own tier (runs after tiers were added)
+        return r["tier"]
     if str(r["route"]).startswith("raster"):
         return "estimate"
     return "proven" if (r["confidence"] or 0) >= 0.8 else "estimate"

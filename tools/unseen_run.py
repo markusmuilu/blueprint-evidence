@@ -68,6 +68,7 @@ def main():
                 rec = {"i": i, "pdf_only": pdf_only, "seconds": round(dt, 1), **{k: q[k] for k in
                        ("path", "drawing", "question", "answer", "unit", "type", "ref_method", "manual_check", "expected")},
                        "ours": res.get("value"), "route": res.get("route"), "confidence": res.get("confidence"),
+                       "tier": res.get("tier"), "tier_reason": res.get("tier_reason"),
                        "abstain": res.get("abstain"), "evidence": res.get("evidence"), "explanation": res.get("explanation"),
                        "checks": res.get("checks"), "query": res.get("query"), "error": err}
                 fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
