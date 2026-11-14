@@ -50,6 +50,8 @@ NAMES = {"kitchen": "kitchen", "bathroom": "bathroom", "wc_room": "WC room", "sa
 MIN_CONF = 0.05
 DEVICE = os.environ.get("STOA_ROOMS_DEVICE") or "cpu"     # batch runs (tuning, eval caches) may pass a GPU
 LABEL_COLOR = (18, 146, 192)
+ORIENT = os.environ.get("STOA_ROOMS_ORIENT", "1") != "0"     # 0: the detector sees the plan as drawn
+LABEL_FILTER = os.environ.get("STOA_ROOMS_LABEL_FILTER", "1") != "0"     # 0: no label-based dropping, no Shower labels
 
 
 def model_tag(model: Path = MODEL) -> str | None:
@@ -80,12 +82,16 @@ def _predict(img: np.ndarray, imgsz: int) -> list[dict]:
             for b, s, c in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist(), res.boxes.cls.tolist())]
 
 
-def detect_views(file: Path, imgsz: int, tta: bool) -> list[list[dict]] | None:
-    """Room boxes scored >= MIN_CONF per view, in original pixels; cached under out/rooms_det/."""
+def detect_views(file: Path, imgsz: int, tta: bool, quarter: int = 0) -> list[list[dict]] | None:
+    """Room boxes scored >= MIN_CONF per view, in original pixels; cached under out/rooms_det/. `quarter`: the
+    single view is the plan turned by this many quarter turns (an upside-down plan); with tta all eight dihedral
+    views are used and the argument has no effect."""
     tag = model_tag()
     if tag is None:
         return None
-    cache = REPO / "out" / "rooms_det" / f"{tag}-{imgsz}{'-d4' if tta else ''}" / f"{Path(file).stem}.json"
+    quarter = 0 if tta else quarter % 4
+    suffix = ("-d4" if tta else "") + (f"-q{quarter}" if quarter else "")
+    cache = REPO / "out" / "rooms_det" / f"{tag}-{imgsz}{suffix}" / f"{Path(file).stem}.json"
     if cache.exists():
         return json.loads(cache.read_text(encoding="utf-8"))["views"]
     img = cv2.imread(str(file))
@@ -93,12 +99,36 @@ def detect_views(file: Path, imgsz: int, tta: bool) -> list[list[dict]] | None:
         return None
     h, w = img.shape[:2]
     views = []
-    for k, m in (tiling.DIHEDRAL if tta else [(0, False)]):
+    for k, m in (tiling.DIHEDRAL if tta else [(quarter, False)]):
         ds = _predict(tiling.transform(img, k, m), imgsz)
         views.append([{**d, "xyxy": [round(v, 1) for v in tiling.untransform_box(d["xyxy"], k, m, w, h)]} for d in ds])
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps({"views": views}), encoding="utf-8")
     return views
+
+
+def drawn_score(views: list[list[dict]]) -> float:
+    """How much room-like drawing the detector sees: summed score of its boxes at 0.3 or more, per view."""
+    return float(np.mean([sum(d["conf"] for d in v if d["conf"] >= 0.3) for v in views])) if views else 0.0
+
+
+UPSIDE_DOWN_GAIN = 1.5      # the plan turned 180 degrees must show this many times the drawing, and at least +1.0
+
+
+def upright_views(file: Path, imgsz: int, tta: bool):
+    """(views, quarter): the detector's views of the plan as drawn, or turned 180 degrees when it is drawn upside
+    down (the detector is trained on upright plans; the turned view must score clearly higher: drawn_score)."""
+    v0 = detect_views(file, imgsz, tta)
+    if not ORIENT or v0 is None or tta:
+        return v0, 0
+    s0 = drawn_score(v0)
+    if s0 >= 4.0:
+        return v0, 0                 # plenty of rooms found as it is: no second pass
+    v2 = detect_views(file, imgsz, tta, quarter=2)
+    s2 = drawn_score(v2)
+    if v2 is not None and s2 >= UPSIDE_DOWN_GAIN * s0 and s2 >= s0 + 1.0:
+        return v2, 2
+    return v0, 0
 
 
 def det_count(views: list[list[dict]], obj: str, cfg: dict) -> tuple[int, list[dict], list[dict]]:
@@ -112,6 +142,48 @@ def det_count(views: list[list[dict]], obj: str, cfg: dict) -> tuple[int, list[d
     kept = sorted([d for d in per[best] if d["conf"] >= thr], key=lambda d: -d["conf"])
     unsure = [d for d in per[best] if lo <= d["conf"] < hi]
     return n, kept, unsure
+
+
+def _center_in(box, b) -> bool:
+    cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+    return box[0] <= cx <= box[2] and box[1] <= cy <= box[3]
+
+
+def other_type_labels(toks, obj: str) -> list[dict]:
+    """Printed labels of a room type other than `obj`, read exactly (no OCR-error matches, no one-letter
+    abbreviations: a lone K or S is as likely a north arrow or a stair mark as a room)."""
+    out = []
+    for o in CLASSES:
+        if o == obj:
+            continue
+        out += [h for h in labels.find_rooms(toks, o) if not h.get("fuzzy") and len(h["part"]) >= 2]
+    return out
+
+
+def drop_labelled_other(boxes: list[dict], other: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(kept, dropped): a drawn room whose box holds the printed label of another room type is that room
+    (Tyneside: two "Bedroom" rooms scored 0.39 and 0.35 as bathrooms)."""
+    kept, dropped = [], []
+    for k in boxes:
+        hit = next((h for h in other if _center_in(k["xyxy"], h["box"])), None)
+        (dropped if hit else kept).append({**k, "why": hit["text"]} if hit else k)
+    return kept, dropped
+
+
+def shower_labels(toks, boxes: list[dict]) -> list[dict]:
+    """A printed "Shower" (or "Shower room") label inside a drawn bathroom box. The word alone is not a room
+    label (labels.py: it is also printed next to the fixture symbol), but inside a box the detector drew as a
+    bathroom it names that room."""
+    out = []
+    for t in labels.dedupe(toks):
+        if t["conf"] < 0.5 or not labels.clean_token(t["text"]):
+            continue
+        if labels.norm(t["text"]).replace(" ", "") not in ("SHOWER", "SHOWERROOM", "DUSCHE", "DUSCHRAUM"):
+            continue
+        b = labels.quad_box(t["quad"])
+        if any(_center_in(k["xyxy"], b) for k in boxes):
+            out.append({"text": t["text"], "box": b})
+    return out
 
 
 def combine(obj: str, o: int, o_proven: bool, d: int, cfg: dict, n_unsure: int = 0,
@@ -150,19 +222,38 @@ def answer(ctx, q) -> Answer:
         ocr = raster.room_labels(ctx, q, img, calibrate=False)   # the OCR route's own tier, as tuned
     finally:
         ctx.evidence = keep_ev
-    views = detect_views(ctx.file, cfg.get("imgsz", 640), cfg.get("tta", False)) if cfg else None
+    views, quarter = (upright_views(ctx.file, cfg.get("imgsz", 640), cfg.get("tta", False)) if cfg else (None, 0))
     if not cfg or views is None:
         return raster.answer(ctx, q)
     d, kept, unsure = det_count(views, q.obj, cfg)
+    toks = raster.ocr_image(ctx.file)
+    dropped = []
+    if LABEL_FILTER and (kept or unsure):
+        other = other_type_labels(toks, q.obj)
+        kept, dropped = drop_labelled_other(kept, other)
+        unsure, _ = drop_labelled_other(unsure, other)
+        d = len(kept)
     o, o_proven = int(ocr.value), ocr.tier == "proven"
-    words = o > 0 and all(labels.full_word(q.obj, it.get("match", "")) for it in ocr.items)
+    showers = shower_labels(toks, kept) if LABEL_FILTER and q.obj == "bathroom" and o < d else []
+    if showers:                      # printed "Shower" in a drawn bathroom: that room is labelled, as an estimate
+        o, o_proven = o + len(showers), False
+    # every label a full room word: read exactly, or (words of 8+ letters, "PESUIHUONE") with one OCR error
+    words = o > 0 and all(labels.full_word(q.obj, it.get("match", "")) or len(labels.fuzzy(q.obj, it.get("match", "")) or "") >= 8
+                          for it in ocr.items)
     value, proven, which = combine(q.obj, o, o_proven, d, cfg, len(unsure), words)
+    if showers:
+        proven = False               # a fixture word names the room: never proven on that alone
     name = NAMES[q.obj]
     det_items = [{"n": i + 1, "reading": "drawn room", "type": q.obj, "score": k["conf"],
                   "xyxy": [round(v) for v in k["xyxy"]]} for i, k in enumerate(kept)]
     lab_items = [{"n": f"L{i + 1}", "reading": "label", **{k: v for k, v in it.items() if k != "n"}}
                  for i, it in enumerate(ocr.items)]
     readings = f"room detector: {d} {name}(s) drawn; room labels: {o} read"
+    if dropped:
+        readings += (f"; {len(dropped)} drawn room(s) dropped because they hold another room's label: "
+                     + ", ".join(f"{k['why']} (score {k['conf']:.2f})" for k in dropped))
+    if showers:
+        readings += f"; labels include {len(showers)} printed 'Shower' inside a drawn bathroom"
     if which == "both":
         expl = f"{value} {name}(s): the drawn rooms and the printed labels agree ({readings})"
     else:
@@ -184,6 +275,9 @@ def answer(ctx, q) -> Answer:
         if which == "both" and value == 0:
             estimate(ans, f"no {name} label was read and none was drawn; both readings give 0, but absence of "
                           f"a label is not proof that the plan has none")
+        elif which == "both" and showers:
+            estimate(ans, f"both readings give {value}, but the {name} labels are printed 'Shower' words, which also "
+                          f"name a fixture")
         elif which == "both":
             estimate(ans, f"both readings give {value}, but the proof rule for {name} counts "
                           f"({cfg.get('proven_rule')}) does not hold on this plan")
