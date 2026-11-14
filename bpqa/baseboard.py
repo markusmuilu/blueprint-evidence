@@ -26,7 +26,10 @@ from .query import fold
 BASEBOARD_RE = re.compile(
     r"\bbase ?boards?\b|\bskirting\b|\bskirting ?boards?\b|\bkick ?boards?\b|\bwall base\b|"
     r"\bjalkalist\w*|\bsockel ?leist\w*|\bfuss ?leist\w*|\bleisten\b(?=.*\bsockel)|\bgolvlist\w*|\bsockellist\w*|\bfotlist\w*|"
-    r"\bplinthes?\b|\bbattiscopa\w*|\brodapie\w*|\bsoklilist\w*|\bfodlist\w*|\bjalalist\w*")
+    r"\bplinthes?\b|\bbattiscopa\w*|\brodapie\w*|\bsoklilist\w*|\bfodlist\w*|\bjalalist\w*|"
+    # Finnish "lista" alone also means "list", so it is a baseboard only with an amount or a need ("paljonko listaa
+    # tarvitsee luokkahuoneisiin", his hunt 14 Nov)
+    r"\bpaljon\w*\W+(?:\w+\W+){0,2}?list(?:a|aa|oja)\b|\bmonta metria\W+(?:\w+\W+){0,2}?list\w*|\blist(?:aa|oja)\b(?=.*\btarvi)")
 ALL_ROOMS_RE = re.compile(
     r"\ball (?:the |of the |of my |my |our )?(?:rooms|spaces)\b|\bevery room\b|\beach room\b|\bwhole (?:floor|flat|apartment|house|plan)\b|"
     r"\bentire (?:floor|flat|apartment|house|plan)\b|\bthroughout\b|"

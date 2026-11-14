@@ -129,7 +129,7 @@ Q_TYPE_RE = {
     "living": r"living ?rooms?|lounge|sitting ?rooms?|family ?rooms?|olohuone|wohnzimmer|sejour|soggiorn[oi]|\bsalons?\b|"
               r"salott[oi]\b|vardagsrum",
     "dining": r"dining ?rooms?|esszimmer|salles? a manger|sale da pranzo|sala da pranzo",
-    "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|eteinen|eteise|kaytav|korridor|\bflur|couloir|"
+    "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|\bsali\w*|\bhalli\w*|eteinen|eteise|kaytav|korridor|\bflur|couloir|"
             r"corridoi|ingress[oi]\b|vestibules?\b|disimpegn",
     "utility": r"utility rooms?|laundry|kodinhoitohuone|waschkuche|buanderie|lavanderi",
     "storage": r"storage|store ?rooms?|closets?|walk-in|varasto|vaatehuone|abstellraum|reduit|ripostigli|"
@@ -156,7 +156,7 @@ AREA_UNIT = re.compile(r"\bm2\b|\bm\^2|square ?met|\bsq\.? ?m\b|\bsqm\b|sq\.? ?f
 # their areas" lists rooms, it is not a takeoff
 # "how big/large are the bedrooms in total", "kuinka isoja alueita makuuhuoneet ovat yhteensa": size words count as
 # an area only next to a sum word (QA 14 Nov: the Finnish phrasing fell through to Nemotron)
-AREA_WORD = re.compile(r"pinta-ala|\barea\b|\bareas\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|flache|surface|superficie|\bala\b|lattiapinta|lattiaala|floor ?space|"
+AREA_WORD = re.compile(r"pinta-?\s?ala|\barea\b|\bareas\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|flache|surface|superficie|\bala\b|lattiapinta|lattiaala|floor ?space|"
                        r"\bhow (?:big|large)\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|"
                        r"\b(?:kuinka|miten) (?:iso|suur)\w*\b(?=.*\byhteensa\b)|\balue(?:ita|et|en|iden)?\b(?=.*\byhteensa\b)|"
                        # "total size of the bedrooms", "makuuhuoneiden koko yhteensa" (genitive + koko = size of;

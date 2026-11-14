@@ -95,6 +95,7 @@ def label_words(text: str) -> list[str]:
 # and compound forms match (wc-tilaa -> wctilaa, WC-Raume -> wcraume, kaytavien, luokkahuoneita).
 FOREIGN_ROOM = [(re.compile(r"^(wc\w*|vess\w+|toalet\w*|toilette\w*|klo|klos)$"), "toilet"),
                 (re.compile(r"^(kaytav\w*|korridor\w*|flur\w*)$"), "corridor"),
+                (re.compile(r"^(sali|salin|salissa|salit|salien|halli\w*|aula\w*)$"), "hall"),
                 (re.compile(r"^(luokkahuone\w*|luok(ka|an|ass|ia|ien|at)\w*|klassenzimmer\w*|klassenr(au|ae|a)m\w*)$"), "classroom"),
                 (re.compile(r"^(keitti\w*|kuche\w*|kueche\w*)$"), "kitchen"),
                 (re.compile(r"^(toimisto\w*|buro\w*|buero\w*)$"), "office"),
@@ -103,6 +104,13 @@ FOREIGN_ROOM = [(re.compile(r"^(wc\w*|vess\w+|toalet\w*|toilette\w*|klo|klos)$")
                 (re.compile(r"^(hissi\w*|aufzug\w*|aufzuge)$"), "lift"),
                 (re.compile(r"^(suihku\w*|dusche\w*)$"), "shower"),
                 (re.compile(r"^(pukuhuone\w*|umkleide\w*)$"), "changing")]
+
+
+def _baseboard_word(question: str) -> bool:
+    """Baseboard in any language the takeoff knows ("jalkalista", "paljonko listaa tarvitsee ...", his hunt 14 Nov)."""
+    from bpqa.baseboard import BASEBOARD_RE
+    from bpqa.query import fold
+    return bool(BASEBOARD_RE.search(fold(question).lower()))
 
 
 def _foreign(w: str) -> str:
@@ -380,7 +388,7 @@ def answer(ctx, query) -> Answer:
         d = S.assumed(d, getattr(ctx, "assume", None))     # scale-assumption: the person's ratio and sheet, if any
         labels = room_labels(d)
         ph, hits = match_phrase(q, labels)
-        if PERIM_RE.search(q):
+        if PERIM_RE.search(q) or _baseboard_word(q):
             return measured(ctx, d, ph, hits, labels, perimeter=True)
         if not ph and TOTAL_RE.search(q):
             return total_area(ctx, d, labels)
@@ -612,7 +620,8 @@ def measured(ctx, d: dict, ph: list[str], hits: list[dict], labels: list[dict], 
     split = [h for h in ok if h.get("split")]
     why = _area_why(sc) + (f"; {len(split)} outline(s) held several room names and were divided between them at the "
                            f"narrowest passage ({', '.join(h['text'] for h in split[:4])})" if split else "")
-    baseboard = perimeter and bool(re.search(r"\b(skirting|baseboard|base board)\b", ctx.q.question, re.I))
+    baseboard = perimeter and (bool(re.search(r"\b(skirting|baseboard|base board)\b", ctx.q.question, re.I))
+                               or _baseboard_word(ctx.q.question))
     doors_m = {}
     if baseboard:
         # a baseboard stops at a door: the door boxes in each room's walls are deducted (bpqa/baseboard.py's rule)

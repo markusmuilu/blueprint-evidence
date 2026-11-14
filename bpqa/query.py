@@ -44,7 +44,7 @@ def fold(s: str) -> str:
 # Count / measure cues. Checked on accent-folded lower-case text.
 COUNT = (r"\b(how many|wie viele|wieviele|combien|quant[ie]|kuinka monta|kuinka moni|montako|hvor mange|mitu|hur manga|"
          r"^number of|count the|anzahl|antalet|antal|lukumaara|raekna|rakna|zahl mal|zahl die)\b")
-AREA = r"(area|flache|surface|superficie|nettoareal|areal|pind|pinta-ala|\byta\b|\bytan\b|golvyta)"
+AREA = r"(area|flache|surface|superficie|nettoareal|areal|pind|pinta-?\s?ala|\byta\b|\bytan\b|golvyta)"
 LENGTH = r"(length|lange|laengde|langde|longueur|lunghezza|pituus|wie lang)"
 VOLUME = r"(volume|volumen|volym|tilavuus|maht)"
 
