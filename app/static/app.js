@@ -736,9 +736,10 @@ function checkItems(a) {
     return { i, n: (it && typeof it === "object" && it.n) || i + 1, it, rect: itemRect(it, a, i), mark: m, label, extra, area,
              tone: m ? m.tone : a.status === "estimate" ? "amber" : "blue" };
   });
-  if (!rows.some((r) => r.rect) && a.marks?.marks?.length) {        // items without positions: use the drawn marks
+  const itemMarks = (a.marks?.marks || []).filter((m) => m.kind === "box" || m.kind === "poly");   // not context ("scale")
+  if (!rows.some((r) => r.rect) && itemMarks.length) {        // items without positions: use the drawn marks
     const off = headerOff(a);
-    rows = a.marks.marks.map((m, i) => ({ i, n: m.n ?? i + 1, it: null, mark: m, label: m.kind === "poly" ? `region ${i + 1}` : `item ${m.n}`,
+    rows = itemMarks.map((m, i) => ({ i, n: m.n ?? i + 1, it: null, mark: m, label: m.kind === "poly" ? `region ${i + 1}` : `item ${m.n}`,
       extra: "", area: null, tone: m.tone, rect: [m.rect[0], m.rect[1] + off, m.rect[2] - m.rect[0], m.rect[3] - m.rect[1]] }));
   }
   return rows;

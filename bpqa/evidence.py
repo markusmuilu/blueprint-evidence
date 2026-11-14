@@ -73,6 +73,22 @@ def _record_poly(img, pts, fill):
                         "rect": [min(xs), min(ys), max(xs), max(ys)]})
 
 
+def record_context(img, rect, kind: str = "scale") -> None:
+    """A context mark that is not an answer item (e.g. kind "scale": a printed room used only to fit the pixel
+    scale). Saved with its own kind and tone "grey", so the app does not pin or number it like an item."""
+    x0, y0, x1, y1 = (float(v) for v in rect)
+    _marks(img).append({"kind": kind, "tone": "grey", "rect": [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]})
+
+
+def dashed_rect(d, rect, color=GREY, width: int = 1, dash: int = 6) -> None:
+    """A thin dashed rectangle, the quiet style for context that is not part of the answer."""
+    x0, y0, x1, y1 = (int(round(v)) for v in rect)
+    for a, b, fixed, horiz in ((x0, x1, y0, True), (x0, x1, y1, True), (y0, y1, x0, False), (y0, y1, x1, False)):
+        for t in range(a, b, 2 * dash):
+            e = min(t + dash, b)
+            d.line([(t, fixed), (e, fixed)] if horiz else [(fixed, t), (fixed, e)], fill=color, width=width)
+
+
 def record_steps(img, n, steps) -> None:
     """The reasoning behind one answer item, layer by layer, for the app's Steps card.
 

@@ -42,6 +42,68 @@ detector counts clear the bar, precisions within 0.3 points). raster-ocr-labels 
 questions (raster-rooms does, and falls back to it only without a room model); its cells are kept from the earlier
 dev run, all under the line as before. `tools/calibrate_tiers.py` now leaves out each learned route's own training
 images (raster-detector: ds_cubi, raster-rooms: ds_rooms).
+## 2026-11-14: wall-bounded room regions on scans, branch `room-regions`
+
+Problem (QA, from his test): on colorful-11196 "How large areas do the bedrooms have combined?" is right (19.7 m2,
+printed), but the traced outline of MH2 steps in around the dashed bed head and wardrobe and bulges out into the
+doorway; MH 1 does the same. Cause: the walls-only mask in `raster_area.py` first closes the dark pixels by 5 px and
+then opens by 4 px. The closing merges a dashed double outline into a band that survives the opening, so furniture
+acts as a wall, and the doorway bridge (a plain row/column closing) misses some doorways and fills rooms narrower
+than a door width.
+
+Change (`bpqa/routes/raster_area.py`, nothing keyed to a file):
+- Stroke wall mask. The plan's thinnest wall width comes from the distance-transform stroke widths (first width over
+  3 px holding 15% of the thick stroke weight; thick strokes must be 25% or more of all stroke weight, otherwise the
+  plan has no stroke mask). Walls are the dark pixels opened by a square of 0.6 x that width, with no closing, so
+  dashed and thin lines, door swings, hatching and fill-colour edges are not walls.
+- Wall-line gaps (doors, windows) are closed only where the gap is a thin stack of equal row (column) gaps: at most
+  2.6 m long and 0.55 m deep at the doorway-scale hypothesis, at least as deep as the opening size, open floor beyond
+  both ends of the stack, the wall going on past both ends, and one end a stub of the same wall. A room interior is
+  never such a stack, so it is not sliced.
+- `hypotheses()` adds `stroke@ppm` region sets next to the legacy `walls@ppm` sets on plans with a stroke mask.
+  `choose()` keeps the legacy set unless a stroke set has strictly more rooms agreeing on a scale (at least 3 when
+  no legacy set gives a scale). Plans drawn with outlined or hatched walls keep the legacy regions unchanged.
+- `STOA_WALL_MODE=legacy` turns the stroke sets off.
+
+Leave-one-out against printed areas (`tools/area_eval.py --split dev`, the 370 dev CubiCasa plans with 2+ printed
+areas from the object-scale entry, none in the CubiCasa5K test split, no Stoa test question). Each printed room is
+measured with a scale from the other rooms only. Classes by printed area:
+
+| | before | after |
+|---|---|---|
+| rooms measured (plans) | 307 (82) | 314 (84) |
+| 6 m2 and over: median abs error / within 5% / within 10% | 6.7% / 43% / 60% (178) | 6.8% / 42% / 59% (186) |
+| 3 to 6 m2 | 19.0% / 25% / 36% (76) | 19.0% / 25% / 36% (76) |
+| under 3 m2 | 19.9% / 19% / 28% (53) | 17.8% / 21% / 29% (52) |
+| all | 11.3% / 35% / 48% | 11.3% / 35% / 48% |
+| the 290 rooms measured both times | 11.9% / 33% / 47% | 11.9% / 34% / 47% |
+
+Rooms measured both times are equal or better in every class. 214 of the 370 plans have a stroke mask, but in the
+leave-one-out a stroke set is picked on only 4 plans (11 of the 314 measured rooms), so the totals barely move. The
+new rooms are measured on plans where no scale could be set before. The small rise in the 6 m2 and over median comes from those
+22 extra rooms. Visual check, before/after on 15 plans of all three styles: colorful-11196 MH2 and MH 1 (and KHH, PH,
+KPH, LH) are now the full rooms closed at the wall line (MH2 measures 8.7 m2 against 8.7 printed, MH 1 11.1 against
+11.0, scale 5 of 6 rooms within 1.0%, was 2 of 4); colorful-13513, colorful-11193, high_quality_architectural-2565
+and -6207 gain a scale and clean outlines; plans without thick strokes are unchanged. Note: colorful-11196 is a Stoa
+test-split drawing; it was used to debug the mask, not for any number above.
+
+`eval.py --split dev --sources cubicasa5k`, before (`STOA_WALL_MODE=legacy`) and after: the first 4,481 of the 58,354
+dev questions (run stopped for time) give identical answers, 3,793 correct both times. All CubiCasa questions are
+counts, and no count route uses the regions, so the rest cannot move either.
+
+Tried and kept off: (1) the stroke mask alone, without the legacy sets: 243 rooms instead of 307, and on the plans
+with a stroke mask 33.8% median error against 20.7%, because many high_quality_architectural plans have solid
+interior walls but hatched exterior walls, which vanish from the mask so the rooms leak. (2) A thin-band filter on the
+legacy doorway bridge (`STOA_THIN_DOOR_BRIDGE=1`). It fixes the high_quality_architectural-10372 WC (1.80 m2 printed),
+which the legacy bridge fills on one half: that plan has no thick strokes, so it stays on the legacy mask. But it is
+worse on dev: median 12.8% against 11.3%, within 5% 26% against 35%. So that WC is still measured at about 0.8 m2,
+and its wall tiles come out short. (3) The wall-line gap bridge on the legacy mask: its ragged blobs give many false
+stacks.
+
+Evidence: on scan area answers the printed rooms that only set the scale are drawn grey, dashed, unfilled (were
+blue, and were read as part of the answer), and the marks sidecar holds them as `{"kind": "scale", "tone": "grey"}`
+(`evidence.record_context`); the app pins only `box` and `poly` marks. Tests: `tests/test_room_regions.py` (new);
+the existing tests pass.
 
 ## 2026-11-14: object scale for scans without printed areas, branch `object-scale` (behind a flag, off)
 
