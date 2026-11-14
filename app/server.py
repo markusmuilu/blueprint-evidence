@@ -16,6 +16,7 @@ GET  /api/ifc3d...      3D view of an IFC model per storey (app/ifc3d.py)
 from __future__ import annotations
 
 import hashlib
+import os
 import importlib.util
 import asyncio
 import io
@@ -203,13 +204,45 @@ def _dxf_preview(f: Path) -> Path:
     return out
 
 
+PREVIEW_MAX_SIDE = int(os.environ.get("BPE_PREVIEW_MAX_SIDE", "6000"))
+
+
+def _raster_preview(f: Path) -> Path:
+    """The image the browser shows: the original, or for a big sheet a copy capped at PREVIEW_MAX_SIDE px on the long
+    side. A 14000 px scan decoded in the browser (about 550 MB) crashed the tab (QA 15 Nov); the routes still read the
+    original at full resolution, and the evidence images are drawn by the server at their own size."""
+    from PIL import Image
+    limit, Image.MAX_IMAGE_PIXELS = Image.MAX_IMAGE_PIXELS, None
+    try:
+        with Image.open(f) as im:
+            w, h = im.size
+            if max(w, h) <= PREVIEW_MAX_SIDE:
+                return f
+            st = f.stat()
+            key = hashlib.sha1(f"{f}|{st.st_size}|{int(st.st_mtime)}|{PREVIEW_MAX_SIDE}".encode()).hexdigest()[:16]
+            out = PREVIEW_CACHE / f"r{key}.png"
+            if not out.exists():
+                k = PREVIEW_MAX_SIDE / max(w, h)
+                small = im.convert("L" if im.mode in ("1", "L", "LA", "I;16") else "RGB").resize(
+                    (max(1, round(w * k)), max(1, round(h * k))), Image.LANCZOS)
+                tmp = out.with_name(out.name + ".tmp")
+                small.save(tmp, "PNG", optimize=False)
+                os.replace(tmp, out)
+            return out
+    except Exception as ex:          # never break the preview: fall back to the original
+        print(f"[preview] {f.name}: {type(ex).__name__}: {ex}", flush=True)
+        return f
+    finally:
+        Image.MAX_IMAGE_PIXELS = limit
+
+
 @app.get("/api/preview")
 def preview(path: str):
     root, rel = resolve(path)
     f = root / rel
     ext = f.suffix.lower()[1:]
     if ext in ("png", "jpg", "jpeg"):
-        return FileResponse(f)
+        return FileResponse(_raster_preview(f))
     if ext == "dxf":
         twin = f.with_suffix(".pdf")          # a PDF twin of the drawing is the better picture: show it
         if twin.exists():
