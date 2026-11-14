@@ -225,7 +225,7 @@ def run(file: Path, obj: str, value) -> list[Check]:
 
 LOWER_FACTOR = 0.5
 # Checks whose implied value replaces the route's count when the check fails (the answer then becomes
-# an estimate either way). Chosen on the dev split (tools/check_eval.py --tiers): only where the
+# an estimate either way). Chosen on the dev split (answers.jsonl of a dev run, see CHANGELOG): only where the
 # implied value was right more often than the route's own count on dev answers that failed the check.
 ADOPT = {"numbered-labels", "summary-kitchen", "summary-sauna", "utility-kitchen", "floor-names", "stairs-label",
          "showers>=bathrooms"}
