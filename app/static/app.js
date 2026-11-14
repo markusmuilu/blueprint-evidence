@@ -508,7 +508,7 @@ const viewer = (() => {
 
   /* Wheel input, as map viewers do it (14 Nov: zoom felt awkward on a laptop):
      pinch on a touchpad (browsers send it as ctrl+wheel) and ctrl+wheel zoom, at a pinch-friendly rate;
-     a mouse wheel notch zooms about 1.5x about the cursor (18% was too slow, his test); a two-finger touchpad scroll pans instead of zooming. */
+     a mouse wheel notch zooms about 1.3x about the cursor (1.2x too slow, 1.5x too much, his tests); a two-finger touchpad scroll pans instead of zooming. */
   vp.addEventListener("wheel", (e) => {
     if (!img.naturalWidth) return;
     e.preventDefault();
@@ -517,9 +517,9 @@ const viewer = (() => {
     const dx = e.deltaX * unit, dy = e.deltaY * unit;
     const cx = e.clientX - r.left, cy = e.clientY - r.top;
     if (e.ctrlKey || e.metaKey) {
-      zoomAt(Math.exp(-Math.max(-60, Math.min(60, dy)) * 0.03), cx, cy);
+      zoomAt(Math.exp(-Math.max(-60, Math.min(60, dy)) * 0.02), cx, cy);
     } else if (e.deltaMode !== 0 || (dx === 0 && Math.abs(dy) >= 50)) {
-      zoomAt(Math.exp(-Math.sign(dy) * Math.min(Math.abs(dy), 150) * 0.0042), cx, cy);   // one notch: about 1.5x
+      zoomAt(Math.exp(-Math.sign(dy) * Math.min(Math.abs(dy), 150) * 0.0027), cx, cy);   // one notch: about 1.3x
     } else {
       x -= dx; y -= dy; atFit = false; apply();
     }
@@ -555,7 +555,7 @@ const viewer = (() => {
   vp.addEventListener("keydown", (e) => {
     const step = 60;
     const map = {
-      "+": () => zoomAt(1.6, ...center()), "=": () => zoomAt(1.6, ...center()), "-": () => zoomAt(1 / 1.6, ...center()),
+      "+": () => zoomAt(1.4, ...center()), "=": () => zoomAt(1.4, ...center()), "-": () => zoomAt(1 / 1.4, ...center()),
       "0": fit, ArrowLeft: () => { x += step; atFit = false; apply(); }, ArrowRight: () => { x -= step; atFit = false; apply(); },
       ArrowUp: () => { y += step; atFit = false; apply(); }, ArrowDown: () => { y -= step; atFit = false; apply(); },
     };
@@ -573,8 +573,8 @@ const viewer = (() => {
     else return;
     e.preventDefault();
   });
-  $("#zoomIn").addEventListener("click", () => zoomAt(1.6, ...center()));
-  $("#zoomOut").addEventListener("click", () => zoomAt(1 / 1.6, ...center()));
+  $("#zoomIn").addEventListener("click", () => zoomAt(1.4, ...center()));
+  $("#zoomOut").addEventListener("click", () => zoomAt(1 / 1.4, ...center()));
   $("#zoomFit").addEventListener("click", fit);
   $("#rotL").addEventListener("click", () => turn(-1));
   $("#rotR").addEventListener("click", () => turn(1));
