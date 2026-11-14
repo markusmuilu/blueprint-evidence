@@ -381,7 +381,7 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
 .tbl tr.total td { font-weight: 600; border-top: 1px solid var(--border-strong); }
 .tbl td.dim { color: var(--muted); }
 .tbl td.wrap { white-space: normal; min-width: 22ch; }
-.tbl td.src { white-space: normal; word-break: break-all; font-size: var(--fs-xs); min-width: 16ch; }
+.tbl td.srcfile { white-space: normal; word-break: break-all; font-size: var(--fs-xs); min-width: 16ch; }
 .cellbar { display: inline-grid; grid-template-columns: 64px auto; align-items: center; gap: var(--s2); }
 .cellbar i { display: block; height: 6px; background: var(--border); border-radius: 0 2px 2px 0; overflow: hidden; }
 .cellbar i b { display: block; height: 100%; background: var(--accent); }

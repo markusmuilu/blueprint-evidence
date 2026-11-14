@@ -691,7 +691,7 @@ async function loadOverview() {
     else if (it.wrong != null) detail = `${it.correct} correct, ${it.wrong} wrong (${it.proven_wrong} of them proven), ${it.abstain} abstained, ${it.abstain_ok} correctly abstained`;
     else if (it.proven != null) detail = `proven ${num(it.proven)} at ${pct(it.proven_precision)}, estimate ${num(it.estimate)} at ${pct(it.estimate_precision)}`;
     return `<tr><td>${esc(it.set)}</td><td class="num">${num(it.n)}</td><td class="num">${pct(it.accuracy)}</td>
-      <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td><td class="mono dim src">${esc(it.source || "")}</td></tr>`;
+      <td class="num">${it.precision == null ? "-" : pct(it.precision)}</td><td class="wrap">${detail}</td><td class="mono dim srcfile">${esc(it.source || "")}</td></tr>`;
   }).join("");
   $("#overviewTable").innerHTML = head + "<tbody>" + body + "</tbody>";
 }
