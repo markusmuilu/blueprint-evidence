@@ -26,6 +26,26 @@ the unfiltered value. Slab questions on a plan sheet use the sheet's storey (FZK
 list slab kinds. A printed apartment summary total is never a room in a list. Judge and QA cases: 37 checked, every
 former wrong Proven is now right or not answered. Dev (ifc_models 2224 q, swiss_dwellings first 2500 q): Proven
 1705 at 98.9% and 2500 at 99.1%, unchanged from before.
+## 2026-11-14 night: final measurement, branch `final-measurement`
+
+Builder BE. Measured on commit 8d5f0bb (main before BD, BF and BG merged), Nemotron off, calibration on, no model calls.
+Only measuring code changed: `eval.py` gained `--shard K/N` (a run covers every Nth drawing) and `--merge` (rebuild the
+summary from shard runs; checked identical to a single run on the preview test split), so the full test split could run in six
+processes on a shared CPU. Detector and OCR caches were merged from other worktrees' `out/` (keyed by model hash and image, so they only skip recomputation).
+
+- **Full set, test split, 39,807 questions: 84.8% (33,754), precision 85.2%, proven 17,497 at 98.7%, estimate 22,136 at 74.5%.**
+  Morning run (13:28): 81.2%, proven 15,441 at 98.4%, estimate 24,218 at 70.7%. By source: CubiCasa 74.2% to 79.4%, Swiss 99.0% to 99.4%,
+  IFC-Bench 27.8% to 28.6%, IFC models and OpeningDesign unchanged. CubiCasa objects: kitchens 64.0% to 91.3%, saunas 63.6% to 93.9%, WC rooms 81.2% to 90.3%,
+  bedrooms 75.1% to 79.6%, bathrooms 87.9% to 86.5%, others within 0.4 points (doors 59.6%, windows 49.1%).
+- **Preview set, test split, 2,701 questions: 89.5% (2,418), proven 1,565 at 99.6%, estimate 1,131 at 76.0%** (morning 86.8%).
+- **Cost and latency** (`tools/cost_eval.py`, 89 preview dev questions, caches cleared, GPU visible): all sampled questions median 87 ms,
+  cold 155 ms, warm 55 ms; scans cold 3.5 to 4.0 s, warm 55 to 96 ms. Rules read the question for 99.3% of the test split; the reader would be asked for 0.74%.
+  Blended $0.168 (EUR 0.152) per 1,000 questions on the test mix; Nemotron plain prompt $101 per 1,000.
+- **First question on Stoa's big sample** (CPU only, through `deploy.web`): 22.4 s cold, whole background reading done at 33 s, then 0.25 to 0.32 s.
+- **Found, not fixed (measure only):** on this machine's CUDA build of torch with `CUDA_VISIBLE_DEVICES` empty, small-scan door, window and room-type questions raised "Invalid device id"
+  from ultralytics device selection (13 of 20 scan questions in the cost sample abstained with `error: AssertionError`; the big-sheet route was not affected). `deploy.web` sets that variable too;
+  whether the deployed CPU-only image (a CPU torch build) is affected was not tested here and is worth one check.
+- Witness agreement (`tools/witness_eval.py`) was not re-run: 3,922 questions would have taken about 30 minutes on the shared CPU.
 
 ## 2026-11-14: scale assumption, branch `scale-assumption`
 
