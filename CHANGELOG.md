@@ -70,6 +70,35 @@ right answers as it fixes. The window pane convention goes both ways (merge 58 i
 split rule fixes some plans and breaks others. The off-unit false positives are real doors and windows;
 a counting rule cannot tell which unit the annotation covers.
 
+### Several tile scales fused (`tile` may be a list in the thresholds file)
+
+The error table says doors and windows fail on context: the off-unit doors, the pane convention and the
+interior glazing all need more of the plan than a 1,024 px tile at 2x shows. The same `yolo26s` tile
+model was run at other resize factors (training saw 2x with +-30% scale augmentation), and the views of
+several scales fused like the eight TTA views (`bpqa/tiling.fuse_views`; the route and checks read the
+views through `detector.views_for`). Tuned on the 624 tune images, 2-fold cross-validated exact count:
+
+| policy (tiled `yolo26s`) | toilet | sink | shower/bath | door | window |
+|---|---|---|---|---|---|
+| 2x, one view (main's door policy) | 87.5% | 78.2% | 72.4% | 59.1% | 44.7% |
+| 1.5x, one view | 87.0% | 74.9% | 70.3% | 59.1% | 48.4% |
+| 1.25x, one view | 86.9% | 75.2% | 63.8% | 57.8% | 45.8% |
+| 1x, one view | 83.5% | 67.6% | 63.1% | 54.6% | 45.5% |
+| 2.5x, one view | 85.7% | 78.2% | 75.9% | 56.2% | 45.0% |
+| 2x + 1.5x, one view each | 87.7% | 79.1% | 72.4% | 59.3% | 48.4% |
+| 2x, TTA (main's policy for the other four) | 88.3% | 79.3% | 77.6% | 58.2% | 50.0% |
+| 1.5x, TTA | 87.7% | 79.1% | 75.2% | 61.6% | 51.3% |
+| 1.25x, TTA | 87.7% | 77.7% | 71.4% | 60.0% | 47.1% |
+| 2x + 1.5x, TTA | 88.8% | 79.5% | 77.1% | 62.9% | 51.3% |
+| 1.5x + 1.25x, TTA | 88.3% | 79.1% | 74.5% | 63.1% | 51.6% |
+| **2x + 1.5x + 1.25x, TTA (24 views)** | 88.1% | 80.5% | 75.2% | **64.3%** | **52.6%** |
+| larger tiles, 1,536 px at 1.5x / 2x, one view | 88.3% / 88.3% | 76.2% / 78.2% | 72.8% / 71.6% | 59.8% / 57.1% | 48.1% / 47.1% |
+
+Main on the same images: door 59.1%, window 50.0%. The three-scale TTA policy is kept for doors
+(+5.2 points) and windows (+2.6). Toilet, sink and shower/bath keep main's policy: the best variant
+there is within 1.5 points of main, inside the noise of choosing among a dozen variants on 624 images.
+Cost: 24 views instead of 8 (doors had 1), about 3x the detector time per image for those two objects.
+
 ## 2026-11-14 morning: English and German room labels, evidence colours, app tiers and results, branch `polish`
 
 Problem: on the unseen-drawing set the room-label route read only Finnish and Swedish words, so the two
