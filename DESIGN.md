@@ -106,6 +106,18 @@ placeholder 4.6 / 5.1, text on the accent button 8.9.
 - Empty states teach: the viewer explains what will be drawn; the answer panel explains what the
   answer will contain; the library explains how to point at a dataset.
 - Errors: toast with the server's message; the previous answer stays.
+- Verification strip (under the viewer): one 104 x 78 crop per counted item or measured room, cut from the
+  evidence image, numbered like the overlay; border in accent for proven items and estimate amber (with
+  the estimate icon) for items to check. Measured rooms are outlined in the overlay's paper blue on the
+  crop. "Not this one" dims and dashes a crop; added items are dashed circles on the drawing. The live
+  count sits in mono at the strip's right, with Save correction (secondary) and Export (quiet).
+- Pins: proven items use the overlay's paper blue oklch(0.50 0.13 240), items to check the paper amber
+  already used for estimate pins, so pins hold on the white drawing; a selected pin takes the accent.
+- Witnesses (answer panel): one row per format, value in mono; a value that disagrees is circled with a
+  1.5px estimate-amber pill. Items where two page-aligned formats disagree are circled on the drawing
+  (solid: counted only here; dashed: counted by the other format, missed here).
+- Cost meter (answer panel): two log-scale bars, this answer in accent and the model baseline in muted,
+  with the assumed prices written under them.
 
 ## Motion
 
