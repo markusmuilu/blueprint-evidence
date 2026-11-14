@@ -20,11 +20,11 @@ NEEDS = {
     "fire": "fire ratings", "external": "whether an element is exterior or interior",
     "internal": "whether an element is exterior or interior", "sliding": "the opening type (sliding or swing)",
     "double": "single or double leaf", "glazed": "glazing", "accessible": "accessibility",
-    "emergency": "which doors are emergency exits", "loadbearing": "the load-bearing flag",
+    "emergency": "which doors are emergency exits", "entrance": "which doors are entrance doors", "loadbearing": "the load-bearing flag",
     "material": "the element material", "orientation": "facade orientation",
 }
 # qualifier kinds each route filters by (routes are named by their module)
-HONOURS = {"ifc_route": {"fire", "external", "internal", "sliding", "double", "loadbearing"}}
+HONOURS = {"ifc_route": {"fire", "external", "internal", "sliding", "double", "loadbearing", "emergency", "entrance"}}
 # the typed-lookup routes after the numeric ones read interior / exterior themselves (IsExternal, layer names)
 FALLBACK_HONOURS = {"external", "internal"}
 SOURCES = {"dxf_swiss": "CAD drawing", "dxf_generic": "CAD drawing", "pdf_text": "sheet text",
@@ -116,6 +116,16 @@ def operation_values(e) -> list[str]:
     return [v for v in vals if v.upper() not in ("NOTDEFINED", "USERDEFINED", "")]
 
 
+EXIT_KEY = re.compile(r"fire ?exit|emergency|escape|notausgang|fluchtweg", re.I)
+ENTRANCE_KEY = re.compile(r"entrance|haupteingang|entry ?door", re.I)
+ENTRANCE_NAME = re.compile(r"entrance|entry door|front door|main door|haustur|haustuer|eingang|sisaankaynti|sisaankaynt|"
+                           r"paaovi|etuovi|porte d.entree|porte principale|ingresso", re.I)
+
+
+def _truthy(v) -> bool:
+    return v is True or str(v).strip().lower() in ("true", "yes", "ja", "1", "x", "vrai", "oui")
+
+
 SLIDING = re.compile(r"slid|schiebe|liuku|coulis|skjut", re.I)
 DOUBLE = re.compile(r"double|doppel|dubbel|two[_ -]?(panel|leaf)|2[_ -]?(fl|leaf|panel)", re.I)
 
@@ -149,6 +159,40 @@ def filter_ifc(M, ents, q, storey):
             top = Counter(v for _, v in vals if v).most_common(3)
             notes.append(f"{len(ents)} of {total} {label}s with a FireRating property"
                          + (f" ({', '.join(v for v, _ in top)})" if top else ""))
+        elif kind == "emergency":
+            def exit_flag(e):
+                for ps, k, v in _props().flat_props(e):
+                    if EXIT_KEY.search(str(k)) and v is not None:
+                        return _truthy(v)
+                return None
+            flags = [exit_flag(e) for e in everything]
+            if all(f is None for f in flags):
+                return ents, "", "", (f"cannot prove: no {label} in this model carries a fire-exit or emergency-exit property "
+                                      f"(Pset_DoorCommon.FireExit or similar); {len(everything)} {label}s in the model")
+            ents = [e for e in ents if exit_flag(e)]
+            notes.append(f"{len(ents)} of {total} {label}s with a FireExit / emergency-exit property = True "
+                         f"(set on {sum(f is not None for f in flags)} of {len(everything)} {label}s in the model)")
+        elif kind == "entrance":
+            def entrance_flag(e):
+                for ps, k, v in _props().flat_props(e):
+                    if ENTRANCE_KEY.search(str(k)) and v is not None:
+                        return _truthy(v)
+                return None
+            if any(entrance_flag(e) is not None for e in everything):
+                ents = [e for e in ents if entrance_flag(e)]
+                notes.append(f"{len(ents)} of {total} {label}s with an entrance property = True")
+            elif any(ENTRANCE_NAME.search(_names(e)) for e in everything):
+                ents = [e for e in ents if ENTRANCE_NAME.search(_names(e))]
+                notes.append(f"{len(ents)} of {total} {label}s whose name or type name reads as an entrance door")
+                reason = f"no {label} carries an entrance property; entrance doors were read from element and type names"
+            elif any(M.is_external(e) is not None for e in everything):
+                ents = [e for e in ents if M.is_external(e)]
+                notes.append(f"{len(ents)} of {total} {label}s with IsExternal = True")
+                reason = ("the model does not mark entrance doors; the exterior doors (IsExternal) are shown as the "
+                          "closest recorded property and include doors that are not entrances")
+            else:
+                return ents, "", "", (f"cannot prove: this model marks no entrance doors (no entrance property, no door name "
+                                      f"that says entrance, no IsExternal value); {len(everything)} {label}s in the model")
         elif kind == "loadbearing":
             P = _props()
 

@@ -160,6 +160,17 @@ def qualifier_abstain(why: str, n: int, q, storey) -> Answer:
     return a
 
 
+def external_note(M, before, after, q) -> str:
+    """The interior / exterior filter, stated; elements without an IsExternal value are said, not hidden."""
+    if q.extra.get("external") is None or q.extra.get("slab_type"):
+        return ""
+    unknown = sum(M.is_external(e) is None for e in before)
+    text = f"{len(after)} of {len(before)} {q.obj}s with IsExternal = {q.extra['external']}"
+    if unknown:
+        text += f" ({unknown} {q.obj}{' has' if unknown == 1 else 's have'} no IsExternal value and {'is' if unknown == 1 else 'are'} in neither answer)"
+    return text
+
+
 def _external_filter(M, ents, q):
     if q.extra.get("slab_type"):
         ents = [e for e in ents if getattr(e, "PredefinedType", None) == q.extra["slab_type"]]
@@ -661,7 +672,7 @@ def answer(ctx, q) -> Answer:
         ents, qnote, qtier, qwhy = qualifiers.filter_ifc(M, ents, q, storey)
         if qwhy:
             return qualifier_abstain(qwhy, len(ents), q, storey)
-        n_before = len(ents)
+        ents_pre = ents
         ents = _external_filter(M, ents, q)
         if ents is None:
             return abstain(ROUTE, "interior/exterior asked but IsExternal not set in the model")
@@ -670,8 +681,8 @@ def answer(ctx, q) -> Answer:
         where = f" on storey {storey.Name}" if storey else " in the model"
         note = f"{len(ents)} x {CLASSES[q.obj][0]}" + where
         filters = [qnote.removesuffix(where)] if qnote else []
-        if q.extra.get("external") is not None and not q.extra.get("slab_type"):
-            filters.append(f"{len(ents)} of {n_before} {q.obj}s with IsExternal = {q.extra['external']}")
+        if external_note(M, ents_pre, ents, q):
+            filters.append(external_note(M, ents_pre, ents, q))
         if filters:
             note = f"{'; '.join(filters)}{where} ({CLASSES[q.obj][0]})"
         if qtier:
