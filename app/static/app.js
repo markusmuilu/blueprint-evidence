@@ -330,9 +330,12 @@ function drawItem(d) {
   const b = document.createElement("button");
   b.className = "draw-item";
   b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
-  b.innerHTML = `<span class="nm" title="${esc(d.path)}">${esc(d.name)}</span>
+  b.dataset.path = d.path; b.dataset.name = d.name; b.dataset.ext = d.ext;
+  b.innerHTML = `<span class="box" aria-hidden="true"></span><span class="nm" title="${esc(d.path)}">${esc(d.name)}</span>
     <span class="sub"><span>${esc(SOURCE_NAMES[d.source] || d.source)}</span><span>${esc(d.ext.toUpperCase())}</span><span>${d.n_questions} questions</span><span>${esc(d.split)}</span></span>`;
-  b.addEventListener("click", () => selectDrawing(d.path));
+  b.addEventListener("click", (e) => pickOrOpen(b, e));       // ask-several block: select, or open
+  b.addEventListener("dblclick", () => { if (batch.on) selectDrawing(d.path); });
+  paintPick(b);
   li.appendChild(b);
   return li;
 }
@@ -368,6 +371,7 @@ async function upload(files) {
   try {
     const res = await api("/api/upload", { method: "POST", body: fd });
     toast(`Uploaded ${res.name}`);
+    batchAddUploaded(res);                     // ask-several block: with the toggle on, uploads join the selection
     selectDrawing(res.path);
   } catch (e) {
     toast("Upload failed: " + e.message, true);
@@ -392,6 +396,7 @@ async function selectDrawing(path, keepAnswer = false) {
     renderDrawingQuestions(d);
     renderExamples();
     if (!keepAnswer) {
+      leaveBatchView();                              // ask-several block
       if (state.drawing && state.askTicket) {      // a question still running on the previous drawing is abandoned
         state.askTicket += 1;
         clearInterval(busyT);
@@ -1388,13 +1393,14 @@ async function saveCorrection() {
 }
 
 /* ================================================================ ask */
-$("#askForm").addEventListener("submit", (e) => { e.preventDefault(); ask(); });
+$("#askForm").addEventListener("submit", (e) => { e.preventDefault(); if (batchActive()) askMany(); else ask(); });
 
 let busyT;
 async function ask(refresh = false) {
   const q = $("#question").value.trim();
   if (!state.drawing) { toast("Pick a drawing first", true); return; }
   if (!q) { $("#question").focus(); return; }
+  leaveBatchView();                       // ask-several block: a single question shows its own answer
   const btn = $("#askBtn");
   btn.disabled = true;
   btn.setAttribute("aria-busy", "true");
@@ -1777,15 +1783,275 @@ async function copyCsv(a) {
     toast(ok ? "Copied one CSV row" : "Copy is blocked here; use Download CSV", !ok);
   }
 }
-function downloadCsv(a) {
-  const blob = new Blob([CSV_COLS.join(",") + "\n" + csvRow(a) + "\n"], { type: "text/csv" });
+function saveCsv(text, filename) {
+  const blob = new Blob([text], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = (a.drawing || "answer").replace(/\.[^.]+$/, "") + "_answer.csv";
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function downloadCsv(a) {
+  saveCsv(CSV_COLS.join(",") + "\n" + csvRow(a) + "\n", (a.drawing || "answer").replace(/\.[^.]+$/, "") + "_answer.csv");
+}
+
+/* ================================================================ BEGIN ask-several (app.js)
+   One question across many drawings. Nothing here touches the single-drawing path except five one-line hooks
+   (the submit handler, ask(), selectDrawing(), drawItem(), upload()). The answers come from the ordinary /api/ask,
+   one drawing at a time: the server solves one question at a time anyway (SOLVE_LOCK), and one at a time is gentle.
+   An answer already in the server's cache returns in about a second, so opening a row afterwards costs nothing.
+   Cannot-prove rows and failed requests are listed but never added to a total. */
+const BATCH_MAX = 40;
+const batch = {
+  on: false,                 // the "Ask several" toggle
+  sel: new Map(),            // path -> { name, ext }, in the order picked
+  anchor: null,              // last picked path, for Shift-click ranges
+  results: null,             // { question, pdf_only, rows: [{ path, name, st, a, err }], stop, seq }
+};
+let batchSeq = 0;
+const batchActive = () => batch.on && batch.sel.size >= 2;
+const plural = (n, w) => !w || n === 1 ? w : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + "ies" : /(s|x|ch|sh)$/.test(w) ? w + "es" : w + "s";
+const nDrawings = (n) => `${n} drawing${n === 1 ? "" : "s"}`;
+
+function paintPick(b) {
+  const on = batch.on && batch.sel.has(b.dataset.path);
+  if (batch.on) { b.setAttribute("role", "checkbox"); b.setAttribute("aria-checked", String(on)); }
+  else { b.removeAttribute("role"); b.removeAttribute("aria-checked"); }
+  b.classList.toggle("picked", on);
+}
+function batchChanged() {
+  $("#picker").classList.toggle("multi", batch.on);
+  document.querySelectorAll(".draw-item").forEach(paintPick);
+  $("#multiToggle").setAttribute("aria-pressed", String(batch.on));
+  $("#multiBar").hidden = !batch.on;
+  const n = batch.sel.size;
+  $("#multiCount").textContent = n ? `${n} selected` : "None selected";
+  $("#multiList").innerHTML = [...batch.sel].map(([p, d]) =>
+    `<li><span class="nm" title="${esc(p)}">${esc(d.name)}</span><button type="button" class="x" data-path="${esc(p)}" aria-label="Remove ${esc(d.name)} from the selection">×</button></li>`).join("");
+  const note = $("#multiNote");
+  note.hidden = !batch.on;
+  note.textContent = n >= 2 ? `Asks all ${n} selected drawings, one after another.` : n === 1 ? "One drawing selected. Select another to ask across several." : "No drawings selected. Tick two or more in the library.";
+  $("#askBtn").textContent = batchActive() ? `Ask ${n} drawings` : "Ask";
+}
+function batchPick(path, info, on) {
+  if (on) {
+    if (!batch.sel.has(path) && batch.sel.size >= BATCH_MAX) { toast(`Up to ${BATCH_MAX} drawings at a time, to go easy on the server`, true); return false; }
+    batch.sel.set(path, info);
+  } else batch.sel.delete(path);
+  return true;
+}
+function setMulti(on) {
+  if (on === batch.on) return;
+  batch.on = on;
+  if (on) {
+    if (state.drawing) batchPick(state.drawing.path, { name: state.drawing.name, ext: state.drawing.ext }, true);
+    batch.anchor = state.drawing ? state.drawing.path : null;
+  } else {
+    if (batch.results) batch.results.stop = true;
+    batch.sel.clear(); batch.results = null; batch.anchor = null;
+    leaveBatchView();
+    $("#askBtn").disabled = false;
+    $("#askBtn").removeAttribute("aria-busy");
+  }
+  batchChanged();
+}
+function pickOrOpen(b, e) {
+  const path = b.dataset.path, info = { name: b.dataset.name, ext: b.dataset.ext };
+  const withKey = e.ctrlKey || e.metaKey || e.shiftKey;
+  if (!batch.on && !withKey) { selectDrawing(path); return; }
+  if (!batch.on) setMulti(true);
+  const items = [...document.querySelectorAll(".draw-item")].filter((x) => x.offsetParent !== null);
+  const from = items.findIndex((x) => x.dataset.path === batch.anchor), to = items.indexOf(b);
+  if (e.shiftKey && from >= 0 && to >= 0) {
+    for (const x of items.slice(Math.min(from, to), Math.max(from, to) + 1)) if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
+  } else {
+    batchPick(path, info, !batch.sel.has(path));
+  }
+  batch.anchor = path;
+  batchChanged();
+}
+function batchAddUploaded(res) {
+  if (!batch.on) return;
+  const list = Array.isArray(res.drawings) && res.drawings.length ? res.drawings : [{ path: res.path, name: res.name, ext: res.ext }];
+  for (const d of list) if (!batchPick(d.path, { name: d.name, ext: d.ext }, true)) break;
+  batchChanged();
+}
+$("#multiToggle").addEventListener("click", () => setMulti(!batch.on));
+$("#multiClear").addEventListener("click", () => { batch.sel.clear(); batch.anchor = null; batchChanged(); });
+$("#multiShown").addEventListener("click", () => {
+  for (const x of document.querySelectorAll(".draw-item")) {
+    if (x.offsetParent === null) continue;
+    if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
+  }
+  batchChanged();
+});
+$("#multiList").addEventListener("click", (e) => {
+  const x = e.target.closest("button.x");
+  if (x) { batch.sel.delete(x.dataset.path); batchChanged(); }
+});
+
+/* ---- running the question ---- */
+async function askMany() {
+  const q = $("#question").value.trim();
+  if (!q) { $("#question").focus(); return; }
+  const run = { question: q, pdf_only: $("#pdfOnly").checked, stop: false, seq: ++batchSeq,
+    rows: [...batch.sel].map(([path, d]) => ({ path, name: d.name, st: "wait" })) };
+  batch.results = run;
+  showBatchView();
+  const btn = $("#askBtn");
+  btn.disabled = true; btn.setAttribute("aria-busy", "true");
+  renderBatch();
+  for (const row of run.rows) {
+    if (run.stop || batch.results !== run) break;
+    row.st = "run"; renderBatch();
+    try {
+      row.a = await api("/api/ask", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: row.path, question: q, pdf_only: run.pdf_only, refresh: false }),
+      });
+      row.st = "done";
+    } catch (e) { row.st = "fail"; row.err = e.message; }
+    if (batch.results === run) renderBatch();
+  }
+  if (batch.results !== run) return;           // cleared or left while it ran
+  for (const row of run.rows) if (row.st === "wait" || row.st === "run") row.st = "skip";
+  run.finished = true;
+  btn.disabled = false; btn.removeAttribute("aria-busy");
+  renderBatch();
+}
+
+function showBatchView() { $("#detail").classList.add("batch-on"); $("#detailBatch").hidden = false; $("#batchBack").hidden = true; }
+function leaveBatchView() {
+  $("#detail").classList.remove("batch-on");
+  $("#detailBatch").hidden = true;
+  const r = batch.results;
+  $("#batchBack").hidden = !r;
+  if (r) $("#batchBackBtn").textContent = `Back to the table for ${nDrawings(r.rows.length)}`;
+}
+$("#batchBackBtn").addEventListener("click", () => { if (batch.results) { showBatchView(); renderBatch(); } });
+
+/* ---- what the table says ---- */
+const ROW_STATUS = {
+  proven: ["Proven", "proven"], estimate: ["Estimate", "estimate"], cannot: ["Cannot prove", "cannot"],
+};
+const SUMMABLE = { count: "", m2: "m²", m3: "m³", m: "m" };
+function batchSummary(run) {
+  const done = run.rows.filter((r) => r.st === "done" && r.a);
+  const used = done.filter((r) => r.a.status !== "cannot" && r.a.value != null);
+  const proven = used.filter((r) => r.a.status === "proven").length, est = used.length - proven;
+  const left = run.rows.filter((r) => !used.includes(r) && (r.st === "done" || r.st === "fail")).length;
+  const pending = run.rows.filter((r) => r.st === "wait" || r.st === "run").length;
+  const out = { used, proven, est, left, pending, total: null, why: "" };
+  if (!used.length) { out.why = run.finished ? "No total: no drawing could be answered." : ""; return out; }
+  const units = new Set(used.map((r) => r.a.unit || ""));
+  if (used.some((r) => typeof r.a.value !== "number" || !isFinite(r.a.value))) out.why = "No total: the answers are not numbers.";
+  else if (units.size > 1) out.why = "No total: the drawings answered in different units.";
+  else if (!(([...units][0]) in SUMMABLE)) out.why = `No total: ${[...units][0] || "this unit"} cannot be added up.`;
+  else {
+    out.unit = [...units][0];
+    out.total = Math.round(used.reduce((s, r) => s + r.a.value, 0) * 100) / 100;
+    const objs = new Set(used.map((r) => (r.a.query && r.a.query.obj) || ""));
+    const obj = objs.size === 1 ? [...objs][0] : "";
+    out.noun = out.unit === "count" && /^[a-z][a-z_ ]*$/.test(obj) ? plural(out.total, obj.replace(/_/g, " ")) : fmtUnit(out.unit);
+    out.about = used.some((r) => r.a.approx);
+  }
+  return out;
+}
+function batchSentence(run, s) {
+  if (s.total == null) return s.why;
+  const parts = [];
+  if (s.proven) parts.push(`${s.proven} proven`);
+  if (s.est) parts.push(`${s.est} estimate`);
+  let t = `${run.finished ? "Total" : "Total so far"} ${s.about ? "about " : ""}${fmtValue(s.total)}${s.noun ? " " + s.noun : ""}: ${parts.join(", ")}`;
+  if (s.left) t += `; ${nDrawings(s.left)} could not be answered (not included)`;
+  return t + ".";
+}
+function reasonText(r) {
+  const t = r.st === "fail" ? r.err || "The request failed." : shortReason(r.a);
+  return t.length > 180 ? t.slice(0, 177) + "..." : t;
+}
+function renderBatch() {
+  const run = batch.results, box = $("#detailBatch");
+  if (!run) { box.innerHTML = ""; return; }
+  const n = run.rows.length, finished = run.rows.filter((r) => r.st === "done" || r.st === "fail").length;
+  const cur = run.rows.find((r) => r.st === "run");
+  const s = batchSummary(run);
+  const rows = run.rows.map((r) => {
+    const link = `<button type="button" class="rowlink mono" data-path="${esc(r.path)}" title="Open ${esc(r.path)} with its evidence">${esc(r.name)}</button>`;
+    if (r.st === "wait") return `<tr class="dimrow"><td>${link}</td><td class="num">-</td><td></td><td class="dim">Waiting</td></tr>`;
+    if (r.st === "run") return `<tr><td>${link}</td><td class="num">-</td><td></td><td class="dim">Reading...</td></tr>`;
+    if (r.st === "skip") return `<tr class="dimrow"><td>${link}</td><td class="num">-</td><td></td><td class="dim">Not run</td></tr>`;
+    if (r.st === "fail") return `<tr class="has-reason"><td>${link}</td><td class="num">-</td><td></td><td class="fail">Failed</td></tr><tr class="reason"><td colspan="4">${esc(reasonText(r))}</td></tr>`;
+    const a = r.a, [label, cls] = ROW_STATUS[a.status] || ROW_STATUS.cannot;
+    const hasVal = a.value != null && a.status !== "cannot";
+    const val = hasVal ? `${a.approx ? '<span class="about">about </span>' : ""}${esc(fmtValue(a.value))}` : "-";
+    const unit = hasVal ? esc(a.unit === "count" ? "count" : fmtUnit(a.unit)) : "";
+    const main = `<tr${a.status === "cannot" ? ' class="has-reason"' : ""}><td>${link}</td><td class="num">${val}</td><td class="unit">${unit}</td><td class="status ${cls}">${label}</td></tr>`;
+    return main + (a.status === "cannot" ? `<tr class="reason"><td colspan="4">${esc(reasonText(r))}</td></tr>` : "");
+  }).join("");
+  const totalRow = s.total == null ? "" :
+    `<tr class="total"><td>${run.finished ? "Total" : "Total so far"}, ${s.used.length} of ${n} drawings</td><td class="num">${s.about ? '<span class="about">about </span>' : ""}${esc(fmtValue(s.total))}</td><td class="unit">${esc(s.unit === "count" ? "count" : fmtUnit(s.unit))}</td><td class="status ${s.est ? "estimate" : "proven"}">${s.est ? "Includes estimates" : "All proven"}</td></tr>`;
+  const sentence = s.pending && !run.finished ? "" : batchSentence(run, s);
+  const prog = `${finished} of ${n} done` + (run.finished ? (run.stop ? ", stopped" : "") : cur ? `, reading ${esc(cur.name)}` : "");
+  box.innerHTML = `
+    <div class="ans-head">
+      <h2 class="h-panel">Answers across ${esc(nDrawings(n))}</h2>
+      <p class="detail-q">${esc(run.question)}</p>
+      <div class="batch-prog" role="status">
+        <p class="meta">${prog}</p>
+        ${run.finished ? "" : `<div class="bar" aria-hidden="true"><span style="width:${Math.round((finished / n) * 100)}%"></span></div>
+        <p class="meta">A drawing seen for the first time takes about 20 s; one already read, about a second.</p>`}
+      </div>
+    </div>
+    <section class="sec">
+      <div class="table-wrap"><table class="tbl batch-tbl">
+        <thead><tr><th>Drawing</th><th class="num">Value</th><th>Unit</th><th>Status</th></tr></thead>
+        <tbody>${rows}${totalRow}</tbody>
+      </table></div>
+      ${sentence ? `<p class="batch-sum" id="batchSum">${esc(sentence)}</p>` : ""}
+      <p class="meta">Click a drawing to open its own answer with the evidence and the steps. A drawing that cannot be proven is listed with its reason and is never added to the total.</p>
+    </section>
+    <div class="actions">
+      ${run.finished ? `<button class="btn" type="button" id="batchCsv">${icon("download")}Download CSV</button>`
+                     : `<button class="btn" type="button" id="batchStop">Stop</button>`}
+      <button class="btn btn-quiet" type="button" id="batchLeave">Back to one drawing</button>
+    </div>`;
+}
+$("#detailBatch").addEventListener("click", (e) => {
+  const run = batch.results;
+  if (!run) return;
+  const link = e.target.closest(".rowlink");
+  if (link) { openBatchRow(link.dataset.path); return; }
+  if (e.target.closest("#batchStop")) { run.stop = true; e.target.closest("#batchStop").disabled = true; }
+  else if (e.target.closest("#batchCsv")) downloadBatchCsv(run);
+  else if (e.target.closest("#batchLeave")) setMulti(false);
+});
+async function openBatchRow(path) {
+  const run = batch.results;
+  if (!run.finished) { toast("Wait for the run to finish, or press Stop"); return; }
+  leaveBatchView();
+  await selectDrawing(path);                    // opens the drawing (and resets the panel to its empty state)
+  $("#question").value = run.question;
+  $("#pdfOnly").checked = run.pdf_only;
+  ask();                                        // served from the server's answer cache, with evidence and steps
+}
+
+/* ---- CSV: the same columns and the same row writer as the single answer, one row per drawing, then the total ---- */
+function downloadBatchCsv(run) {
+  const s = batchSummary(run);
+  const lines = [CSV_COLS.join(",")];
+  for (const r of run.rows) {
+    if (r.st === "done" && r.a) lines.push(csvRow(r.a));
+    else lines.push(csvRow({ path: r.path, question: run.question, status: "cannot", abstain: r.st === "fail" ? "request failed: " + (r.err || "") : "not run", unit: "", time_ms: 0 }));
+  }
+  if (s.total != null) {
+    lines.push(csvRow({ path: `total of ${s.used.length} of ${run.rows.length} drawings`, question: run.question, value: s.total, unit: s.unit,
+      status: s.est ? `sum of ${s.proven} proven and ${s.est} estimate rows` : `sum of ${s.proven} proven rows`, time_ms: 0 }));
+  }
+  saveCsv(lines.join("\n") + "\n", `answers_${run.rows.length}_drawings.csv`);
+}
+/* END ask-several (app.js) ================================================================ */
 
 /* ================================================================ results */
 let runsLoaded = false, runData = null, measure = "accuracy";
