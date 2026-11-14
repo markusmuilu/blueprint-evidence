@@ -84,8 +84,8 @@ app = modal.App(APP_NAME)
 
 @app.function(
     image=image,
-    cpu=4.0,                    # physical cores (8 vCPU): the tiled detector with TTA is CPU-bound
-    memory=4096,                # MiB request; torch + detector + a large IFC fit with room to spare
+    cpu=8.0,                    # physical cores (16 vCPU): the tiled detector with TTA and big sheets are CPU-bound
+    memory=12288,               # MiB request: torch + detectors + a 14000 px sheet + a large IFC
     min_containers=1 if WARM else 0,
     max_containers=1,           # uploads live in the container's temp folder, so one container serves all
     scaledown_window=300 if WARM else 120,
