@@ -14,8 +14,8 @@ worked out separately from the files. Numbers are exact counts, nothing is round
   and 2 abstentions on questions that have no derivable answer (counted separately, 23 of 50 = 46.0% if
   those two count as handled correctly). When the system answered it was right 21 of 27 times (77.8%).
 - IFC generalises: 18 of 23 correct on five models Stoa does not contain, both IFC4 and IFC2x3. The five
-  misses are two parser problems, not route problems (see below), and a diagnostic run fixes all of the
-  ones it re-tested.
+  misses are two parser problems, not route problems (see below); a diagnostic run fixes four of them, and
+  the fifth (IFC2x3 room area) was not re-run.
 - The DXF route does not generalise at all: 0 of 3, and all three are confident wrong zeros (confidence
   0.95, tier "proven") because it looks for Swiss layer names.
 - PDF linework (`pdf-vector`) answered nothing on the three generic plan PDFs (12 questions): 0 correct,
