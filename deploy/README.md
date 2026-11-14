@@ -87,9 +87,11 @@ Nemotron calls on that key: they come only after every local route abstained, ar
   file derived from them, 15 minutes after upload (`BPE_UPLOAD_TTL`), and in any case when the container
   stops. Adds `/credits`, `/api/credits?path=`, a credit bar on every page naming the licence and credit
   of the drawing on screen, and `/api/deploy` (memory, CPU seconds, uptime; no secrets). At start it
-  loads torch, both detector models and the OCR engine (about 5 s), then fills the detector and OCR cache
-  for the 7 demo scans (about 80 s), so scan questions on demo drawings answer in under a second;
-  `BPE_PREWARM=0` and `BPE_PRECOMPUTE=0` turn these off.
+  loads torch, both detector models and the OCR engine (about 5 s). In warm mode only (`BPE_WARM=1` sets
+  `BPE_PRECOMPUTE=1`) it then fills the detector and OCR cache for the 7 demo scans (about 80 s), so scan
+  questions on demo drawings answer in under a second all day. It is off for scale-to-zero because on a
+  cold start the first minute of questions queued behind it (measured: a DXF ask took 9 s instead of
+  0.7 s). `BPE_PREWARM=0` turns the model loading off.
 - `build_demo_set.py`: the fixed selection (22 drawings with 769 dataset questions, about 93 MB): 7 Swiss
   floors as PDF + DXF (the two README examples and five test-split floors with area questions), 3 IFC
   models with 2 plans each (FZK-Haus, Esplanades, Molio; no NoDerivatives files), 6 CubiCasa PNGs (two
@@ -110,8 +112,8 @@ Nemotron calls on that key: they come only after every local route abstained, ar
 | tiling, Swiss PDF, DXF twin | 16.76 m², proven, dxf-geometry | 0.9 s cold, 0.65 s warm |
 | tiling, Swiss PDF only | 16.76 m², proven, pdf-vector | 1.0 s cold, 0.8 s warm |
 | IFC area, FZK-Haus kitchen | 16.305 m² (dataset 16.31), proven, ifc | 1.0 s cold, 0.7 s warm |
-| IFC tiling, Molio (74 MB IFC) | 13.86 m², proven, ifc | 6.4 s first parse, 0.8 s after |
-| CubiCasa windows, 10372 | 12 (dataset 12), estimate, raster-detector | 26 s uncached, under 1 s cached |
+| IFC tiling, Molio (74 MB IFC) | 13.86 m², proven, ifc | 6 to 11 s first parse, 0.8 s after |
+| CubiCasa windows, 10372 | 12 (dataset 12), estimate, raster-detector | 26 to 34 s uncached, under 1 s cached |
 | upload unseen kjdraw DXF, doors / windows | 12 / 6 (reference 12 / 6), proven, dxf-generic | 0.7 s upload, 0.7 s each ask |
 | upload `.txt` / 31 MB | 400 / 413 | 0.6 s / 7.5 s |
 

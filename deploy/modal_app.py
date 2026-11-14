@@ -49,6 +49,9 @@ image = (
         "STOA_DATA": "/root/demo_data",
         "BPE_MAX_UPLOAD_MB": "30",
         "BPE_UPLOAD_TTL": "900",
+        # fill the demo-scan cache at start only when warm: on a cold start it would make the first
+        # minute of questions queue behind it
+        "BPE_PRECOMPUTE": "1" if WARM else "0",
     })
     .add_local_dir(str(REPO / "bpqa"), f"{REMOTE}/bpqa", ignore=IGNORE)
     .add_local_dir(str(REPO / "app"), f"{REMOTE}/app", ignore=IGNORE)
