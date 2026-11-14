@@ -23,6 +23,7 @@ from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
+from . import phrasing
 from . import second_opinion
 from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_scale
 
@@ -140,12 +141,14 @@ def calibrate(a: Answer, query: Query) -> Answer:
 
 
 def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
-    query = query or parse(ctx.q.question)
     use_nemo = ctx.nemotron and nemo_client.enabled()
-    if not query.ok() and use_nemo:      # rule parser failed: ask Nemotron for the typed query (validated)
-        query = parse(ctx.q.question, fallback=nemotron.NemotronParser())
+    if query is None:
+        # rules first; the language model reads the question only when the rules read nothing, read something no
+        # route answers, or ignored a room type the question names (bpqa/phrasing.py), and its reading is
+        # validated into the same Query shape the rules build
+        query = phrasing.read(ctx.q.question, use_llm=use_nemo)
     if not query.ok():
-        return query, _try_text(ctx, query, "question not understood by the rule parser (Nemotron parse fallback off or its output invalid)")
+        return query, _try_text(ctx, query, "question not understood by the rule parser (language-model parse off, or it found no measurable question)")
     if query.extra.get("compound") or query.extra.get("unresolved_scope"):
         return query, _try_text(ctx, query, "compound question or unresolved scope")
     tk = query.extra.get("takeoff")

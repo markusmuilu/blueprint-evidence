@@ -42,8 +42,9 @@ def fold(s: str) -> str:
 
 
 # Count / measure cues. Checked on accent-folded lower-case text.
-COUNT = r"\b(how many|wie viele|combien|quant[ie]|kuinka monta|hvor mange|mitu)\b"
-AREA = r"(area|flache|surface|superficie|nettoareal|areal|pind|pinta-ala)"
+COUNT = (r"\b(how many|wie viele|wieviele|combien|quant[ie]|kuinka monta|montako|hvor mange|mitu|hur manga|"
+         r"^number of|count the|anzahl|antal|lukumaara|raekna|rakna|zahl mal|zahl die)\b")
+AREA = r"(area|flache|surface|superficie|nettoareal|areal|pind|pinta-ala|\byta\b|\bytan\b|golvyta)"
 LENGTH = r"(length|lange|laengde|langde|longueur|lunghezza|pituus|wie lang)"
 VOLUME = r"(volume|volumen|volym|tilavuus|maht)"
 
@@ -51,10 +52,11 @@ VOLUME = r"(volume|volumen|volym|tilavuus|maht)"
 OBJECTS: list[tuple[str, str]] = [
     ("bathroom", r"bathrooms or washrooms|kylpy- tai pesuhuone"),
     ("wc_room", r"separate wc rooms|erillista wc-tilaa"),
-    ("sink", r"sinks and wash basins|pesu- ja tiskiallas"),
+    ("sink", r"sinks and wash basins|pesu- ja tiskiallas|\bsinks?\b|tiskialta|tiskiallas|diskho|\bvask|spulbecken|\bspulen?\b"),
     ("shower_or_bath", r"showers and bathtubs|suihkua ja kylpyammetta"),
     ("toilet", r"water closets|toilet bowls|wc-istuin|toilets \(wc\)|\bwcs\b|combien de wc|quanti wc|\bwc\b sont|toilets exist"),
-    ("washbasin", r"lavatories|washbasin|lavabo|lavabi"),
+    ("washbasin", r"lavatories|washbasin|lavabo|lavabi|wash ?basins?|hand ?basins?|pesuallas|pesualtaa|pesualtaita|"
+                  r"handfat|tvattstall|waschbecken|waschtisch"),
     ("bathtub", r"bathtub|badewanne|baignoire|vasche da bagno|kylpyamme"),
     ("shower", r"shower|dusche|douche|docce|suihku"),
     ("sauna", r"sauna"),
@@ -62,16 +64,16 @@ OBJECTS: list[tuple[str, str]] = [
     ("bedroom", r"bedrooms|makuuhuone"),
     ("balcony", r"balconies|parveke"),
     ("storey", r"floors \(storeys\)|kerrosta"),
-    ("apartment", r"apartment|wohnung|appartement|appartament|residential unit|unite abitativ"),
-    ("door", r"\bdoors?\b|turen|\bportes?\b|\bporte\b|\bdore\b|\bust\b|\bovea\b|\bovi"),
-    ("window", r"windows?|fenster|fenetres|finestre|vinduer|akent|ikkuna"),
-    ("wall", r"walls?\b|wande|vaegge|vaegge|vagge|seina"),
-    ("column", r"columns|saojler|sojler|posti\b|stutzen|saulen"),
-    ("beam", r"beams|bjaelker|bjelker|tala\b|trager"),
-    ("stair", r"stairs|trapper|treppi|treppen"),
-    ("slab", r"slabs|daek og plader|decken und bodenplatten"),
+    ("apartment", r"apartment|wohnung|appartement|appartament|residential unit|unite abitativ|lagenhet|huoneisto|\basuntoa?\b"),
+    ("door", r"\bdoors?\b|turen|\bportes?\b|\bporte\b|\bdore\b|\bust\b|\bovea\b|\bovi|\bdorr"),
+    ("window", r"windows?|fenster|fenetres|finestre|vinduer|akent|ikkuna|fonster"),
+    ("wall", r"walls?\b|wande|vaegge|vaegge|vagge|seina|\bvagg"),
+    ("column", r"columns|saojler|sojler|posti\b|stutzen|saulen|pelare|pilari|pilareit"),
+    ("beam", r"beams|bjaelker|bjelker|tala\b|trager|balkar|palkki|unterzu"),
+    ("stair", r"stairs|trapper|treppi|treppen|trappor|porras|portaik"),
+    ("slab", r"slabs|daek og plader|decken und bodenplatten|plattor|bjalklag|bodenplatte|geschossdecke|\bdecken\b"),
     ("sanitary", r"sanitary fixtures"),
-    ("room", r"\brooms?\b|raume|raum\b|pieces?\b|piece\b|locali|locale\b|\brum\b|rummet|ruumi|ruumide|spaces"),
+    ("room", r"\brooms?\b|raume|raum\b|pieces?\b|piece\b|locali|locale\b|\brum\b|rummet|rummen\b|ruumi|ruumide|spaces|huonetta|huoneita|huoneiden|\bhuoneet\b"),
 ]
 
 # Room types a count question can name without the fixed dataset phrasing above ("how many bedrooms?",
@@ -84,9 +86,19 @@ COUNT_ROOM_TYPES = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bat
 # or the room (IFC questions: "how many toilets on the ground floor" answered with WC spaces). It is read as
 # the object toilet with extra["toilet_ambiguous"]; each route applies its dataset's convention. A named
 # room ("toilet rooms", "restrooms", "WC-tila") is a WC room.
-WC_ROOM_WORDS = re.compile(r"\b(wc|toilet|toilette)s?[ -]?(rooms?|tila\w*|raume?|raeume)\b|restrooms?|powder rooms?|"
-                           r"\bvesso|\bvessa|separate wc|erillis\w* wc|tualettruum")
+WC_ROOM_WORDS = re.compile(r"\b(wc|toilet|toilette)s?[ -]?(rooms?|til[aoe]\w*|raume?|raeume)\b|restrooms?|powder rooms?|"
+                           r"\bvesso|\bvessa(?!npont)|separate wc|erillis\w* wc|tualettruum|toalett ?rum|\bwc-?rum")
+STOREY_COUNT = re.compile(r"\b(floors|levels|storeys|stories|stockwerke|geschosse|etagen|vaningar|vaningarna)\b|"
+                          r"\bhur manga plan\b|\bkerrosten\b|\bkerroksia\b")
+COUNT_BREAKDOWN = re.compile(r"\b(types?|distribut\w*|by|per|each|across|grouped|along|and what|and how)\b")
 SCALE_Q = re.compile(r"\bscale\b|massstab|\bechelle\b|\bscala\b|mittakaava|maalestik|\bmalestok|skala\b")
+
+
+def storey_count_obj(q, f_obj: str) -> str | None:
+    """'storey' for a plain count that names no other object ("how many floors does the building have")."""
+    if q.measure == "count" and q.obj is None and STOREY_COUNT.search(f_obj) and not COUNT_BREAKDOWN.search(f_obj):
+        return "storey"
+    return None
 
 
 def count_room_type(f_obj: str) -> tuple[str | None, bool]:
@@ -188,6 +200,8 @@ class RuleParser(QueryParser):
             if q.obj:
                 break
 
+        # "how many floors does the building have": storeys, only for a plain count that names no other object
+        q.obj = storey_count_obj(q, f_obj) or q.obj
         # "how many bathrooms does the apartment have": the apartment is the scope, not the object
         apt_scope = q.obj == "apartment" and not re.search(
             r"apartments|wohnungen|appartements|appartamenti|residential units|unita abitative", f_obj)

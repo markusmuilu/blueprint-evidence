@@ -72,7 +72,7 @@ def _nap(seconds: float, end: float | None) -> float:
 
 
 def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: int = MAX_TOKENS,
-         model: str = MODEL, cache: bool = True, think: bool = True) -> dict:
+         model: str = MODEL, cache: bool = True, think: bool = True, deadline_s: float | None = None) -> dict:
     """One request. Returns {content, prompt_tokens, completion_tokens, latency_s, cached, error}.
 
     `latency_s` is the wall time of the original (uncached) call; a cache hit returns it unchanged.
@@ -97,7 +97,8 @@ def chat(prompt: str, png: bytes | None = None, system: str = "", max_tokens: in
     if not think:                                     # no reasoning phase: short, cheap, fine for parsing tasks
         body["chat_template_kwargs"] = {"enable_thinking": False}
     err = None
-    limit = float(os.environ.get("NEMO_DEADLINE_S", "0") or 0)
+    # deadline_s: this call's own wall-clock limit (the question parse uses a short one); None = NEMO_DEADLINE_S
+    limit = float(os.environ.get("NEMO_DEADLINE_S", "0") or 0) if deadline_s is None else float(deadline_s)
     end = time.time() + limit if limit > 0 else None
     for attempt in range(6):
         if end is not None and end - time.time() < 2:

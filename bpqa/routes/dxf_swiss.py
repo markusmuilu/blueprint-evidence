@@ -508,7 +508,7 @@ def answer(ctx, q) -> Answer:
             ans.value, ans.items, wexpl, totals = wallmod.summary(wrooms, tk, ctx.q.question)
             ans.items.append({"totals": totals})
             ans.explanation = wexpl + f" Source: {dxf.name}."
-            ans.tier = "estimate" if not wallmod.parse_inputs(ctx.q.question).get("ceiling_m") else None
+            ans.tier = "estimate" if not wallmod.parse_inputs(ctx.q.question, tk).get("ceiling_m") else None
             ans.tier_reason = "room height, door and window heights are assumptions (a floor plan does not carry them)" if ans.tier else ""
             if fb:
                 estimate(ans, fb)
@@ -517,7 +517,7 @@ def answer(ctx, q) -> Answer:
                 if fb:
                     for b in fl.toilets:            # the toilet symbols that confirm the rooms, boxed
                         cv.box(b, n=None, color=TOILET_COL)
-                inp = wallmod.parse_inputs(ctx.q.question)
+                inp = wallmod.parse_inputs(ctx.q.question, tk)
                 for r in wrooms:
                     w = wallmod.room_walls(r, inp)
                     for o, d in zip(r["openings"], w["deductions"]):

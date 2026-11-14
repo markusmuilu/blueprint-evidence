@@ -22,7 +22,7 @@ the fallback, not the default.
 
 ```
 question --> rule parser (EN DE FR IT FI DA ET) --> typed query {measure, object, label, room, apartment, level}
-                       |                                   (Nemotron parse fallback for questions the rules miss)
+                       |                                   (validated LLM reading for questions the rules miss or read weakly)
 drawing  --> router: cheapest route that can prove the answer
                1. dxf-geometry  DXF layers of the same drawing (Swiss Dwellings layer convention)
                   dxf-generic   any other DXF: AIA / ISO 13567 / plain-word layer and block names;
@@ -459,6 +459,43 @@ type identical), then once more after the tuner was changed to score policies af
 what is committed. The detector adds about 0.1 s per image on the CPU (plus about 4 s to load the model
 once).
 
+### Question understanding (`bpqa/phrasing.py`)
+
+"People are going to ask the things in 100000 different ways." The rule parser (`query.py`, `takeoff.py`) is
+fast and deterministic and runs first; this layer is the second reader for what the rules miss.
+
+- **Canonical shapes.** `INTENTS` lists every question shape the routes accept (32 intents: counts per object,
+  room-type counts, total room area, one named room, one apartment, room-type area takeoffs with material,
+  surface, waste and heights, wall area / length / volume, slab volume, drawing scale, and `other` for property
+  lookups) and the exact Query each builds. A takeoff is `{measure: area, obj: room, variant: type_sum,
+  extra.takeoff: {types, group, material, surface, aggregation, floor_explicit[, inputs]}}`; the older loose
+  shape `{measure: area, obj: bedroom, variant: total}` that the model used to write is not accepted by any
+  route, which is why such questions fell through to the slow image estimate.
+- **The model picks, it does not write a Query.** One text-only call (thinking off, `max_tokens` 260, cached on
+  disk): a closed JSON schema with enum values and seven examples. It returns an intent and a few slots (room
+  types, material, surface, waste %, heights, a quoted name, an apartment letter, a level). `normalise()` maps
+  synonyms and the loose shape onto the intents, checks every value against the schema and the question text
+  (a name, number, apartment letter or level that the question does not contain rejects the parse; a surface,
+  a height or a waste figure that the question does not state is dropped, because a model tends to fill them
+  in), and `build()` makes the same Query the rules make, reusing the rule parser for scope, whole-model,
+  exterior, compound and unresolved-scope flags. Heights and waste read by the model travel in
+  `takeoff["inputs"]`; `walls.parse_inputs(question, tk)` merges them under what the wording rules found.
+- **Policy** (`phrasing.read`, called by the router): rules first. The model is asked only when the rules read
+  no measurable question, read one that no route can answer (`shape_known`: "area of beams"), or read one that
+  looks weak: a room type named but ignored, an apartment letter dropped, showers and bathtubs both named, a
+  count asked in m2 or m3, a height or percentage the rules did not use. A question with quoted names (every
+  dataset template) keeps its rule parse; a reply that is not a valid, measurable reading leaves the rule parse
+  in place. The reading never replaces a routable rule parse that is not weak.
+- **Why panel.** A model-read question says so: "Question read by the language model as: area of rooms typed
+  bedroom, summed. (Asked because the rules read no measurable question.) Check that this is what you asked."
+- **Benchmark.** `tests/data/paraphrases.jsonl` (612 paraphrases, 32 intents, EN FI SV DE, casual wording, typos,
+  word order, units, imperatives; each with its expected canonical parse; split 50/50 tune / held-out) and
+  `tools/paraphrase_bench.py run` (rules vs rules + model per language and intent). Results are in `CHANGELOG.md`.
+  The rule vocabulary and the prompt were tuned on the tune half only.
+- **Safety.** On all 6,789 distinct questions of the preview and full question files the rule parse is
+  unchanged (checked by a before/after dump); `eval.py --split dev` gives identical answers; of the questions
+  the rules parse, 4 free-text ones are weak (and so could be sent to the model).
+
 ### Nemotron
 
 NVIDIA Nemotron (`nvidia/nemotron-3.5-super-vl-120b-a12b`, a vision-language reasoning model, called
@@ -471,11 +508,11 @@ nothing it says reaches an answer without a check.
    (a PDF page rendered at 150 dpi, or the scan) is downscaled to 1600 px on the long edge and sent with
    the question. The model must reply with one JSON object: the value, the regions of the drawing it
    relied on as pixel bounding boxes, and one sentence on how it got the value.
-2. **Question-parse fallback** (`NemotronParser`, same file). When the rule parser (EN DE FR IT FI DA ET)
-   cannot map a question to the typed query, Nemotron is asked for the same typed query as JSON. The
-   schema is closed: measure, object, scope and variant come from fixed lists, and a room label, room
-   number, apartment letter or level name is accepted only if it appears in the question text. Reasoning
-   is switched off for this call (a short classification). Replies are cached by question text.
+2. **Question-parse fallback** (`bpqa/phrasing.py`, see "Question understanding" above; `NemotronParser`
+   in the route file is a thin alias). When the rules cannot read a question, read it in a way no route can
+   answer, or read it weakly, Nemotron picks one of 32 intents from a closed schema and the reply is
+   normalised into the Query the rules would build. Reasoning is switched off for this call (a short
+   classification). Replies are cached by question text.
 3. **Naive baseline** (`tools/nemo_baseline.py`), a measurement and not part of the product: the same
    model, a plain prompt that asks for just the number, no regions and no checks, on the same questions
    our router answers. It exists to show what the structured routes add (see "Nemotron results" below).

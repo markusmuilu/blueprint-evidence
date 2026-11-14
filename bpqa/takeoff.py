@@ -108,16 +108,16 @@ def room_types(name: str | None) -> set[str]:
 # room-type words in a question (folded text, quotes and exclusion clauses removed). Finnish
 # words are stems, so inflected forms match (kylpyhuoneisiin, keittioon, saunaan, vessoihin).
 Q_TYPE_RE = {
-    "wet": r"wet ?rooms?|wet areas?|markatil|kosteat tilat|kosteisiin tiloihin|nassraum|nassraeume|nasszell|"
-           r"pieces humides|locali umidi",
+    "wet": r"wet ?rooms?|wet areas?|markatil|kosteat tilat|kosteisiin tiloihin|nassraum|nassraeume|nassraume|nasszell|"
+           r"pieces humides|locali umidi|vatrum|markatila|markatilojen",
     "bathroom": r"bathrooms?|bath rooms?|washrooms?|shower rooms?|kylpyhuone|pesuhuone|suihkuhuone|badezimmer|"
-                r"\bbad\b|\bbader\b|salles? de bains?|salles? d'eau|salles? de douche|bagn[oi]\b|vannitub|badevaerelse",
+                r"\bbad\b|\bbader\b|salles? de bains?|salles? d'eau|salles? de douche|bagn[oi]\b|vannitub|badevaerelse|badrum",
     "wc": r"toilets?|\bwcs?\b|w\.c\.|restrooms?|lavator(y|ies)|powder rooms?|water closets?|vessa|vesso|"
-          r"\bwc-|toilette|gabinett[oi]|servizi igienici|tualett",
-    "sauna": r"saunas?|saunaan|saunan|saunoihin|saunoj|loylyhuone",
-    "kitchen": r"kitchens?|kitchenette|keittio|keittokomero|\bkuche|cuisines?|cucin[ae]|cucinin[oi]|\bkoo?gi?\b|\bkook|kokken",
-    "bedroom": r"bedrooms?|makuuhuone|schlafzimmer|kinderzimmer|magamistub|sovevaerelse|chambres?( a coucher)?|camer[ae] da letto",
-    "living": r"living ?rooms?|lounge|olohuone|wohnzimmer|sejour|soggiorn[oi]|\bsalons?\b|salott[oi]\b",
+          r"\bwc-|toilette|gabinett[oi]|servizi igienici|tualett|toalett|\bloos?\b|\bklos?\b",
+    "sauna": r"saunas?|saunaan|saunan|saunoihin|saunoj|loylyhuone|saunen|bastu",
+    "kitchen": r"kitchens?|kitchenette|keittio|keittokomero|\bkuche|cuisines?|cucin[ae]|cucinin[oi]|\bkoo?gi?\b|\bkook|kokken|\bkok(et|en)?\b",
+    "bedroom": r"bedrooms?|makuuhuone|schlafzimmer|kinderzimmer|magamistub|sovevaerelse|chambres?( a coucher)?|camer[ae] da letto|sovrum",
+    "living": r"living ?rooms?|lounge|olohuone|wohnzimmer|sejour|soggiorn[oi]|\bsalons?\b|salott[oi]\b|vardagsrum",
     "dining": r"dining ?rooms?|esszimmer|salles? a manger|sale da pranzo|sala da pranzo",
     "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|eteinen|eteise|kaytav|korridor|\bflur|couloir|"
             r"corridoi|ingress[oi]\b|vestibules?\b|disimpegn",
@@ -161,7 +161,7 @@ MATERIALS = {
     "screed": r"screed|tasoite|estrich|chape|massaus",
 }
 _MATERIALS = {k: re.compile(v) for k, v in MATERIALS.items()}
-WALLS = re.compile(r"\bwalls?\b|seina|seiniin|\bwand|\bwande|\bmurs?\b|pareti|parete")
+WALLS = re.compile(r"\bwalls?\b|seina|seini|\bwand|\bwande|\bmurs?\b|pareti|parete|\bvagg")
 CEILING = re.compile(r"ceilings?|\bkatto|kattoon|katon|kattoj|\bdecke|plafond|soffitt")
 EXCLUDE = re.compile(r"\b(except|excluding|without|apart from|other than|ohne|ausser|sauf|hors|sans|esclus[oi]|"
                      r"tranne|paitsi|lukuun ottamatta|pois lukien|ilman)\b[^)?.;]*")
@@ -192,12 +192,12 @@ def parse_takeoff(question: str) -> dict | None:
         return None
     f_surf = re.sub(r"ceiling heights?|room heights?|huonekorkeus|raumhohe", " ", f)   # an input, not a surface
     walls, ceiling = bool(WALLS.search(f_surf)), bool(CEILING.search(f_surf))
-    surface = "walls" if walls and not re.search(r"\bfloors?\b|lattia", f) else ("ceiling" if ceiling else "floor")
-    if walls and re.search(r"\bfloors?\b|lattia", f):
+    surface = "walls" if walls and not re.search(r"\bfloors?\b|lattia|boden|\bgolv", f) else ("ceiling" if ceiling else "floor")
+    if walls and re.search(r"\bfloors?\b|lattia|boden|\bgolv", f):
         surface = "floor+walls"
     group = next((g for g in GROUPS if _Q_TYPE_RE[g].search(f_incl)), None)
     out = {"types": types, "group": group, "material": material, "surface": surface, "aggregation": "sum",
-           "floor_explicit": bool(re.search(r"\bfloors?\b|lattia|\bboden|\bsol\b|pavimento", f))}
+           "floor_explicit": bool(re.search(r"\bfloors?\b|lattia|boden|\bgolv|\bsol\b|pavimento", f))}
     m = SCOPE_ID.search(f)
     if m:
         out["scope_named"] = m.group(0)     # "house A": not resolvable from labels in general
