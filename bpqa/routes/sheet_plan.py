@@ -465,7 +465,8 @@ def objects(ctx, obj: str) -> Answer:
                  explanation=(f"{what} scored >= {t:.2f} by the scan detector, run on tiles of the sheet scaled "
                               f"by {f:.2f}" + (f" to {det_ppm:.0f} px per m (scale: {short_scale(sc)})" if det_ppm else
                                                " (no scale read, so the scale is a guess)")
-                              + "; one view, no rotations"))
+                              + "; one view, no rotations"
+                              + (f"; {D.DOOR_CONVENTION}" if obj == "door" else "")))
     if ctx.evidence:
         cv = Canvas(ctx.file)
         for i, b in enumerate(hits):

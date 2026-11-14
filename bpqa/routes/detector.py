@@ -242,6 +242,10 @@ def policy(hits, unsure, c, spread: int = 0, n: int | None = None) -> list[str]:
     return why
 
 
+# What a scan door count counts, stated in every scan door answer: the detector was trained on CubiCasa labels, where a
+# double door is one doorway, and Stoa confirmed that closet doors do not count (2026-11-14).
+DOOR_CONVENTION = "double doors counted as one doorway; closet and cabinet doors not counted"
+
 CLEAR_MARGIN = 0.20      # "clear": every view gives the same count and no box of the object scores this close to t
 
 
@@ -285,7 +289,8 @@ def answer(ctx, q, img=None) -> Answer:
                               f"(per-view counts differ by {spread}); "
                               if c.get("agg") == "median" and len(views) > 1 else
                               f"{n} box(es) of {', '.join(OBJECTS[q.obj])} scored >= {t:.2f} by the detector{' ' + mode if mode else ''}; ")
-                             + f"{len(unsure)} box(es) within {band:.2f} of the threshold")
+                             + f"{len(unsure)} box(es) within {band:.2f} of the threshold"
+                             + (f"; {DOOR_CONVENTION}" if q.obj == "door" else ""))
     for w in why:
         estimate(ans, w)
     if ctx.evidence:

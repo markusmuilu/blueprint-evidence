@@ -3,6 +3,19 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: door count convention stated; opening labels tried and dropped, branch `opening-labels`
+
+Every scan door answer (raster detector, drawing-sheet route) now says what it counts: "double doors counted as one
+doorway; closet and cabinet doors not counted". Swiss door answers say they count per doorway: one DOOR outline per
+opening, a double door is one outline with two swing arcs (60 Swiss DXFs: 89 outlines wider than 1.4 m, 68 with two
+arcs at them). No value or tier changed: CubiCasa dev door/window (1,110 + 1,562 q on plans with cached detector and OCR)
+64.0% / 53.8%, test (2,274 + 3,020 q) 59.6% / 49.1%, 0 Proven, before and after; demo gate 0 differences in value, tier
+or correctness (28 door explanations changed). Tried and not kept: counting the printed module labels ("O 9x21",
+"3-12x16") from the cached OCR as a second witness. On 896 dev plans with all upright OCR passes, labels were read on
+9% (doors) and 10% (windows) of plans and matched gold on 2 of 56 and 6 of 88; the OCR misses or truncates most of
+them and some plans print the width only ("09"). Detector and labels agreed on 8 dev plans (7 right), far below the
+100 a Proven cell needs, so the reader was not added.
+
 ## 2026-11-14: tiling means one thing, cheap abstains, branch `tiling-abstains`
 
 Tiling: "floor" (lattia in any inflection, Boden, golv) means floor only on every route, "on this floor" is a storey,
