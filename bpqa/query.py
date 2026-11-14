@@ -108,10 +108,11 @@ COUNTABLE = {"door", "window", "toilet", "sink", "washbasin", "shower", "bathtub
 # de / sv -en -er -ar); no question word, superlative or size word ("biggest room?" is not a count)
 _BARE = re.compile(r"^\s*[\w\-]+(?:\s+[\w\-]+){0,2}\s*\?\s*$")
 _BARE_NOT = re.compile(r"\b(what|which|where|why|how|biggest|largest|smallest|big|large|size|area|total|"
-                       r"mika|missa|suurin|isoin|pienin|grosste|groesste|kleinste|storsta|minsta)\b")
+                       r"mika|missa|suurin|isoin|pienin|grosste|groesste|kleinste|storsta|minsta)\b|"
+                       r"\btotal\w*|\bsumm?\w*|\blang\w*|\blangd\w*|\bpituu\w*|\bvolu\w*|\byhteis\w*|\bkubik\w*|\bkvadrat\w*")
 
 
-ROOM_WORD = re.compile(r"\brooms?\b|\bzimmer\b|\braume\b|\bhuone\w*|\brum\b|\bpieces?\b|\blocali\b|\bstanze\b")
+ROOM_WORD = re.compile(r"\brooms?\b|\bzimmer\b|\braume\b|\bhuone(?!isto)\w*|\brum\b|\bpieces?\b|\blocali\b|\bstanze\b")
 LARGEST_ROOM = re.compile(r"\b(biggest|largest)\b(?:\s+\w+)?\s+(rooms?|spaces?)\b|\b(suurin|isoin)\s+huone\w*|"
                           r"\b(grosste\w*|groesste\w*)\s+(zimmer|raum)\b|\bstorsta\s+rum\w*|\bplus grande piece\b|"
                           r"\bstanza piu grande\b")
@@ -134,7 +135,8 @@ def bare_plural_question(question: str) -> bool:
         return True
     if len(words) == 1 and _PLURAL.search(words[0]):       # "ikkunat", "WCs"
         return True
-    return bool(_FRAGMENT.match(f) and len(words) >= 2 and _PLURAL.search(words[0]))
+    # a fragment: the first word a nominative plural only (en -s, fi -t), not a genitive ("suihkujen", "vaggarnas")
+    return bool(_FRAGMENT.match(f) and len(words) >= 2 and re.search(r"(?<!na)(?<!ar)(?<!er)s$|t$", words[0]))
 
 
 def storey_count_obj(q, f_obj: str) -> str | None:

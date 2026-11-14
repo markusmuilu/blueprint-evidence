@@ -323,6 +323,8 @@ def normalise(d, question: str) -> tuple[dict | None, str]:
             return None, f"count of rooms, but the question names '{unknown}', a room type the vocabulary does not know"
         elif not GENERIC_ROOM.search(strip_quoted(f)):
             return None, "count of rooms of any kind, but the question names no generic room word"
+    if intent == "area_room_largest" and re.search(r"\b(which|what|welche\w*|vilk\w*|mika|mita|quel\w*|quale)\b", f):
+        intent = "other"                      # "Welcher Raum ist der groesste?" asks which room, not its area
     if intent in ("area_room_total", "area_room_largest"):
         if named and intent == "area_room_total":
             intent, d = "area_rooms_of_type", {**d, "types": sorted(named)}
@@ -609,7 +611,7 @@ def _named_types(question: str) -> set[str]:
 
 
 # words for a room of any kind (folded): a count_room reading needs one of them in the question
-GENERIC_ROOM = re.compile(r"\brooms?\b|\bspaces?\b|huone(?!isto)\w*|\btil(a|oja|oj\w+|at|aa)\b|zimmer\b|\braum\b|\braume\b|"
+GENERIC_ROOM = re.compile(r"\brooms?\b|\bspaces?\b|huone(?!isto)\w*|\btil(a|oja|oj\w+|at|aa)\b|zimmer\w*|\braum\w*|"
                           r"\brum(men|met|mene)?\b|\bpieces?\b|\blocal[ei]\b|\bstanz[ae]\b|\bruum\w*|vaerelse\w*")
 # "<word> rooms": words that leave the room type open ("all rooms", "numbered rooms", "the indoor spaces")
 _ROOM_MOD = re.compile(r"\b([a-z]+)[ -](rooms?|spaces?)\b")
