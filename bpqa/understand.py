@@ -202,6 +202,9 @@ def finish(q: Query, question: str) -> Query:
         q.extra["unresolved_scope"] = True
     if q.measure == "area" and SQFT.search(fold(question)):
         q.extra["unit_out"] = "sqft"
+    rs = room_scope(q, question) if not quotes(question) else None
+    if rs:
+        q.extra["room_scope"] = rs
     if q.obj in QUALIFIER_OBJS and q.measure in ("count", "area", "length", "volume") and not q.extra.get("qualifier") \
             and not quotes(question) and not q.extra.get("compound"):
         f = fold(strip_quoted(question))
@@ -254,8 +257,8 @@ def gaps(q: Query, question: str) -> str | None:
     """Why a confident rule reading (after `finish`) is still incomplete, or None. Never for quoted questions (the
     dataset templates), which the caller leaves to the rules."""
     from . import phrasing
-    if not q.ok():
-        return None
+    if not q.ok() or q.extra.get("room_scope"):
+        return None                       # a count inside one room: the room type is the scope, read by finish()
     f = fold(strip_quoted(question))
     tk = q.extra.get("takeoff")
     # a room type the question names that the reading leaves out
@@ -309,3 +312,32 @@ def storey_scope(ctx, query: Query) -> tuple[str | None, str]:
 # "not counting separate WC rooms", "except the sauna": the words after it are left out on purpose
 _NOT_COUNTING = re.compile(r"\b(not counting|not including|excluding|except|without|apart from|other than|ohne|ausser|"
                            r"paitsi|lukuun ottamatta|pois lukien|ilman|utom|utan|exklusive|sauf|hors|tranne)\b[^)?.;]*")
+
+
+# --------------------------------------------------------------------------- a count inside one room
+
+# element counts that can be asked for one room ("windows in the living room", "ikkunaa olohuoneessa")
+_ROOM_SCOPED_OBJS = {"door", "window", "toilet", "sink", "washbasin", "shower", "bathtub", "shower_or_bath", "column",
+                     "beam", "stair", "wall"}
+
+
+def room_scope(q: Query, question: str) -> dict | None:
+    """{type, phrase} when an element count is asked inside a room type, else None. QA 14 Nov: "Montako ikkunaa
+    olohuoneessa on?" counted every window on the plan."""
+    from .takeoff import Q_TYPE_RE, EXCLUDE
+    if q.measure != "count" or q.obj not in _ROOM_SCOPED_OBJS:
+        return None
+    f = EXCLUDE.sub(" ", fold(strip_quoted(question)))
+    for t, rx in Q_TYPE_RE.items():
+        if t == "wet" or (t == "wc" and q.obj == "toilet"):
+            continue
+        pats = (rf"\b(?:in|inside|within)\s+(?:the\s+|this\s+|that\s+|each\s+|every\s+|all\s+(?:the\s+)?|a\s+|my\s+)?"
+                rf"(?:\w+\s+)?(?:{rx})",
+                rf"(?:{rx})\w*?ss[a]\b",                                     # fi inessive: olohuoneessa, keittiossa
+                rf"\b(?:im|in\s+der|in\s+den|in\s+dem)\s+(?:\w+\s+)?(?:{rx})",  # de
+                rf"\bi\s+(?:\w+\s+)?(?:{rx})")                                # sv / da
+        for p in pats:
+            m = re.search(p, f)
+            if m:
+                return {"type": t, "phrase": m.group(0).strip()}
+    return None

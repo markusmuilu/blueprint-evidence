@@ -90,3 +90,25 @@ def test_unknown_compound_room_blocks_the_all_rooms_reading():
     q = P.read("Mikä on pukuhuoneiden pinta-ala?", use_llm=False)
     assert q.extra.get("blocked")
     assert P.read("Mikä on makuuhuoneiden pinta-ala?", use_llm=False).extra["takeoff"]["types"] == ["bedroom"]
+
+
+def test_room_scoped_count_qa_nov14():
+    # "Montako ikkunaa olohuoneessa on?" counted every window on the plan: the room is read as the scope
+    q = P.read("Montako ikkunaa olohuoneessa on?", use_llm=False)
+    assert q.obj == "window" and q.extra["room_scope"]["type"] == "living"
+    assert P.read("How many doors in the kitchen?", use_llm=False).extra["room_scope"]["type"] == "kitchen"
+    assert "room_scope" not in P.read("How many windows are there?", use_llm=False).extra
+    assert "room_scope" not in P.read("How many toilets (WC) are on this floor plan?", use_llm=False).extra
+
+
+def test_reader_reaches_the_baseboard_takeoff():
+    q = P.build({"intent": "area_rooms_of_type", "types": ["bedroom"]}, "skirting for the sleeping rooms, metres please")
+    assert q.extra["takeoff"]["surface"] == "baseboard" and q.extra["takeoff"]["types"] == ["bedroom"]
+    assert P.read("How many linear meters of baseboard are needed?", use_llm=False).extra["takeoff"]["surface"] == "baseboard"
+
+
+def test_file_header_is_not_a_storey_answer():
+    from bpqa.routes.ifc_props import META_CUE
+    from bpqa.query import fold
+    assert not META_CUE.search(fold("Mikä kerros tämä on?"))
+    assert META_CUE.search(fold("Which software exported this IFC file?"))

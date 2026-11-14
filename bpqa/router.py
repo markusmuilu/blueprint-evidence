@@ -378,6 +378,18 @@ def _solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         query.extra["scope_resolved"] = note
         from .query import attach_qualifier
         query = attach_qualifier(ctx.q.question, query)
+    if query.extra.get("room_scope") and not query.extra.get("compound"):
+        # "ikkunaa olohuoneessa", "doors in the kitchen": a count inside one room. The plan-wide routes would count the
+        # whole plan, so only the property lookups (IFC elements contained in a space) may answer; otherwise abstain
+        rs = query.extra["room_scope"]
+        a = _try_text(ctx, query, "") if text_routes(ctx) else None
+        if a is not None and a.answered:
+            return query, a
+        a = abstain("parser", f"not answered: the question counts {query.obj}s {rs['phrase']!r} (inside one room), and "
+                              f"this drawing's routes count {query.obj}s over the whole plan, not per room; the "
+                              f"plan-wide count would be wrong")
+        a.final = True
+        return query, a
     if query.extra.get("blocked") and not (query.extra.get("compound") or query.extra.get("unresolved_scope")):
         a = abstain("parser", f"not answered: {query.extra['blocked']}. Ask for a room type the drawings name "
                               f"(bedroom, kitchen, bathroom, WC, office, meeting room ...) or for all rooms")

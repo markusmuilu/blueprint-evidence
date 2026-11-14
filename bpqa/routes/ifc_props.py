@@ -1209,6 +1209,10 @@ def map_with_nemotron(M, question) -> Lookup | None:
 
 # ------------------------------------------------------------------ route entry
 
+# the file header is an answer only to a question about the file: software, schema, standard (any language)
+META_CUE = re.compile(r"software|application|authoring|\bifc\b|schema|standard|version|exported|originat|"
+                      r"ohjelm|sovellu|versio|anwendung|programm|program\b|programvara|logiciel|norme?\b")
+
 def answer(ctx, q) -> Answer:
     path = ctx.model_ifc()
     if path is None:
@@ -1222,6 +1226,9 @@ def answer(ctx, q) -> Answer:
     cost = 0.0
     if L is None and ctx.nemotron:
         L = map_with_nemotron(M, question)
+        if L is not None and L.intent == "meta" and not META_CUE.search(fold(question)):
+            # QA 14 Nov: "Mika kerros tama on?" (which floor is this) came back as the IFC file header
+            L = None
     if L is None:
         return abstain(ROUTE, "no property lookup matches the question")
     if (ctx.q.ext in ("pdf", "svg") and L.storey is None and L.intent in SHEET_SCOPED and not L.by_level

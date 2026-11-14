@@ -328,7 +328,8 @@ def _base0(ctx, question: str, types: list[str], solve_q, per_apartment: bool = 
                             "measured on this drawing)" + (f"; not measured: {'; '.join(missed)}" if missed else "") + ".")
             if missed:
                 base.tier = "estimate"
-                base.tier_reason = (base.tier_reason + "; " if base.tier_reason else "") +                     f"{len(missed)} room type(s) could not be measured, so the list is incomplete"
+                incomplete = f"{len(missed)} room type(s) could not be measured, so the list is incomplete"
+                base.tier_reason = f"{base.tier_reason}; {incomplete}" if base.tier_reason else incomplete
             return q2, base, rows
     return q, a, rows_of(a) if a.answered else []
 

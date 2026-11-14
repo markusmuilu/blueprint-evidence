@@ -448,6 +448,14 @@ def build(reading: dict, question: str) -> Query:
               "aggregation": "sum", "floor_explicit": reading.get("surface") in ("floor", "floor+walls")}
         if reading.get("inputs"):
             tk["inputs"] = dict(reading["inputs"])
+        from .baseboard import BASEBOARD_RE, parse_baseboard
+        bb = parse_baseboard(question) if BASEBOARD_RE.search(fold(question)) else None
+        if bb is not None:                # "skirting for the bedrooms": the baseboard takeoff, with the reader's types
+            if bb.get("all_rooms") and "all_rooms_why" in bb and bb["all_rooms_why"].startswith("no room type") \
+                    and reading["types"]:
+                bb = {k: v for k, v in bb.items() if k not in ("all_rooms", "all_rooms_why")}
+                bb["types"] = types
+            tk = bb
         m = TK.SCOPE_ID.search(fold(strip_quoted(question)))
         if m:
             tk["scope_named"] = m.group(0)
