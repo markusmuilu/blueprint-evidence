@@ -54,6 +54,7 @@ EXIST_RE = re.compile(r"^\s*(is|are) there\b|\b(does|do) (the|this|it|we)\b.*\b(
 COUNT_RE = re.compile(r"\bhow many\b|\bnumber of\b|\bcount\b|\bkuinka monta\b|\bmontako\b|\bwie ?viele\b|\banzahl\b|"
                       r"\bcombien\b|\bhvor mange\b|\bhur manga\b", re.I)
 AREA_Q_RE = re.compile(r"\b(area|perimeter|skirting|baseboard|m2|square)\b|\bhow (big|large)\b|kuinka (iso|suuri)|"
+                       r"\b(?:combined|total) are of\b|"
                        r"kokonais\w*ala|pinta-?\s?ala|neliometri|neliömetri|fl(a|ä)che|"
                        r"quadratmeter|m²", re.I)
 
