@@ -146,7 +146,7 @@ def room_labels(ctx, q, img) -> Answer:
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                               f"Answer: {n}{tier}   ({LABEL_ROUTE}, local OCR, $0)",
                               note=f"{'amber' if ans.tier == 'estimate' else 'blue'} numbered boxes: labels read as {NAMES[q.obj]}: "
-                                   + ", ".join(h["text"] for h in hits) + "; grey boxes: other room labels read"
+                                   + (", ".join(h["text"] for h in hits) or "none") + "; grey boxes: other room labels read"
                                    + (f". Estimate because: {ans.tier_reason}" if ans.tier == "estimate" else ""))
     return ans
 

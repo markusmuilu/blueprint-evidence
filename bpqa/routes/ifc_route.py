@@ -462,6 +462,58 @@ def toilet_rooms_fallback(M, floor, tk):
     return [r["sp"] for r in used], tk2, ("; ".join(filter(None, [tr["why"]])) if not used else "")
 
 
+# count objects answered from IfcSpace names (and the WC fixtures for "toilets")
+ROOM_COUNTS = set(takeoff.COUNT_TYPES) | {"toilet"}
+
+
+def room_type_count(M, storey, q) -> dict:
+    """Count of rooms of one type (bedrooms, bathrooms, WC rooms ...) on the storey (or the model), from
+    the IfcSpace names; and "toilets". Returns {used, value, note[, estimate]} or {why}.
+
+    "toilets" follows the dataset's convention for IFC models: a question about "toilets" on a floor is
+    answered with the WC / toilet spaces (ifc_bench: "How many toilets exist on the ground floor?" ->
+    "Toilet/WC spaces on ground floor: 2"). "Toilet bowls", "WC seats" and "water closets" ask for the
+    fixtures: IfcSanitaryTerminal / IfcFlowTerminal whose type reads as a WC (fixture_kind). Each answer
+    also states the other count, so the reader sees both."""
+    spaces = [s for s in M.entities("room") if storey is None or M.storey_of(s) == storey]
+    where = f"on storey {storey.Name}" if storey is not None else "in the model"
+    fx = [e for e in M.entities("sanitary") if (storey is None or M.storey_of(e) == storey) and fixture_kind(e) == "wc"]
+    fx_note = (f"{len(fx)} WC fixture(s) (IfcSanitaryTerminal of WC type) {where}" if fx else
+               f"the model has no WC fixtures (IfcSanitaryTerminal of WC type) {where}")
+    if q.obj == "toilet" and not q.extra.get("toilet_ambiguous"):
+        if not fx:
+            return {"why": fx_note + "; WC seats cannot be counted from the model"}
+        wc_sp = [s for s in spaces if "wc" in takeoff.room_types(space_type_label(s))]
+        return {"used": [(e, None) for e in fx], "value": len(fx),
+                "note": f"{len(fx)} x IfcSanitaryTerminal of WC type {where} ({len(wc_sp)} WC / toilet spaces)"}
+    t = "wc" if q.obj == "toilet" else takeoff.COUNT_TYPES[q.obj]
+    rt = takeoff.count_room_type([{"name": space_type_label(s), "number": s.Name, "sp": s} for s in spaces],
+                                 q.obj if q.obj != "toilet" else "wc_room")
+    typed = [r["sp"] for r in rt.get("rooms") or []]
+    if rt["value"] is None:
+        return {"why": rt["why"]}
+    est = rt.get("estimate", "")
+    note = f"{len(typed)} x IfcSpace named as {takeoff.TYPE_NAMES[t]} {where}"
+    if typed:
+        labs = Counter(space_type_label(s) for s in typed)
+        note += " (" + ", ".join(f"{k} x{v}" if v > 1 else k for k, v in labs.most_common(8)) + ")"
+    if not typed and t in ("bathroom", "wc"):
+        inf = infer_space_types(M, spaces)
+        typed = [s for s in spaces if s.id() in inf and t in inf[s.id()][0]]
+        if typed:
+            note = f"{len(typed)} x IfcSpace typed as {takeoff.TYPE_NAMES[t]} from the sanitary fixtures inside {where}"
+            est = (est + "; " if est else "") + "no space name reads as this room type; typed from the fixtures inside"
+    if q.obj == "toilet":
+        if not typed and fx:
+            return {"used": [(e, None) for e in fx], "value": len(fx),
+                    "note": f"{len(fx)} x IfcSanitaryTerminal of WC type {where} (no space is named as a WC / toilet room)",
+                    "estimate": "'toilets' read as WC fixtures because no space is named as a toilet room"}
+        note += f"; 'toilets' read as toilet rooms (the dataset's IFC convention); {fx_note}"
+    if not typed and not spaces:
+        return {"why": f"no IfcSpace {where}"}
+    return {"used": [(s, None) for s in typed], "value": len(typed), "note": note, "estimate": est}
+
+
 def space_display(sp) -> str:
     n, ln = sp.Name or "", getattr(sp, "LongName", None) or ""
     return f"{ln} ({n})" if ln and n and ln != n else (ln or n)
@@ -494,7 +546,8 @@ def answer(ctx, q) -> Answer:
         if storey is None:
             return abstain(ROUTE, f"storey '{q.level}' not in model")
     sheet_note = ""
-    if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or q.obj in CLASSES and sheet_scope_applies(ctx, q)):
+    counted = q.obj in CLASSES or q.obj in ROOM_COUNTS
+    if storey is None and (q.variant == "type_sum" and ctx.q.ext == "pdf" or counted and sheet_scope_applies(ctx, q)):
         # a plan sheet shows one storey: find it from the storey name and space labels printed on the sheet
         storey, sheet_note = sheet_storey(M, ctx)
         if storey is None:
@@ -502,9 +555,17 @@ def answer(ctx, q) -> Answer:
                                   f"ask with a level name or for the whole model")
 
     used, value, note, unit = [], None, "", ""
+    tier_reason = ""
     inferred, inf_note = {}, ""
     tk_eff = q.extra.get("takeoff")       # the takeoff as interpreted (the toilets fallback may rewrite its types)
-    if q.measure == "count":
+    if q.measure == "count" and q.obj in ROOM_COUNTS:
+        rc = room_type_count(M, storey, q)
+        if rc.get("why"):
+            return abstain(ROUTE, rc["why"])
+        used, value, unit, note = rc["used"], rc["value"], "count", rc["note"]
+        if rc.get("estimate"):
+            tier_reason = rc["estimate"]
+    elif q.measure == "count":
         if q.obj not in CLASSES:
             return abstain(ROUTE, f"no IFC class for {q.obj}")
         ents = M.entities(q.obj)
@@ -590,6 +651,8 @@ def answer(ctx, q) -> Answer:
     items = [{"guid": e.GlobalId, "name": getattr(e, "Name", None), "value": (round(v, 3) if v is not None else None)} for e, v in used]
     ans = Answer(value=value, unit=unit, route=ROUTE, confidence=0.9, items=items,
                  explanation=f"{value} = {note} in {path.name}" + (f"; {sheet_note}" if sheet_note else ""))
+    if tier_reason:
+        ans.tier, ans.tier_reason = "estimate", tier_reason
     if q.variant == "type_sum":
         rows = []
         for e, v in used:

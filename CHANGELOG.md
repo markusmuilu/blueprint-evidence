@@ -3,6 +3,77 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: route misses from QA, branch `route-misses`
+
+QA found questions where the drawing holds the answer but the router fell through to Nemotron or answered oddly.
+All fixes are general (vocabulary, rules, router); nothing is keyed to a file.
+
+- **Room-type counts on vector drawings.** "How many bedrooms / bathrooms / kitchens / WC rooms / balconies?"
+  (EN, FI, DE, FR, IT, ET, DA words; `query.count_room_type`) are counted from the room labels
+  (`takeoff.count_room_type`) on Swiss DXF floors and from IfcSpace names on IFC models. Swiss unnamed numbered rooms
+  are typed from the fixtures drawn inside (bathtub or shower = bathroom; toilet and no tub/shower = WC), tier estimate.
+  site3387 "How many bedrooms?": 5 from the Schlafzimmer labels, proven (was Nemotron, 5, 16 s).
+- **Generic room labels.** "Zimmer", "Piece", "Stanza" stay generic: never counted as bedrooms. Of the 178 floors in
+  the full set that use "Piece", one also has a "Chambre a coucher", and 64 label no living room, so the living room
+  is a "Piece" too. A bedroom count or bedroom/living takeoff on a floor with only generic rooms abstains and says why,
+  with the new `Answer.final` flag: the router then does not hand the question to Nemotron, which could only guess
+  (site254 "total area of the bedrooms" was 164.0 m2 from Nemotron, the whole flat).
+- **French and Italian room words** added to `takeoff.LABEL_RE` / `Q_TYPE_RE`: toilettes, gabinetto, servizi igienici,
+  doccia, salle de douche, cuisinette, cucinino, angolo cottura, salle a manger, sala da pranzo, salotto, salle de
+  sejour, vestibule, anticamera, cantina, debarras, lavanderia (question side), balcons/balconi; plus German
+  Kinderzimmer, Esszimmer, Halle, Kellerabteil, Waschen/Trocknen and labels that start with a WC word ("WC Damen West").
+- **IFC "toilets".** Bare "toilets" is ambiguous (`toilet_ambiguous`). On IFC models it follows the dataset's own
+  convention (ifc_bench answers "how many toilets on the ground floor" with WC / toilet spaces): esplanades plan-01
+  "How many toilets are on this floor?" = 13 IfcSpaces named TUALETTRUUM / INVA-WC / WC on 1.korrus, proven (was
+  Nemotron, 18, 88 s). The answer also states the fixture count (this model has no IfcSanitaryTerminal).
+  "Toilet bowls" / "WC seats" count WC fixtures and abstain when the model has none. Swiss and scan routes keep
+  counting fixtures.
+- **Net indoor totals: unnamed numbered rooms.** Before, a room with a number and no name counted only with a sanitary
+  fixture inside. site1000 misses 2.07 (2.06 m2) and 2.19 (5.19 m2), neither with a fixture (334.17 vs gold 341.45).
+  Survey over the full dataset's dev split (all floors, `swiss_rooms.json` style dump of every DXF): unnamed rooms
+  without a fixture are counted when the short side of their minimum rotated rectangle is over 1.0 m (shafts are
+  narrow). Width beat area as the feature; 0.8 to 1.2 m is a plateau.
+
+  | dev split, rule only | fixture only (before) | area > 1.5 m2 | width > 1.0 m (chosen) | all unnamed |
+  |---|---|---|---|---|
+  | full dev, floor totals (1448) | 92.3% | 94.6% | 94.9% | 94.1% |
+  | full dev, apartment totals (2612) | 94.3% | 95.8% | 96.2% | 95.8% |
+  | preview dev, floor totals (94) | 93.6% | 91.5% | 93.6% | 91.5% |
+  | preview dev, apartment totals (160) | 97.5% | 92.5% | 93.8% | 92.5% |
+
+  The preview dev split (65 floors, where the old rule was set) loses 2 floors (12 questions) and gains 2 (6
+  questions); the full dev split, which contains it, gains 90 questions. Kept for the full split; to revert, make
+  the width threshold infinite. `UNNAMED_MIN_WIDTH_M` in `dxf_swiss.py` (shared by `pdf_vector.py`).
+- **Check-adopted counts read consistently.** When a check replaces a raster count (e.g. `bathroom>=1-if-shower`), the
+  explanation now opens with the value given and the check that gave it, then the route's own reading
+  ("1 = implied by check ...; the raster-ocr-labels route alone gave 0: ..."), and the evidence header says
+  "count changed from 0 to 1". CubiCasa 10372 "How many bathrooms are there?" had value 1 with "0 labels read".
+- **Drawing scale.** New route `sheet-scale` for "What is the scale of this drawing?" (EN, DE, FR, IT, FI, ET words):
+  the printed ratio from the PDF text layer, proven, with the scale bar / area labels / dimensions reported as agreeing
+  or not (estimate on a clash); without a printed ratio, derived from those measurements as an estimate (assumes the
+  page prints at its own size); on scans, a ratio read by OCR. site254: 1:100, proven, agrees with the scale bar.
+- **Parser scope fixes found by the parse diff:** "on the third / fourth / fifth / sixth / top / upper / lower / attic
+  floor" is an unresolved scope (left to text routes, as "first" and "second" already were); "distributed" marks a
+  breakdown question.
+- **Tyneside flat (unseen), "How many bedrooms?" = 5 proven: correct, not changed.** The image holds two flats: Bedroom
+  1, 2, 3 on the left and Bedroom 1, 2 on the right; the manual reference in `data/unseen/questions.jsonl` is also 5.
+
+Parse diff over all 6,821 distinct questions (full set and unseen): 14 parses change, all ifc_bench free-text
+questions (scope, breakdown or the new room-type objects).
+
+Dev numbers (`eval.py --split dev`, Nemotron off; before = main at a38fbd0):
+
+| data, sources | before | after |
+|---|---|---|
+| full set, swiss_dwellings (26,176) | 98.9% (area 96.7%, count 100.0%) | 99.3% (area 97.8%, count 100.0%) |
+| full set, ifc_models (2,224) | 75.8% | 75.8% |
+| full set `--pdf-only`, swiss_dwellings | 98.6% (area 96.4%) | 99.0% (area 97.5%) |
+| preview, swiss_dwellings (1,704) | 99.4% (area 98.1%) | 99.1% (area 97.0%) |
+| preview, ifc_models (419) / cubicasa5k (2,908) / ifc_bench (214) | 94.3% / 74.9% / 40.2% | unchanged (ifc_bench: one answer moved from estimate to proven, still wrong) |
+| preview, all four sources (5,245) | 83.0% | 82.9% (the 6 Swiss apartment/floor-total questions above) |
+
+Tests: `tests/test_route_misses.py` (pytest; the QA questions run on the real files when the full set is present).
+
 ## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
 
 Problem: on a scan with some printed room areas a takeoff abstained for every room that prints none, and wall
