@@ -112,3 +112,26 @@ def test_file_header_is_not_a_storey_answer():
     from bpqa.query import fold
     assert not META_CUE.search(fold("Mikä kerros tämä on?"))
     assert META_CUE.search(fold("Which software exported this IFC file?"))
+
+
+def test_fast_cannot_asks_the_reader_once(monkeypatch):
+    from pathlib import Path
+    from bpqa import router as R
+    from bpqa.answer import abstain
+    from bpqa.data import Question
+    from bpqa.query import Query
+    ctx = R.Context(root=Path("."), q=Question(qid=-1, path="data/x/y.png", question="how many sleeping spots"),
+                    out_dir=Path("."), evidence=False)
+    rules = Query(measure="count", obj="room", raw=ctx.q.question)
+    llm = Query(measure="count", obj="bedroom", parser="llm", raw=ctx.q.question)
+    monkeypatch.setattr(R.nemo_client, "enabled", lambda: True)
+    monkeypatch.setattr(R.phrasing, "llm_parse", lambda q: llm)
+    monkeypatch.setattr(R, "_solve", lambda c, q: (q, Answer(value=2, unit="count", route="raster-rooms")))
+    q, a = R._retry_with_reader(ctx, rules, abstain("raster-cv", "cannot"), 0.2)
+    assert q.obj == "bedroom" and a.value == 2 and "within 0.2 s" in q.extra["llm_reason"]
+    # a slow cannot keeps the rule reading, and so does a reading the model agrees with
+    q, a = R._retry_with_reader(ctx, rules, abstain("raster-cv", "cannot"), 3.0)
+    assert q is rules and not a.answered
+    monkeypatch.setattr(R.phrasing, "llm_parse", lambda q: Query(measure="count", obj="room", parser="llm"))
+    q, a = R._retry_with_reader(ctx, rules, abstain("raster-cv", "cannot"), 0.2)
+    assert q is rules and not a.answered
