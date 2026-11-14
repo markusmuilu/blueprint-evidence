@@ -44,6 +44,7 @@ CLASSES = ["kitchen", "bathroom", "wc_room", "sauna", "bedroom", "balcony"]
 NAMES = {"kitchen": "kitchen", "bathroom": "bathroom", "wc_room": "WC room", "sauna": "sauna",
          "bedroom": "bedroom", "balcony": "balcony"}
 MIN_CONF = 0.05
+DEVICE = os.environ.get("STOA_ROOMS_DEVICE") or "cpu"     # batch runs (tuning, eval caches) may pass a GPU
 LABEL_COLOR = (18, 146, 192)
 
 
@@ -70,7 +71,7 @@ def thresholds() -> dict:
 
 def _predict(img: np.ndarray, imgsz: int) -> list[dict]:
     res = _model(str(MODEL)).predict(img, imgsz=imgsz, conf=MIN_CONF, iou=0.6, agnostic_nms=True, max_det=100,
-                                     verbose=False, device="cpu")[0]
+                                     verbose=False, device=DEVICE)[0]
     return [{"cls": CLASSES[int(c)], "conf": round(float(s), 4), "xyxy": [round(float(v), 1) for v in b]}
             for b, s, c in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist(), res.boxes.cls.tolist())]
 
