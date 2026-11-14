@@ -153,6 +153,14 @@ def answer(ctx, q, M, path, storey):
     from .answer import Answer, abstain, estimate
     from .routes import ifc_route as R
     slab = q.extra["slab"]
+    sheet_note = ""
+    if storey is None and getattr(ctx.q, "ext", "") in ("pdf", "svg") and R.sheet_scope_applies(ctx, q):
+        # a plan sheet shows one storey: its slabs, like the door and wall counts (judge review 14 Nov: 384.96 m2 for the
+        # Erdgeschoss sheet was every slab in the model, roof slabs included; the ground slab is 120 m2)
+        storey, sheet_note = R.sheet_storey(M, ctx)
+        if storey is None:
+            return abstain("ifc", f"cannot tell which storey this sheet shows ({sheet_note}); ask with a level name or "
+                                  f"for the whole model")
     where = f"on storey {storey.Name}" if storey is not None else "in the model"
     got = collect(M, storey, slab)
     rows = got["rows"]
@@ -247,8 +255,12 @@ def answer(ctx, q, M, path, storey):
     what = f"slab area {where}" + (f" ({'; '.join(notes)})" if notes else "")
     how = ("the plan footprint of the geometry (the model has no area quantity), COMPUTED" if len(comp_a) == len(sel) else
            f"{basis} from the slab quantity set" + (", the plan footprint of the geometry (COMPUTED) where the model has none" if comp_a else ""))
+    kinds: dict = {}
+    for r in sel:
+        kinds[r["predefined"]] = kinds.get(r["predefined"], 0.0) + r["area"]
+    by_kind = "; ".join(f"{k}: {v:.2f} m2" for k, v in sorted(kinds.items(), key=lambda kv: -kv[1]))
     expl = (f"{total:.2f} m2 = {what}: {len(sel)} IfcSlab. Area per slab: {how}. By type and thickness: {lines}. "
-            f"Source: {path.name}.")
+            f"By slab kind (IFC PredefinedType): {by_kind}. Source: {path.name}." + (f" {sheet_note}." if sheet_note else ""))
     ans = Answer(value=round(total, 2), unit="m2", route="ifc", confidence=0.9, items=items, explanation=expl)
     if tier_why:
         estimate(ans, "; ".join(tier_why))

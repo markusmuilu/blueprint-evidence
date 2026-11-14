@@ -231,6 +231,11 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     query, a = _solve(ctx, query)
     if not given and not a.answered:
         query, a = _retry_with_reader(ctx, query, a, time.perf_counter() - t0)
+    if not given and a.answered:
+        # a room number, label, apartment, storey or filter in the question that the answer did not apply: repaired
+        # where the data supports it, else not answered (bpqa/constraints.py)
+        from . import constraints
+        query, a = constraints.check(ctx, query, a, lambda q2: _solve(ctx, q2))
     if a.answered and query.extra.get("unit_out") == "sqft" and a.unit == "m2" and isinstance(a.value, (int, float)):
         m2 = float(a.value)              # "in square feet": the same answer, converted (1 m2 = 10.7639 sq ft)
         a.value, a.unit = round(m2 * 10.7639, 1), "sq ft"

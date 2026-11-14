@@ -3,6 +3,17 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: no wrong Proven from a dropped constraint, branch `no-wrong-proven`
+
+`bpqa/constraints.py`, called once in `router.solve`: a room number, a name the drawing prints, an apartment, a storey
+phrase on a multi-storey model, a size filter, a fire class, "for men", or an area/volume asked of a count route that
+the answer did not apply is repaired where the data allows (room by number on Swiss/vector plans, IFC spaces by the
+drawing's own label: "corridors" finds KORIDOR, Swiss rooms of one apartment), else not answered with the reason and
+the unfiltered value. Slab questions on a plan sheet use the sheet's storey (FZK Erdgeschoss 120 m2, not 384.96) and
+list slab kinds. A printed apartment summary total is never a room in a list. Judge and QA cases: 37 checked, every
+former wrong Proven is now right or not answered. Dev (ifc_models 2224 q, swiss_dwellings first 2500 q): Proven
+1705 at 98.9% and 2500 at 99.1%, unchanged from before.
+
 ## 2026-11-14: scale assumption, branch `scale-assumption`
 
 An approximation (a scan with no printed areas, or a big sheet scaled from its printed ratio) now shows the size

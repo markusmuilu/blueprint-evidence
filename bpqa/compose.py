@@ -256,8 +256,8 @@ def rows_of(a: Answer) -> list[dict]:
     """One row per room the answer used: {name, area, unit (apartment), item}."""
     out = []
     for it in a.items or []:
-        if not isinstance(it, dict):
-            continue
+        if not isinstance(it, dict) or it.get("reading") == "apartment summary" or "totals" in it:
+            continue        # a printed summary total (3H+K+S 73,50 m2) or a takeoff total is never a room
         area = next((it[k] for k in ("area_m2", "floor_m2", "area", "net_area_m2") if isinstance(it.get(k), (int, float))
                      and not isinstance(it.get(k), bool)), None)
         if area is None and isinstance(it.get("value"), (int, float)) and not isinstance(it.get("value"), bool):
