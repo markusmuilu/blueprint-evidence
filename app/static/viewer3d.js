@@ -294,12 +294,12 @@ function worldBox() {
   return b;
 }
 
-function frame(box, final = false) {
+function frame(box, final = false, tight = 1.25) {
   if (box.isEmpty()) return;
   const c = box.getCenter(new THREE.Vector3());
   const s = box.getSize(new THREE.Vector3());
   const r = Math.max(s.x, s.z, s.y) * 0.5 + 1;
-  const d = r / Math.tan((V.camera.fov * Math.PI) / 360) * 1.25;
+  const d = r / Math.tan((V.camera.fov * Math.PI) / 360) * tight;
   V.controls.target.copy(c);
   V.camera.position.set(c.x + d * 0.62, c.y + d * 0.55, c.z + d * 0.62);
   V.camera.near = Math.max(0.05, d / 500);
@@ -408,8 +408,8 @@ function focusHighlight() {
   }
   if (b.isEmpty()) return;
   const s = b.getSize(new THREE.Vector3()), r = Math.max(s.x, s.y, s.z, 6);
-  b.expandByScalar(Math.max(4, Math.min(r * 0.6, 12)));                       // keep the storey around them in view
-  frame(b);
+  b.expandByScalar(Math.max(3, Math.min(r * 0.4, 6)));                        // keep the storey around them in view
+  frame(b, false, 0.8);
 }
 
 /* ---------------------------------------------------------------- picking and the element card */

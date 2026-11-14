@@ -153,7 +153,7 @@ const OrderSheet = (() => {
     const pct = isFinite(v.rel) ? ` (${v.diff > 0 ? "+" : "-"}${Math.abs(v.rel * 100).toFixed(1)}%)` : "";
     const head = v.ok ? `Order matches the drawing within ${tg.exact ? "an exact count" : "2%"}`
       : v.diff > 0 ? `Order is ${amt} ${u} over the drawing${pct}` : `Order is ${amt} ${u} short of the drawing${pct}`;
-    const ev = (tg.parts || []).filter((r) => (tg.kind === "walls" ? r.netC : r.floor) != null).slice(0, 12).map((r) =>
+    const ev = (tg.parts || []).filter((r) => (tg.kind === "walls" ? r.netC : r.floor) != null).slice(0, 6).map((r) =>
       `<li><span class="cite">#${esc(r.n)}</span><span class="l">${esc(r.room)}</span><span class="mono">${f2(tg.kind === "walls" ? r.netC : tg.kind === "floor" ? r.floor : (tg.c.useFloor ? r.floor || 0 : 0) + (tg.c.useWalls ? r.netC || 0 : 0))}</span></li>`).join("");
     return `<p class="oc-verdict ${v.tone}">${ico(v.ok ? "proven" : v.diff > 0 ? "estimate" : "cannot")}<span>${esc(head)}</span></p>
       <dl class="oc-cmp">
@@ -161,7 +161,7 @@ const OrderSheet = (() => {
         <dt>From the drawing</dt><dd class="mono">${esc(tg.unit === "count" ? tg.qty : f2(tg.qty))} ${esc(u)} <span class="meta">${esc(tg.label)}</span></dd>
         <dt>Difference</dt><dd class="mono">${v.diff > 0 ? "+" : v.diff < 0 ? "-" : ""}${esc(amt)} ${esc(u)}</dd>
       </dl>
-      ${ev ? `<ul class="oc-ev" aria-label="Rooms behind the drawing quantity">${ev}</ul>` : ""}
+      ${ev ? `<ul class="oc-ev" aria-label="Rooms behind the drawing quantity">${ev}${(tg.parts || []).length > 6 ? `<li class="more"><span></span><span class="l">and ${(tg.parts || []).length - 6} more rooms, each numbered on the drawing and in the order sheet</span><span></span></li>` : ""}</ul>` : ""}
       ${tg.c?.approx ? `<p class="note">Openings use the deducted areas from the answer; run the question again to edit the tiled height.</p>` : ""}`;
   }
 
@@ -338,13 +338,15 @@ const OrderSheet = (() => {
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Order sheet - ${esc(a.drawing)}</title>
 <style>
   @page { size: A4 landscape; margin: 14mm; }
-  body { font: 11pt/1.45 "IBM Plex Sans", "Segoe UI", sans-serif; color: #15191f; margin: 0; }
+  body { font: 10pt/1.4 "IBM Plex Sans", "Segoe UI", sans-serif; color: #15191f; margin: 0; }
+  @media screen { body { padding: 24px; max-width: 1180px; } }
   h1 { font-size: 18pt; margin: 0 0 2pt; font-weight: 600; }
   .meta { color: #5a6270; font-size: 9pt; }
   .q { margin: 6pt 0 10pt; }
-  table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-  th { text-align: left; font-weight: 500; color: #5a6270; border-bottom: 1px solid #8a919c; padding: 3pt 4pt; }
-  td { border-bottom: 1px solid #d7dbe0; padding: 3pt 4pt; vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+  th { text-align: left; font-weight: 500; color: #5a6270; border-bottom: 1px solid #8a919c; padding: 2pt 3pt; }
+  td { border-bottom: 1px solid #d7dbe0; padding: 2pt 3pt; vertical-align: top; }
+  th.num { white-space: normal; }
   .num { text-align: right; font-family: "IBM Plex Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
   tr.total td { font-weight: 600; border-top: 1px solid #15191f; }
   .op { display: block; } .op .mono { font-family: "IBM Plex Mono", Consolas, monospace; }

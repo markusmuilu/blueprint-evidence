@@ -604,9 +604,9 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
 .sheet-tbl .op { display: block; white-space: nowrap; }
 .sheet-tbl .op .mono { color: var(--warn); margin-left: 4px; }
 .sheet-sum { display: grid; grid-template-columns: minmax(240px, auto) minmax(0, 1fr); gap: var(--s6); align-items: start; }
-.sheet-sum dl { display: grid; grid-template-columns: auto auto; gap: 4px var(--s5); margin: 0; justify-content: start; font-size: var(--fs-sm); }
-.sheet-sum dt { color: var(--fg-2); }
-.sheet-sum dd { margin: 0; text-align: right; }
+.sheet-sum > dl { display: grid; grid-template-columns: auto auto; gap: 4px var(--s5); margin: 0; justify-content: start; font-size: var(--fs-sm); }
+.sheet-sum > dl dt { color: var(--fg-2); }
+.sheet-sum > dl dd { margin: 0; text-align: right; }
 .sheet-sum .big { font-size: var(--fs-lg); color: var(--fg); font-weight: 600; padding-top: var(--s2); border-top: 1px solid var(--border-strong); }
 .sheet-check { display: grid; gap: var(--s2); max-width: 520px; }
 .sheet-foot { display: flex; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; align-items: flex-end; border-top: 1px solid var(--border); padding-top: var(--s3); }
@@ -626,6 +626,7 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
 
 /* ------------------------------------------------------------ responsive */
 .strip-head { flex-wrap: wrap; }   /* long scale notes pushed the buttons into the answer panel */
+.strip { grid-template-columns: minmax(0, 1fr); }   /* the strip never widens the page (phones) */
 @media (max-width: 1280px) {
   .strip-head { flex-wrap: wrap; }
   :root { --picker-w: 260px; --detail-w: 340px; }
