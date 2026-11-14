@@ -82,7 +82,7 @@ Nemotron calls on that key: they come only after every local route abstained, ar
   app's own lock anyway, and the 8 concurrent inputs keep previews, evidence images and static files
   flowing while one solve runs.
 - `web.py`: wraps `app/server.py` without changing it. Sets `STOA_DATA` to the demo set; uploads limited
-  to PDF, DXF, IFC, PNG and JPG and 30 MB per request (checked before the body is read, and in the
+  to PDF, DXF, IFC, PNG, JPEG, TIFF and SVG (TIFF and SVG are converted to PNG; DWG is refused with a message unless `dwg2dxf` is installed; several files at once become several drawings, a multi-page PDF one drawing per page; see `app/uploads.py`) and 30 MB per request (checked before the body is read, and in the
   browser before sending); uploads go to the container's temp folder and are deleted, with every cache
   file derived from them, 15 minutes after upload (`BPE_UPLOAD_TTL`), and in any case when the container
   stops. Adds `/credits`, `/api/credits?path=`, a credit bar on every page naming the licence and credit

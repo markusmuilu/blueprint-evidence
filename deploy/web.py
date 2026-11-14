@@ -2,7 +2,7 @@
 
 Wraps the existing FastAPI app instead of editing it:
 - data root: the credited demo set (`STOA_DATA`, set before the app is imported)
-- uploads: PDF, DXF, IFC, PNG, JPG only; 30 MB per request; stored in the container's temp folder and
+- uploads: PDF, DXF, IFC, PNG, JPEG, TIFF, SVG (DWG is refused unless dwg2dxf is installed); 30 MB per request; stored in the container's temp folder and
   deleted, with every cache file derived from them, UPLOAD_TTL seconds after upload (and with the container)
 - credits: `/api/credits?path=` and `/credits`, and a credit bar injected into the page that names the
   licence and credit of the drawing on screen
@@ -28,7 +28,7 @@ os.environ["STOA_DATA"] = str(DEMO)
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 MAX_BYTES = int(os.environ.get("BPE_MAX_UPLOAD_MB", "30")) * 1024 * 1024
-UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg"}
+UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff", "svg", "dwg"}   # tif/svg become PNG; dwg needs dwg2dxf, else refused
 UPLOAD_TTL = int(os.environ.get("BPE_UPLOAD_TTL", "900"))      # seconds an upload is kept
 
 from fastapi import Request                      # noqa: E402
