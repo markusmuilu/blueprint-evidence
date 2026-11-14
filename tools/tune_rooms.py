@@ -9,8 +9,9 @@ The tune images are Stoa train-split CubiCasa images whose public plans were hel
                  a band of +-0.1 around it for "uncertain" boxes
   tta            whether the median count over the eight rotations/mirrors beats a single view
   prefer         which reading answers when detector and OCR disagree: "ocr", "det" or "ocr_proven"
-  agree_proven   True when the two readings' agreements are right on at least AGREE_MIN of the tune
-                 images (with at least 20 agreements)
+  proven_rule    when an agreement is proven: "agree", "agree_ocr", "agree_clean" or "none"; the rule
+                 with the most proven answers that are right on at least AGREE_MIN of the tune images
+                 (at least 20 proven answers)
 Accuracies are also reported with 2-fold cross-validation over images (choices fitted on one half,
 scored on the other), so the choice is not only scored on the images it was fitted on.
 """
@@ -73,24 +74,29 @@ def choose(rows, obj, imgs):
         c = {**cfg, "prefer": pref}
         scores[pref] = sum(value(rows[i][obj], obj, c)[0] == rows[i][obj][0] for i in imgs)
     cfg["prefer"] = max(scores, key=lambda k: (scores[k], k == "ocr_proven"))
-    agree = [i for i in imgs if value(rows[i][obj], obj, cfg)[2] == "both"]
-    agree_ok = sum(value(rows[i][obj], obj, cfg)[0] == rows[i][obj][0] for i in agree)
-    cfg["agree_proven"] = len(agree) >= 20 and agree_ok / len(agree) >= AGREE_MIN
+    cfg["proven_rule"] = "none"
+    best_n = 0
+    for rule in ("agree", "agree_ocr", "agree_clean"):
+        c = {**cfg, "proven_rule": rule}
+        res = [value(rows[i][obj], obj, c) for i in imgs]
+        pr = [(r[0] == rows[i][obj][0]) for r, i in zip(res, imgs) if r[1]]
+        if len(pr) >= 20 and sum(pr) / len(pr) >= AGREE_MIN and len(pr) > best_n:
+            cfg["proven_rule"], best_n = rule, len(pr)
     return cfg
 
 
 def value(row, obj, cfg):
     gold, o, op, v1, v8 = row
-    d = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)[0]
-    return rr.combine(obj, o, op, d, cfg)
+    d, _, unsure = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)
+    return rr.combine(obj, o, op, d, cfg, len(unsure))
 
 
 def score(rows, obj, imgs, cfg):
     s = {"n": len(imgs), "ocr": 0, "det": 0, "combined": 0, "proven": 0, "proven_ok": 0}
     for i in imgs:
         gold, o, op, v1, v8 = rows[i][obj]
-        d = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)[0]
-        val, proven, _ = rr.combine(obj, o, op, d, cfg)
+        d, _, unsure = rr.det_count(v8 if cfg["tta"] else v1, obj, cfg)
+        val, proven, _ = rr.combine(obj, o, op, d, cfg, len(unsure))
         s["ocr"] += o == gold
         s["det"] += d == gold
         s["combined"] += val == gold

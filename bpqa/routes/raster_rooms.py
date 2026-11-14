@@ -11,8 +11,10 @@ two independent readings, the drawn rooms and the printed labels.
 
 Combination, per question (thresholds and policies tuned on the held-out train-split tune images by
 tools/tune_rooms.py, stored in models/rooms_thresholds.json):
-  agree      the two counts are equal: that count, tier "proven" when the type's tuned agreement
-             precision allows it (`agree_proven`), otherwise an estimate
+  agree      the two counts are equal: that count, tier "proven" when the type's tuned rule holds
+             (`proven_rule`: "agree", "agree_ocr" = the OCR reading is one its own rules prove,
+             "agree_clean" = no room box scored inside the uncertainty band, or "none"); the rule is the
+             one giving the most proven answers at >= 95% precision on the tune images
   disagree   tier "estimate"; the value is the reading the type's tuned policy prefers (`prefer`:
              "ocr", "det", or "ocr_proven": OCR when its own rules would have proven it, else the
              detector); both readings and their boxes are in the answer
@@ -110,10 +112,12 @@ def det_count(views: list[list[dict]], obj: str, cfg: dict) -> tuple[int, list[d
     return n, kept, unsure
 
 
-def combine(obj: str, o: int, o_proven: bool, d: int, cfg: dict) -> tuple[int, bool, str]:
+def combine(obj: str, o: int, o_proven: bool, d: int, cfg: dict, n_unsure: int = 0) -> tuple[int, bool, str]:
     """(value, proven, which) from the OCR count o and the detector count d, per the tuned policy."""
     if o == d:
-        return o, bool(cfg.get("agree_proven", True)), "both"
+        rule = cfg.get("proven_rule", "agree")
+        proven = rule == "agree" or (rule == "agree_ocr" and o_proven) or (rule == "agree_clean" and n_unsure == 0)
+        return o, proven, "both"
     pref = cfg.get("prefer", "ocr_proven")
     if pref == "det" or (pref == "ocr_proven" and not o_proven):
         return d, False, "det"
@@ -138,7 +142,7 @@ def answer(ctx, q) -> Answer:
         return raster.answer(ctx, q)
     d, kept, unsure = det_count(views, q.obj, cfg)
     o, o_proven = int(ocr.value), ocr.tier == "proven"
-    value, proven, which = combine(q.obj, o, o_proven, d, cfg)
+    value, proven, which = combine(q.obj, o, o_proven, d, cfg, len(unsure))
     name = NAMES[q.obj]
     det_items = [{"n": i + 1, "reading": "drawn room", "type": q.obj, "score": k["conf"],
                   "xyxy": [round(v) for v in k["xyxy"]]} for i, k in enumerate(kept)]
@@ -154,8 +158,8 @@ def answer(ctx, q) -> Answer:
                  tier="proven" if proven else "estimate", items=det_items + lab_items, explanation=expl)
     if not proven:
         if which == "both":
-            estimate(ans, f"both readings give {value}, but on the tune images agreement on {name} counts "
-                          f"is not reliable enough to prove it")
+            estimate(ans, f"both readings give {value}, but the proof rule for {name} counts "
+                          f"({cfg.get('proven_rule')}) does not hold on this plan")
         else:
             estimate(ans, f"the readings disagree: {d} drawn {name}(s) found by the room detector, "
                           f"{o} {name} label(s) read" + (f" (label reading: {ocr.tier_reason})" if ocr.tier_reason else ""))
