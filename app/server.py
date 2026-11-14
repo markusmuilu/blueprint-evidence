@@ -123,8 +123,8 @@ async def upload(files: list[UploadFile] = File(...)):
     # start reading each uploaded drawing in the background now, so the first question waits only for what is left
     for dr in res["drawings"]:
         try:
-            uid, stored = dr["path"].split(":", 1)[1].split("/", 1)
-            dr["precompute"] = precompute.start(dr["path"], UPLOADS / uid / stored, SOLVE_LOCK, _precompute_scan)
+            root, rel = resolve(dr["path"])          # uploads live under <uid>/data/upload/
+            dr["precompute"] = precompute.start(dr["path"], Path(root) / rel, SOLVE_LOCK, _precompute_scan)
         except Exception as ex:      # never fail an upload over the background reading
             print(f"[precompute] {dr['path']}: {type(ex).__name__}: {ex}", flush=True)
     first = res["drawings"][0]
