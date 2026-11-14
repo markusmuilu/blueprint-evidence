@@ -90,7 +90,7 @@ function ensureScene(host) {
     if (!V.needs || !V.host || V.host.hidden) return;
     V.needs = false;
     V.renderer.render(V.scene, V.camera);
-    if (V.timings.firstFrameAt == null && V.floors.length) {
+    if (V.timings.firstFrameAt == null && V.floors.some((f) => f.solid?.mesh)) {
       V.timings.firstFrameAt = performance.now();
       V.timings.first_frame_ms = Math.round(V.timings.firstFrameAt - V.timings.t0);
       status();
@@ -164,20 +164,23 @@ function buildFloor(entry, kind, buf) {
 }
 
 function paintBase(f) {
-  if (!f.solid) return;
+  if (!f.solid?.mesh) return;
   const hiOn = hasHighlight();
+  // with an answer on screen: storeys holding its elements keep their tones as a see-through shell,
+  // the other storeys fade to a faint outline so they do not haze the view
+  const hot = hiOn && V.hotFloors?.has(f);
   const col = f.solid.mesh.geometry.getAttribute("color");
   const arr = col.array;
   const classes = V.meta.classes;
   const dim = colors().dim;
   for (const row of f.solid.table) {
     const [, ci, , v0, nv] = row;
-    const c = hiOn ? dim : toneFor(classes[ci]);
+    const c = hiOn && !hot ? dim : toneFor(classes[ci]);
     for (let v = v0; v < v0 + nv; v++) { arr[v * 3] = c.r; arr[v * 3 + 1] = c.g; arr[v * 3 + 2] = c.b; }
   }
   col.needsUpdate = true;
   const m = f.solid.mesh.material;
-  m.opacity = hiOn ? 0.16 : 1;
+  m.opacity = !hiOn ? 1 : hot ? 0.22 : 0.035;
   m.depthWrite = !hiOn;
   m.needsUpdate = true;
 }
@@ -249,8 +252,15 @@ async function open(path, host) {
   await Promise.all([worker(), worker(), worker(), worker()]);
   if (gen !== V.gen) return null;
   V.timings.geometry_ms = Math.round(performance.now() - V.timings.t0);
+  // one full frame with every storey, timed to the end of GPU work (upload of all buffers included)
+  const tr = performance.now();
+  V.renderer.render(V.scene, V.camera);
+  V.renderer.getContext().finish();
+  V.timings.full_render_ms = Math.round(performance.now() - tr);
+  V.timings.ready_ms = Math.round(performance.now() - V.timings.t0);
   frame(worldBox(), true);
   applyHighlight();
+  if (hasHighlight()) focusHighlight();
   busy(null);
   status();
   return meta;
@@ -339,6 +349,8 @@ function applyHighlight() {
     ["deducted", new THREE.MeshLambertMaterial({ color: c.deducted, flatShading: true, side: THREE.DoubleSide })],
   ];
   const roomMat = new THREE.MeshBasicMaterial({ color: c.room, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+  V.hotFloors = new Set();
+  for (const s of ["cited", "deducted", "rooms"]) for (const g of V.highlight[s]) { const hit = V.byGuid.get(g); if (hit) V.hotFloors.add(hit.floor); }
   for (const f of V.floors) paintBase(f);
   const found = { cited: 0, deducted: 0, rooms: 0 };
   for (const f of V.floors) {
@@ -376,7 +388,28 @@ function setHighlight(h) {
   const fl = new Set();
   for (const s of ["cited", "deducted", "rooms"]) for (const g of V.highlight[s]) { const hit = V.byGuid.get(g); if (hit) fl.add(hit.floor); }
   V.hiFloors = fl;
+  // cut the building above the answer's highest storey (as a section would); the checkboxes bring them back
+  const real = V.floors.filter((x) => !x.site);
+  const top = Math.max(-1, ...real.map((x, k) => (fl.has(x) ? k : -1)));
+  if (top >= 0) { real.forEach((x, k) => { x.visible = k <= top; }); layout(); }
   renderPanel();
+  focusHighlight();
+}
+
+// frame the answer's elements: the box of their own vertices, storey offset included
+function focusHighlight() {
+  const b = new THREE.Box3(), v = new THREE.Vector3();
+  for (const s of ["cited", "deducted", "rooms"]) for (const g of V.highlight[s]) {
+    const hit = V.byGuid.get(g);
+    const mesh = hit && hit.floor[hit.kind]?.mesh;
+    if (!mesh || !hit.floor.visible) continue;
+    const pos = mesh.geometry.getAttribute("position").array, [, , , v0, nv] = hit.row;
+    for (let i = v0; i < v0 + nv; i++) { v.set(pos[i * 3], pos[i * 3 + 1] + hit.floor.group.position.y, pos[i * 3 + 2]); b.expandByPoint(v); }
+  }
+  if (b.isEmpty()) return;
+  const s = b.getSize(new THREE.Vector3()), r = Math.max(s.x, s.y, s.z, 6);
+  b.expandByScalar(r * 0.6);                       // keep the storey around them in view
+  frame(b);
 }
 
 /* ---------------------------------------------------------------- picking and the element card */
@@ -521,10 +554,10 @@ function status() {
   const t = V.timings, m = V.meta;
   const mb = (x) => (x / 1048576).toFixed(1) + " MB";
   s.textContent = `${m.elements.toLocaleString("en-US")} elements, ${(m.triangles / 1000).toFixed(0)}k triangles, ${mb(t.geom_bytes || m.bytes)}`
-    + (t.geometry_ms != null ? `  ·  loaded in ${(t.geometry_ms / 1000).toFixed(1)} s` : "")
+    + (t.ready_ms != null ? `  ·  ready in ${(t.ready_ms / 1000).toFixed(1)} s` : "")
     + (t.built_here ? `  ·  built on the server in ${m.build_s.total} s` : "");
   s.title = `IfcOpenShell geometry: open ${m.build_s.open} s, tessellation ${m.build_s.geometry} s on ${m.threads} threads (cached per model). `
-    + `Browser: meta ${t.meta_ms} ms, first frame ${t.first_frame_ms} ms, all storeys ${t.geometry_ms} ms.`;
+    + `Browser: meta ${t.meta_ms} ms, first frame ${t.first_frame_ms} ms, all storeys ${t.geometry_ms} ms, first full frame ${t.full_render_ms} ms.`;
 }
 
 window.Viewer3D = {
