@@ -172,6 +172,64 @@ The tuner was then changed to score policies after the checks (`tools/tune_rooms
 images only, and test run once more (run 2, the numbers above; run 1 differed only for bedroom, 81.5%).
 Bathroom still regresses on test; turning the type off (`prefer: "off"`) is left open since it would be
 chosen from the test result.
+## 2026-11-14: Nemotron as a second opinion on scan estimates, branch `nemo-second`
+
+Question: where our CubiCasa count is only an estimate, does Nemotron's own count of the plan help? Earlier, on a
+50-question sample, Nemotron alone scored 66% against our 46%. Method (`tools/nemo_second.py`): our router
+(no Nemotron) on seeded CubiCasa drawings of one split, every English count question for door, window, kitchen,
+sink, shower_or_bath, sauna, bedroom; the answers with tier "estimate" are the sample (at most 43 per object, at most
+3 per drawing, hash order). Two ways of asking, both reasoning on, JSON reply: **A** the plan and the question;
+**B** our boxes drawn on the plan as numbered red boxes, "verify or correct, return the count and boxes".
+
+Per object, exact count, abstention or no reply counts as wrong (dev n=166 of 174 sampled: the rest had no usable
+reply after retries; test n=201 of 201):
+
+| object | dev n | dev ours | dev A | dev B | test n | test ours | test A |
+|---|---|---|---|---|---|---|---|
+| door | 20 | 55% | 20% | 50% | 36 | 36% | 11% |
+| window | 39 | 41% | 21% | 31% | 43 | 33% | 7% |
+| kitchen | 31 | 32% | 71% | 61% | 35 | 14% | 66% |
+| sink | 10 | 80% | 30% | 50% | 8 | 38% | 38% |
+| shower_or_bath | 10 | 40% | 30% | 30% | 16 | 44% | 69% |
+| sauna | 41 | 56% | 73% | 68% | 43 | 53% | 63% |
+| bedroom | 15 | 47% | 67% | 53% | 20 | 70% | 40% |
+| all | 166 | 48% | 48% | 51% | 201 | 39% | 39% |
+
+Policies tried on dev (ours alone; Nemotron alone; agree -> keep, disagree -> abstain; A and B agree -> take it;
+majority of ours, A, B; and so on) are in `out/second/dev/report.txt` (not committed). Findings:
+- Agreement is informative (ours = A: 76% right on dev) but abstaining on disagreement costs far more accuracy than
+  it buys precision; no abstain policy beat "ours" on accuracy for any object.
+- Variant B (our boxes as a hint) is no better than A on rooms (kitchen 61% vs 71%, sauna 68% vs 73% on dev) and
+  only less bad on doors and windows, where it stays below ours. A alone is simpler (no drawing) and better on rooms.
+- Doors and windows: Nemotron is clearly worse than the detector (A 20% / 21% on dev, 11% / 7% on test; paired
+  wins/losses against ours 1/8 and 4/12 on dev, 2/11 and 2/13 on test). It cannot count small symbols in a scan. Left alone.
+- Kitchens: Nemotron A wins clearly. Dev wins/losses against ours 13/1; test 19/1. Our kitchen estimates come from
+  room labels read by OCR, and an open kitchen with no label (or a stray "K") is what Nemotron reads correctly from the picture.
+- Saunas: dev 10/3, test 10/5 (p = 0.30 on test alone, about 0.04 pooled over dev and test): a smaller gain, kept.
+- Sinks, showers, bedrooms: no consistent sign (dev and test disagree), n is 8 to 20; left alone.
+
+**Chosen policy: kitchen and sauna take Nemotron A's count when it returns one, otherwise ours; everything else
+unchanged.** Dev choice, test confirmed once (policy fixed before the test requests were sent): all estimates
+in the sample 47.6% -> 59.0% on dev (23 wins, 4 losses), 39.3% -> 50.7% on test (29 wins, 6 losses). The objects
+were picked from the same dev sample they are measured on, so the dev gain is optimistic; the test gain is the
+number to quote, and it is on estimate answers only, not on all questions. Test per object: kitchen 14.3% -> 65.7%,
+sauna 53.5% -> 65.1%.
+
+Cost: one reasoning request per estimate: latency median 33-36 s, p90 100 s, mean 45 s per request on the free tier
+(about 5,500 completion tokens each, about $0.08 per question at the assumed $3 / $15 per million tokens; free
+in practice), with about 1.05 requests per question counting the retries when the reasoning ran out of tokens. 429 responses
+appear above about 10 requests in flight, and the client's retry gives up after six: failed requests are asked again
+by the tool. Too slow for an interactive answer; it is for batch evaluation.
+
+Implemented as `bpqa/second_opinion.py`, called from `bpqa/router.py` on the answer a route returns
+(`second_opinion.maybe`), off unless `NEMO_SECOND=1` (and key present, `NEMO_FALLBACK` not 0). It touches only
+estimate-tier raster count answers for the objects in `POLICY`; a replaced answer stays tier "estimate", route
+`<route>+nemotron`, confidence 0.7 (the measured dev precision, rounded down), and carries a
+`nemotron-second-opinion` check. Its evidence image still shows our room labels, and the tier reason says so.
+
+Measurement notes: sample is the estimate tier of 240 seeded dev drawings (partly run: the CPU detector took
+about a minute per drawing) and 110 test drawings (partly run), so n per object is 8 to 43 and the small objects
+are noisy. Reproduce: `python tools/nemo_second.py ours|pick|nemo|report --split dev|test`.
 
 ## 2026-11-14: raster area estimates and scan wall takeoff, branch `raster-area-est`
 

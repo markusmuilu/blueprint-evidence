@@ -22,6 +22,7 @@ from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
+from . import second_opinion
 from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_scale
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
@@ -161,7 +162,7 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         if a.answered and a.tier is None:
             a.tier = "proven"           # structured routes: the answer is derived from the file's own data
         if a.answered or a.checks:      # a check-abstained answer keeps its checks and evidence
-            return query, a
+            return query, second_opinion.maybe(ctx, query, a)   # opt-in (NEMO_SECOND=1), estimate answers only
         if a.final:                     # the drawing was read and does not carry the answer: no guessing
             return query, a
         if a.checks:                    # a check-abstained answer keeps its checks and evidence
