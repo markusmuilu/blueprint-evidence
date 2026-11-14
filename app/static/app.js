@@ -2853,6 +2853,20 @@ window.addEventListener("hashchange", async () => {
   if (moved) await selectDrawing(p.get("path"));
   if (p.get("mode") === "3d") setMode("3d");
   if (p.get("q") && (moved || p.get("q") !== $("#question").value)) { $("#question").value = p.get("q"); ask(); }
+  else if (!p.get("q") && !moved && state.askingQ) {
+    // Back pressed while the question is still answering: drop it, as a drawing switch does (Mac QA 14 Nov)
+    state.askTicket += 1;
+    abortAsk();
+    state.askingQ = null;
+    clearInterval(busyT);
+    $("#viewerBusy").hidden = true;
+    $("#askBtn").disabled = false;
+    $("#askBtn").removeAttribute("aria-busy");
+    state.answer = null;
+    renderAnswer(null);
+    showDrawing();
+    $("#question").value = "";
+  }
   else if (!p.get("q") && !moved && state.answer && !state.askingQ) {
     // Back to the drawing before a question was asked: show it without that answer (Mac QA 14 Nov)
     state.answer = null;
