@@ -509,6 +509,8 @@ def scope_sentence(tk: dict, labels) -> str:
     """Sentences about how the question's room word was read: a singular room type with several matching
     rooms (all summed), and combined rooms (whole area counted). '' when neither applies."""
     labels = list(labels)
+    if tk.get("all_rooms"):      # baseboard for every room: no single room type was asked
+        return ""
     parts = []
     if tk.get("single_type") and len(labels) > 1:
         t = _type_word(tk["types"][0])
@@ -526,6 +528,8 @@ def scope_sentence(tk: dict, labels) -> str:
 def scope_reason(tk: dict, labels) -> str:
     """Estimate-tier reason for those readings ('' when the answer stands as proven)."""
     labels = list(labels)
+    if tk.get("all_rooms"):
+        return ""
     why = []
     if tk.get("single_type") and len(labels) > 1:
         why.append(f"the question names one {_type_word(tk['types'][0])} but {len(labels)} rooms match; all are summed")
