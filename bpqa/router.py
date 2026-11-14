@@ -374,6 +374,11 @@ def _solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     if query.extra.get("takeoff"):
         from .takeoff import settle
         settle(query.extra["takeoff"], ctx.q.question)     # one waste number for every route and parser
+    if ctx.q.ext in RASTER_EXT and query.obj == "washbasin" and query.measure == "count":
+        # scans have one class for sinks and wash basins (CubiCasa "sinks and wash basins"), so "Waschbecken",
+        # "pesualtaita" and "handfat" count that class like the English question does (QA paraphrase test 14 Nov)
+        query.obj = "sink"
+        query.extra["obj_note"] = "wash basins counted with sinks: scans draw them as one kind of fixture"
     if ctx.q.ext in RASTER_EXT and query.obj != "scale" and sheet_plan.applies(ctx):
         # a large drawing sheet: read once at the resolution each step needs (bpqa/sheet.py); the scan routes below
         # were built for 2000 px images and would run out of memory on it

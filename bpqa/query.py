@@ -89,7 +89,9 @@ COUNT_ROOM_TYPES = {"bedroom": "bedroom", "kitchen": "kitchen", "bathroom": "bat
 # the object toilet with extra["toilet_ambiguous"]; each route applies its dataset's convention. A named
 # room ("toilet rooms", "restrooms", "WC-tila") is a WC room.
 WC_ROOM_WORDS = re.compile(r"\b(wc|toilet|toilette|toiletten)s?[ -]?(rooms?|til[aoe]\w*|raume?|raeume)\b|restrooms?|powder rooms?|"
-                           r"\bvesso|\bvessa(?!npont)|separate wc|erillis\w* wc|tualettruum|toalett ?rum|\bwc-?rum")
+                           r"\bvessa-?(?:huone|til[aoe])\w*|separate wc|erillis\w* wc|tualettruum|toalett ?rum|\bwc-?rum")
+# plain "vessa" (Finnish) means the toilet and the toilet room alike, so it is read like "toilets": the fixture by
+# each dataset's convention (QA paraphrase test 14 Nov); "vessahuone" / "vessatila" stay rooms
 STOREY_COUNT = re.compile(r"\b(floors|levels|storeys|stories|stockwerke|geschosse|etagen|vaningar|vaningarna)\b|"
                           r"\bhur manga plan\b|\bkerrosten\b|\bkerroksia\b")
 COUNT_BREAKDOWN = re.compile(r"\b(types?|distribut\w*|by|per|each|across|grouped|along|and what|and how)\b")
