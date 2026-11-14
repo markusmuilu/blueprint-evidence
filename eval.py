@@ -82,6 +82,7 @@ def main(argv=None):
     ap.add_argument("--no-checks", action="store_true", help="turn the checking layer off (for before/after numbers)")
     ap.add_argument("--pdf-only", action="store_true",
                     help="ignore DXF/IFC twins of PDFs: answer from the PDF itself (pdf-text, pdf-vector, raster)")
+    ap.add_argument("--nemo", action="store_true", help="turn the Nemotron fallbacks on (parse fallback and last-resort route); off by default so routine evals stay fast and free")
     ap.add_argument("--out", default=str(REPO / "out"))
     args = ap.parse_args(argv)
 
@@ -108,7 +109,7 @@ def main(argv=None):
 
     out = Path(args.out)
     ev_dir = out / "evidence"
-    tag = args.split + ("-prior" if args.prior else "") + ("-notiers" if args.no_tiers else "") + ("-nochecks" if args.no_checks else "") + ("-pdfonly" if args.pdf_only else "")
+    tag = args.split + ("-prior" if args.prior else "") + ("-notiers" if args.no_tiers else "") + ("-nochecks" if args.no_checks else "") + ("-pdfonly" if args.pdf_only else "") + ("-nemo" if args.nemo else "")
     if args.data:
         tag += "-" + Path(args.data).name
     if args.objects:
@@ -125,7 +126,7 @@ def main(argv=None):
     with open(run_dir / "answers.jsonl", "w", encoding="utf-8") as f:
         for i, q in enumerate(qs):
             ctx = Context(root=root, q=q, out_dir=ev_dir, evidence=args.evidence,
-                          checks=not args.no_checks, pdf_only=args.pdf_only)
+                          checks=not args.no_checks, pdf_only=args.pdf_only, nemotron=args.nemo)
             query, a = solve(ctx)
             if args.no_tiers and a.answered and a.tier == "estimate":
                 a.items = [{"would_answer": a.value}] + a.items

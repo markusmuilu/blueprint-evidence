@@ -22,7 +22,7 @@ the fallback, not the default.
 
 ```
 question --> rule parser (EN DE FR IT FI DA ET) --> typed query {measure, object, label, room, apartment, level}
-                       |                                   (LLM parser hook for questions the rules miss)
+                       |                                   (Nemotron parse fallback for questions the rules miss)
 drawing  --> router: cheapest route that can prove the answer
                1. dxf-geometry  DXF layers of the same drawing (Swiss Dwellings layer convention)
                   dxf-generic   any other DXF: AIA / ISO 13567 / plain-word layer and block names;
@@ -37,6 +37,11 @@ drawing  --> router: cheapest route that can prove the answer
           --> checking layer (raster answers): consistency checks across routes; a conflict makes an estimate
           --> answer JSON {value, unit, route, tier, tier_reason, uncertain, confidence, evidence, explanation,
                            items, checks}
+                                abstains where the count is not provable
+               5. nemotron      last resort only: a vision-language model reads the image and must return the
+                                value plus boxes of what it relied on; validated, drawn, tier "estimate"
+          --> checking layer (raster answers): consistency checks across routes; abstain on conflict
+          --> answer JSON {value, unit, route, confidence, tier, evidence, explanation, items, checks}
           --> evidence PNG: counted items boxed and numbered, measured rooms filled with their area
 ```
 
@@ -229,6 +234,74 @@ native resolution from the public `F1_original.png`, resized 2x (long side cappe
 into 1,024 px tiles with 192 px overlap (17,596 training tiles), and a `yolo26s` started from
 Ultralytics' pretrained weights. At inference the image gets the same resize and tiling; boxes found
 twice where tiles overlap are merged (same class, IoU >= 0.5 or the smaller box 60% inside the larger).
+
+### Nemotron
+
+NVIDIA Nemotron (`nvidia/nemotron-3.5-super-vl-120b-a12b`, a vision-language reasoning model, called
+through NVIDIA Build's OpenAI-compatible API) is used in three places. It is never the default, and
+nothing it says reaches an answer without a check.
+
+1. **Last-resort answer route** (`bpqa/routes/nemotron.py`, route name `nemotron-estimate`). It runs only
+   after every other route has abstained for that question: no DXF or IFC twin, no schedule, no vector
+   answer, the detector or OCR route abstained or a consistency check withdrew its answer. The drawing
+   (a PDF page rendered at 150 dpi, or the scan) is downscaled to 1600 px on the long edge and sent with
+   the question. The model must reply with one JSON object: the value, the regions of the drawing it
+   relied on as pixel bounding boxes, and one sentence on how it got the value.
+2. **Question-parse fallback** (`NemotronParser`, same file). When the rule parser (EN DE FR IT FI DA ET)
+   cannot map a question to the typed query, Nemotron is asked for the same typed query as JSON. The
+   schema is closed: measure, object, scope and variant come from fixed lists, and a room label, room
+   number, apartment letter or level name is accepted only if it appears in the question text. Reasoning
+   is switched off for this call (a short classification). Replies are cached by question text.
+3. **Naive baseline** (`tools/nemo_baseline.py`), a measurement and not part of the product: the same
+   model, a plain prompt that asks for just the number, no regions and no checks, on the same questions
+   our router answers. It exists to show what the structured routes add (see "Nemotron results" below).
+
+How the outputs are checked (`validate()` in `bpqa/routes/nemotron.py`):
+
+| check | rule |
+|---|---|
+| JSON | a JSON object must be found in the reply (code fences tolerated); otherwise abstain |
+| value | a finite, non-negative number; an integer for counts; areas between 0.5 and 5000 m2 |
+| regions | every region has a bbox of four finite numbers, positive size, inside the image (2% tolerance, then clipped) |
+| counts | one region per counted object, so `len(regions) == value`; more than 40 abstains (too many to check one by one); a counted object may not cover half the drawing |
+| areas, lengths, volumes | at least one region naming where the value comes from |
+| scope | whole-model questions ("in the model 'X'"), compound questions and unresolved scopes are never sent: one image cannot prove them |
+| failure | any failed check abstains with the reason (`invalid model output: ...`); the router then reports no answer, as before |
+
+A valid answer is marked `tier: "estimate"` in the answer JSON, with confidence 0.3 and the route name
+`nemotron-estimate`. Its evidence PNG draws the validated regions as numbered boxes on the drawing, under a
+header that says ESTIMATE and names the model, so a person can see at once whether the boxes sit on
+the objects. The evidence is for checking by eye; the route does not verify the boxes itself.
+
+Switches and cost: `NEMO_FALLBACK=0` turns both fallbacks off (default on, but they are reached only in
+the fallback cases above); `eval.py --no-nemo` does the same for a run. The API key is read from
+`NVIDIA_API_KEY` in the environment or in `.env` (git-ignored) and is never printed, logged or cached.
+Every response is cached on disk keyed by model, prompt and image hash, requests are throttled to about
+37 per minute with retry and backoff, and each answer records its token use and an estimated cost at an
+assumed list price (`NEMO_PRICE_IN`, `NEMO_PRICE_OUT`, default 3 and 15 USD per million tokens; an
+assumption, not a quote). On the NVIDIA Build free tier the real cost is 0.
+
+### Nemotron results
+
+Measured with the model as described above; details, per-object numbers and the exact setup are in
+`CHANGELOG.md` (section "Nemotron baseline and fallback route"). Preview TEST split, 150 questions, seeded
+sample (CubiCasa 50, Swiss counts 40, Swiss areas 30, IFC room areas 30):
+
+| | Nemotron, plain prompt (number only) | our router |
+|---|---|---|
+| accuracy, all 150 | 39.3% | 82.0% (100% on the 100 PDF questions with PDF only) |
+| CubiCasa counts | 66.0% | 46.0% (answers 27 of 50) |
+| Swiss counts / areas | 50.0% / 16.7% | 100% / 100% |
+| IFC room areas (plan PDF) | 3.3% | 100% |
+| median latency | 25 s (reasoning model) | seconds, local |
+| cost per question | about $0.10 at an assumed 3 / 15 USD per million input / output tokens, about $0.005 if the model answered without reasoning; free on NVIDIA Build | $0 |
+
+Used as the last-resort route on the preview dev questions that otherwise get no answer (1,327 eligible, a
+seeded sample of 200): 85% get a valid estimate and about half of all of them are correct, which raises dev
+accuracy from 64.8% to about 77% and lowers the precision of answered questions from about 92% to about 83%.
+Room-label questions on CubiCasa (bathrooms, kitchens, saunas, bedrooms) are mostly right; doors, windows,
+balconies and WC rooms are mostly wrong. Those answers are `tier: "estimate"` and the evidence image shows the
+boxes the model gave.
 
 ## Run it
 
@@ -461,6 +534,11 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
   cases abstain instead of answering.
 - The test split holds few drawings for some sources: ifc_models test is a single model (Esplanades,
   630 questions), so its 100% says the rules transfer to one unseen model, not to IFC in general.
+- Nemotron estimates are not proofs. On the dev abstentions about half are right, and doors, windows,
+  balconies and WC rooms on scans are mostly wrong. The model sees the drawing downscaled to 1600 px, its
+  boxes are checked for shape and count but not for position, and 23% of plain-prompt replies ran out of tokens
+  even at 16,384 (reasoning). The Nemotron numbers come from one 150-question test sample and a 200-question
+  dev sample, so each percentage carries several points of sampling error.
 - Compound and breakdown questions ("which types and how many of each", "on level 1" without quotes)
   abstain on purpose. Answering them with one number for the whole building was wrong every time.
 - Text answers (ifc_bench, some opening_design) are free-form; `eval.py` scores them approximately (all
@@ -481,8 +559,9 @@ ifc_models abstentions are the FZK-Haus plan PDF, whose IFC model is not in the 
 
 1. Detector: longer training, a larger model and tiled inference for the small fixtures; a shower and
    bathtub head that works; a counting policy for doors and windows that tolerates one uncertain box.
-2. A cheap vision-LLM route behind the router, called only when no structured route exists, with its
-   answer required to point at regions that are then drawn as evidence.
+2. Nemotron route: verify the boxes it returns (a second pass per box, or the detector on the cropped region)
+   so that a wrong estimate can be withdrawn instead of only drawn; reasoning latency is 60 to 100 s on dense
+   floors.
 3. Generalise the schedule parser (column detection from header words) to cover other door, window and
    finish schedules in the opening_design sets.
 

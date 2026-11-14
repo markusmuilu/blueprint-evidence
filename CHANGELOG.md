@@ -311,6 +311,119 @@ Full set, test split, all CubiCasa questions with the checking layer, final rout
 7,276 at 44.6%. Changes against the cubi2 + TTA column above: toilets 88.3%, sinks 78.7%, showers/baths
 76.0%, doors 55.4%, windows 46.4%, and bathrooms 87.9% (the shower check sees more showers). With the
 unchanged other sources: **all 39,807 full-set test questions 80.4% (before 63.7%)**.
+## 2026-11-14: Nemotron baseline and fallback route, branch `nemotron`
+
+Model: `nvidia/nemotron-3.5-super-vl-120b-a12b` (NVIDIA Build, free tier). Client `bpqa/nemotron.py` (disk
+cache keyed by model, prompt, image hash; throttled; retry with backoff; key read from `.env`, never
+logged). Everything below is reproducible from the cache in `out/nemo_cache/`.
+
+### 1. Naive AI baseline vs our router (preview TEST split, 150 questions)
+
+Sample (`tools/nemo_baseline.py`, seed 2026, same split function as `eval.py`): CubiCasa counts 50, Swiss counts
+40, Swiss areas 30, IFC room areas via the rendered plan PDF 30 (one model, one drawing: Esplanades); parsed
+object types round-robined, at most 3 questions per drawing (52 drawings). Whole-model IFC questions
+("in the model ...") were left out: no single image can answer them. Nemotron gets the drawing as one image
+(PDF page 1 at 150 dpi, long edge 1600 px) and the question with "Reply with just the number, no units and no
+explanation". The reply is parsed for a number; no number (or a reply cut off by the token limit) counts as
+wrong. Scoring is `eval.score` (counts exact, areas within 2%). Reasoning models spend most of their output on
+reasoning: with 4096 max tokens 78 of 150 replies were cut off, so those were asked again with 16384; 35 still
+ended without an answer. Only the final call's tokens and latency are counted.
+
+| source | type | n | Nemotron correct | Nemotron answered | ours (router) correct | ours answered | ours, PDF only | tokens in / out per q | latency median / mean | $ per q, measured tokens | $ per q, direct answer |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| cubicasa5k | count | 50 | 33 (66.0%) | 46 | 23 (46.0%) | 27 | - | 922 / 3273 | 10s / 25s | $0.052 | $0.0029 |
+| swiss_dwellings | count | 40 | 20 (50.0%) | 36 | 40 (100.0%) | 40 | 40/40 | 1858 / 4555 | 14s / 34s | $0.074 | $0.0057 |
+| swiss_dwellings | area | 30 | 5 (16.7%) | 16 | 30 (100.0%) | 30 | 30/30 | 1880 / 11012 | 102s / 77s | $0.171 | $0.0058 |
+| ifc_models | area | 30 | 1 (3.3%) | 17 | 30 (100.0%) | 30 | 30/30 | 2087 / 9542 | 61s / 73s | $0.149 | $0.0064 |
+| **all** | | 150 | **59 (39.3%)** | 115 | **123 (82.0%)** | 127 | 100/100 | 1596 / 6417 | 25s / 48s | $0.101 | $0.0049 |
+
+"Ours (router)" is the shipped router with DXF/IFC twins available, Nemotron fallback off, no `--prior`; it costs
+$0 per question and takes seconds (CubiCasa OCR is the slow part). "Ours, PDF only" is `--pdf-only` on the
+100 PDF questions, i.e. from the PDF alone, the closest to what Nemotron saw (CubiCasa images have no PDF
+form). Precision when Nemotron answers: CubiCasa 71.7%, Swiss 48.1%, IFC 5.9%. Nemotron's per-object result
+on CubiCasa (n = 4 to 5 each, so only a rough guide): storeys 4/4, toilets 4/4, bathrooms 5/5, kitchens 3/4,
+saunas 3/4, bedrooms 3/4, sinks 3/4, WC rooms 2/4, windows 2/4, showers/baths 2/4, balconies 2/5, doors 0/4;
+ours: storeys 4/4, WC rooms 4/4, kitchens 3/4, bathrooms 3/5, balconies 3/5, toilets 3/4, bedrooms 2/4,
+sinks 1/4, doors, windows, saunas and showers 0/4 (mostly abstentions). On Swiss floors Nemotron is good at
+apartments, rooms by label and bathtubs (5/5 each) and poor at doors (0/5), windows (1/5), washbasins
+(1/5), toilets (2/5) and areas.
+
+Cost on a paid frontier API at list price. ASSUMPTION: 3 USD per million input tokens and 15 USD per
+million output tokens (a mid-priced frontier model; not a quote, check the current price list, and image
+tokenisation differs between vendors). "Measured tokens" prices Nemotron's own token counts, reasoning
+included (6417 output tokens per question, so about $0.10 per question, $15 per 150 questions). "Direct
+answer" prices the same input tokens and 10 output tokens, which is what a non-reasoning model answering with a
+bare number would cost (about $0.005 per question). Our router: $0.000.
+
+What it shows: on this sample the plain vision model gets 39% where the router gets 82% (100% on everything
+that has a vector or model source), costs far more per question than our $0, and is slow when it reasons (a
+median of 25 s, up to minutes on dense floors). On CubiCasa scans, where our router abstains on half the
+questions, the plain model is ahead (66% vs 46% before any prior). The fallback below targets exactly that
+gap, with checks the plain prompt lacks. Full records: `out/baseline_nemotron.json` (committed with
+`git add -f`, `out/` is otherwise ignored).
+
+### 2. Nemotron fallback route (`bpqa/routes/nemotron.py`) and parse fallback
+
+Route `nemotron-estimate`: used only when every other route abstained (or a consistency check withdrew a raster
+answer). JSON with value, regions (bounding boxes in image pixels) and a one-line reading; `validate()`
+checks it (finite non-negative value, integer counts, areas within 0.5 to 5000 m2, boxes inside the image, one
+region per counted object and at most 40, at least one region for a measurement) and abstains on anything else;
+regions are drawn as numbered boxes; answer `tier: "estimate"`, confidence 0.3. Whole-model, compound and
+unresolved-scope questions are never sent. Switch: `NEMO_FALLBACK=0` or `eval.py --no-nemo`; default on, but
+only for the fallback cases. The router also uses `NemotronParser` when the rule parser returns no query.
+
+Measured on the preview DEV questions that abstain (`tools/nemo_fallback_eval.py`; test not used). The
+router without Nemotron answers 3732 of 5289 dev questions and abstains on 1557; 1327 of those are eligible
+for the route (numeric, one drawing, an image or PDF), 1300 of them CubiCasa. A seeded sample of 200 eligible
+questions, stratified by source and parsed object (round-robin, so the strata are not proportional), went
+through the full router:
+
+| | sample (200) | weighted to the 1327 eligible |
+|---|---|---|
+| valid estimate returned | 169 (84.5%) | about 1145 |
+| correct (counts exact, areas within 2%) | 86 (43.0% of the sample, 50.9% of the answered) | about 640 (48%, 95% interval about 41% to 56%) |
+| invalid output or no answer, abstained | 31 | about 180 |
+
+By object (CubiCasa part of the sample; n, valid, correct):
+
+| object | n | valid | correct |
+|---|---|---|---|
+| balcony | 15 | 13 | 3 |
+| bathroom | 15 | 13 | 11 |
+| bedroom | 15 | 11 | 9 |
+| door | 15 | 13 | 2 |
+| kitchen | 15 | 13 | 11 |
+| sauna | 15 | 13 | 12 |
+| shower_or_bath | 15 | 14 | 9 |
+| sink | 14 | 13 | 8 |
+| storey | 12 | 9 | 7 |
+| toilet | 14 | 9 | 7 |
+| wc_room | 14 | 12 | 3 |
+| window | 14 | 11 | 1 |
+
+Effect on the whole dev split, estimated from the sample: about 640 more correct answers, dev accuracy from
+64.8% to about 77%, and precision of answered questions from about 92% to about 83%. The fallback buys coverage
+and accuracy by answering questions the other routes could not prove, with answers that are right about half
+the time and are labelled as estimates. The strong cases are room-label questions (bathrooms 11/13,
+kitchens 11/13, saunas 12/13, bedrooms 9/11); doors (2/13), windows (1/11), WC rooms (3/12) and balconies (3/13)
+are mostly wrong and a caller should not rely on them. Invalid outputs were mainly replies with no JSON (the
+reasoning used the whole budget) and a few boxes outside the image. The boxes were not scored: the evidence
+images show that boxes often sit near the right objects while the count is off (`out/nemo_fallback/evidence/`).
+Mean estimated cost on the sample: $0.074 per question at the assumed prices.
+
+Question-parse fallback (`tools/nemo_parse_eval.py`, no reasoning, about 2 s per call): (A) on 80 dev questions
+the rule parser handles, in all languages, the typed query matches the rule parser's on 74 (92.5%); before
+normalising to the rule parser's conventions (a named room is obj "room" with the name in `label`, no variant
+on a named room, scope follows level) it was 64 of 80. (B) On 14 hand-written phrasings and languages the
+rules do not cover (Spanish, Swedish, Dutch, Portuguese, Finnish, "loos", "glazed openings", ...) the rule parser
+returns a query for 2 (1 correct); the fallback maps all 14 correctly. Those 14 were written by us and one
+of them guided the normalisation, so it is a smoke test, not a benchmark. (C) The 130 preview
+questions the rules leave unparsed are free-form IFC-Bench text questions about IFC files; the fallback maps 109
+to a valid query, but there is no image or route behind them, so nothing changes in the answers.
+
+Not done: the boxes are not verified (no second pass that checks each box with the model or a detector), the
+reasoning latency (a median of 60 to 100 s on dense floors) is too slow for interactive use, and 23% of
+baseline replies still ran out of tokens at 16384.
 
 ## 2026-11-14: pdf-vector route (answers from the PDF alone), branch `pdf-route`
 

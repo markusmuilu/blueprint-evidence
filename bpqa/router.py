@@ -5,10 +5,11 @@ Order of preference, cheapest and most verifiable first:
   2. the PDF text layer and its tables
   3. the PDF's own vector linework (pdf-vector), when no DXF/IFC twin exists or twins are ignored
   4. raster computer vision (classical, no model)
-  4. (future) a vision LLM, only when nothing above can answer
+  5. nemotron (bpqa/routes/nemotron.py): a vision-language model, only when nothing above can answer;
+     its answer must carry boxes of what it relied on, is validated and marked tier "estimate"
 
 A route returns an Answer or abstains with a reason; the router then tries the next route.
-Every route here costs $0 in model calls.
+Routes 1 to 4 cost $0 in model calls; route 5 is the only one that calls a model.
 """
 from __future__ import annotations
 
@@ -20,7 +21,8 @@ from . import checks as checking
 from .answer import Answer, abstain
 from .data import Question
 from .query import Query, parse
-from .routes import dxf_swiss, ifc_route, pdf_text, pdf_vector, raster
+from . import nemotron as nemo_client
+from .routes import dxf_swiss, ifc_route, nemotron, pdf_text, pdf_vector, raster
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -33,6 +35,7 @@ class Context:
     evidence: bool = True
     checks: bool = True          # run the checking layer on raster answers (bpqa/checks.py)
     pdf_only: bool = False       # ignore DXF/IFC twins: answer from the file itself (eval.py --pdf-only)
+    nemotron: bool = True        # Nemotron fallbacks (parse + last-resort route); also needs env NEMO_FALLBACK != 0
     tried: list = field(default_factory=list)
 
     @property
@@ -93,8 +96,11 @@ def candidate_routes(ctx: Context):
 
 def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     query = query or parse(ctx.q.question)
+    use_nemo = ctx.nemotron and nemo_client.enabled()
+    if not query.ok() and use_nemo:      # rule parser failed: ask Nemotron for the typed query (validated)
+        query = parse(ctx.q.question, fallback=nemotron.NemotronParser())
     if not query.ok():
-        return query, abstain("parser", "question not understood by the rule parser (LLM parser hook not enabled)")
+        return query, abstain("parser", "question not understood by the rule parser (Nemotron parse fallback off or its output invalid)")
     if query.extra.get("compound") or query.extra.get("unresolved_scope"):
         return query, abstain("parser", "compound question or unresolved scope; needs the text/LLM route")
     tk = query.extra.get("takeoff")
@@ -104,6 +110,7 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         if why:
             return query, abstain("takeoff", why)
     last = abstain("router", "no route for this file type")
+    held = None
     reasons = []
     if ctx.evidence and no_derivatives(ctx):
         ctx.evidence = False   # answer still given; the JSON items list is the evidence
@@ -122,6 +129,21 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
             a.tier = "proven"           # structured routes: the answer is derived from the file's own data
         if a.answered or a.checks:      # a check-abstained answer keeps its checks and evidence
             return query, a
+        if a.checks:                    # a check-abstained answer keeps its checks and evidence
+            if not use_nemo:
+                return query, a
+            held = a
+        reasons.append(f"{a.route}: {a.abstain}")
+    if use_nemo:                        # last resort: every route above abstained
+        try:
+            a = nemotron.answer(ctx, query)
+        except Exception as ex:
+            a = abstain("nemotron-estimate", f"error: {type(ex).__name__}: {ex}")
+        ctx.tried.append(a.route)
+        if a.answered:
+            return query, a
+        if held is not None:
+            return query, held
         reasons.append(f"{a.route}: {a.abstain}")
     if reasons:
         last.route, last.abstain = ctx.tried[0], "; ".join(reasons)
