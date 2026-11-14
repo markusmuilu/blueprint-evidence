@@ -642,3 +642,74 @@ def analyse(file: Path, regions: bool = True, progress=None) -> dict:
 def scale_of(d: dict) -> SheetScale:
     s = d["scale"]
     return SheetScale(s["ppm"], s["source"], s["strong"], s["detail"], s["ratio"], s["sheet"], s["bar"])
+
+
+# ================================================================ BEGIN scale-assumption (builder BC)
+# The person can change the printed ratio and sheet size behind a big sheet's scale after an answer ("1:[200] on
+# [A2]" in the Approximation box, or "scale 1:100 on A3" in the question). The rooms stay as traced at the scale
+# read from the sheet (tracing again at another scale would take minutes); their areas and lengths are converted
+# with the person's scale: lengths x k, areas x k^2, k = read px per m / your px per m.
+
+def editable_ratio(sc: SheetScale) -> bool:
+    """A ratio control makes sense where the scale came from a printed ratio and a sheet size."""
+    return bool(sc.ppm and sc.ratio and sc.ratio.get("denom") and sc.sheet and sc.source.startswith("printed ratio"))
+
+
+def assume_ppm(d: dict, sc: SheetScale, assume: dict | None) -> float | None:
+    """Pixels per metre for the person's ratio and sheet ({"ratio": 100, "sheet": "A3"}; either may be missing and
+    then the one read is kept), or None when the assumption does not apply to this sheet."""
+    if not assume or not editable_ratio(sc) or not ({"ratio", "sheet"} & set(assume)):
+        return None
+    denom = int(assume.get("ratio") or sc.ratio["denom"])
+    name = assume.get("sheet") or sc.sheet["name"]
+    return max(d["size"]) / ISO_MM[name][0] * 1000 / denom
+
+
+def assumed(d: dict, assume: dict | None) -> dict:
+    """The reading with the person's ratio and sheet applied: a copy whose room areas, perimeters and gross area are
+    converted and whose "scale" is the person's (the one read kept under "read_scale"). `d` itself when nothing
+    applies."""
+    sc = scale_of(d)
+    ppm = assume_ppm(d, sc, assume)
+    if ppm is None or abs(ppm - sc.ppm) < 1e-9:
+        return d
+    k = sc.ppm / ppm
+    denom = int(assume.get("ratio") or sc.ratio["denom"])
+    name = assume.get("sheet") or sc.sheet["name"]
+    labels = []
+    for l in d["labels"]:
+        l = dict(l)
+        if l.get("area_m2") is not None:
+            l["area_m2"] = round(l["area_m2"] * k * k, 2)
+        if l.get("perimeter_m") is not None:
+            l["perimeter_m"] = round(l["perimeter_m"] * k, 2)
+        labels.append(l)
+    d2 = {**d, "labels": labels}
+    if d.get("gross_m2") is not None:
+        d2["gross_m2"] = round(d["gross_m2"] * k * k, 1)
+    L, S = ISO_MM[name]
+    read = f"1:{sc.ratio['denom']} on {sc.sheet['name']}"
+    sheet = {**sc.sheet, "name": name, "mm": (L, S), "px_per_mm": max(d["size"]) / L}
+    detail = (f"your scale 1:{denom} on {name} (read on the sheet: {read}, {sc.ppm:.1f} px per m) -> {ppm:.1f} px per m; "
+              f"rooms traced at the read scale, their areas x {k * k:.3f} and lengths x {k:.3f}")
+    sc2 = SheetScale(ppm, "your ratio and sheet size", False, detail, {**sc.ratio, "denom": denom}, sheet, sc.bar)
+    d2["scale"], d2["read_scale"] = sc2.as_dict(), d["scale"]
+    return d2
+
+
+def read_scale(d: dict) -> SheetScale:
+    """The scale read on the sheet, also when the person set another (the detector runs at its resolution)."""
+    return scale_of({"scale": d.get("read_scale") or d["scale"]})
+
+
+def assume_payload(d: dict) -> dict | None:
+    """What the app needs to show "1:[200] on [A2]" and rescale at once: the ratio and sheet in use, the ones read,
+    and the image's long side (px per paper mm of any sheet size = long side / sheet long side)."""
+    sc, read = scale_of(d), read_scale(d)
+    if not editable_ratio(read):
+        return None
+    return {"kind": "ratio", "ratio": sc.ratio["denom"], "sheet": sc.sheet["name"],
+            "read_ratio": read.ratio["denom"], "read_sheet": read.sheet["name"], "px_per_m": sc.ppm,
+            "read_px_per_m": read.ppm, "long_px": max(d["size"]), "sheets": {n: ISO_MM[n][0] for n in ISO_MM},
+            "assumed": bool(d.get("read_scale"))}
+# ================================================================ END scale-assumption (builder BC)

@@ -3,6 +3,32 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: scale assumption, branch `scale-assumption`
+
+An approximation (a scan with no printed areas, or a big sheet scaled from its printed ratio) now shows the size
+it rests on as a control (idea from Taavi, Stoa's CPO): "Scale from 7 doors, assumed [0.84] m wide" with a slider
+(0.70 to 1.20 m), one row per object class used (WC pans 0.55 to 0.95 m, bathtubs 1.40 to 2.00 m), or
+"1:[200] on [A2]" on a big sheet. A change rescales the answer at once in the app (areas x k^2, lengths and wall
+areas x k, waste recomputed on the new net), then 600 ms after the last change the server measures again with
+`assume` on `/api/ask` and its answer, evidence and Steps card replace the preview.
+
+- **Mixed objects.** The scale is the median of all candidates, each with the size of its class, so the app
+  recomputes that median from the per-object candidates in the answer (`approx.assume.candidates`). On
+  high_quality-10241 (7 doors, 1 WC pan) a WC pan length alone does not move the scale; the box says so.
+- **Preview and recompute differ a little** because the server picks the wall-gap setting nearest the new scale:
+  10241 bedrooms 14.71 m2, door 0.90 m preview 16.58, recompute 16.73; bathroom tiling 40.64, preview 43.75,
+  recompute 43.76. Big sheet (school plan, 1:200 on A2 read), 1:100 on A3: classrooms 354.7, preview 44.33,
+  recompute 44.3 (the rooms keep the outlines traced at the read scale; only the conversion changes).
+- **In the question.** "if the doors are 0.9 m wide", "assuming 90 cm doors", "the WC is 0.7 m long", "scale
+  1:100 on A3" (and "jos ovet ovat 0,9 m leveitä") set the same assumption (`takeoff.parse_assumption`), read in
+  `router.solve` before the question is parsed and removed from it, so "doors" in the clause does not turn an area
+  question into a door count; the language-model reader sees the question without the clause. A value set in
+  the box replaces one said in the question. "how many doors are 0.9 m wide" is not read as an assumption.
+- Printed door sizes (9x21) are read, not assumed: no control, and an assumed door width there is reported as
+  not used. Proven answers (printed areas, CAD, IFC, vector PDFs) carry no `approx` and show nothing.
+- The CSV (single answer and Ask several) has a `scale_assumption` column, and Save correction records it.
+  Answer cache version 6.
+
 ## 2026-11-14: question understanding round 3, branch `phrasing-3`
 
 Final evaluation uses unseen drawings and harder questions. Four changes, kept out of the rule parser files

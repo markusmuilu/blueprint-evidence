@@ -794,8 +794,9 @@ class PlanAreas:
                 f"{'do' if self.printed_n > 1 else 'does'} not give a scale (no 2 agree with their traced rooms)")
 
 
-@lru_cache(maxsize=4)
-def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
+@lru_cache(maxsize=8)
+def analyse(path: str, allow_run: bool = True, assume: tuple = ()) -> PlanAreas | None:
+    """`assume`: object sizes the person set (scale_objects.assume_key), used only by an object scale."""
     f = Path(path)
     orient, toks, extra = plan_tokens(f, allow_run=allow_run)
     img = cv2.imread(str(f))
@@ -808,7 +809,7 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
     hyps = hypotheses(img, toks, proto, others, mode="walls")   # walls beat lines and auto on dev (CHANGELOG)
     name, rooms, sc = choose(hyps)
     if not sc.known and OS.ENABLED:     # no printed-area scale: printed door sizes, then standard objects (scale_objects.py)
-        on, orooms, osc = OS.object_scale(f, hyps, allow_run, mirror=orient[0])
+        on, orooms, osc = OS.object_scale(f, hyps, allow_run, mirror=orient[0], assume=dict(assume))
         name, rooms, sc = (on, orooms, osc) if orooms is not None else (name, rooms, sc)
         if orooms is not None and STROKE_MERGE:
             merge_stroke(hyps, on, orooms, 1 / float(np.sqrt(sc.m2_per_px)))
@@ -955,7 +956,8 @@ def takeoff_answer(ctx, q, img):
     from PIL import Image
 
     tk = q.extra["takeoff"]
-    pa = analyse(str(ctx.file))
+    akey = OS.assume_key(getattr(ctx, "assume", None))      # scale-assumption: object sizes the person set
+    pa = analyse(str(ctx.file), assume=akey) if akey else analyse(str(ctx.file))
     if pa is None:
         return abstain(ROUTE, "image or OCR unavailable")
     from .labels import find_rooms
@@ -1157,7 +1159,8 @@ def takeoff_answer(ctx, q, img):
                       "objects": [{"tag": c.get("tag"), "label": OS.obj_label(c), "xyxy": [round(v, 1) for v in c["xyxy"]]}
                                   for c in sc.objects],
                       "rooms": [{"label": r["label"], "area_m2": round(r["area"], 2),
-                                 "typical_error": OS.typical_error(r["area"], sc)} for r in meas_rows]}
+                                 "typical_error": OS.typical_error(r["area"], sc)} for r in meas_rows],
+                      "assume": OS.assume_payload(sc, getattr(ctx, "assume", None))}      # scale-assumption: candidates and sizes for the app
 
     if ctx.evidence:
         cv = ImageCanvas(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))

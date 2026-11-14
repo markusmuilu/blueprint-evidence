@@ -627,3 +627,80 @@ def fallback_reason(tk: dict) -> str:
     if tr["confirmed"] and tr.get("unknown"):
         how += f"; {len(tr['unknown'])} bathroom(s) with nothing drawn inside used on the label alone"
     return "interpretation: no separate WC room, so 'toilets' read as the rooms that contain a toilet (" + how + ")"
+
+
+# ================================================================ BEGIN scale-assumption (builder BC)
+# A size assumption said in the question ("how big are the bedrooms if the doors are 0.9 m wide", "kitchen area,
+# scale 1:100 on A3", "the WC is 0.7 m long"): the same assumption the Approximation box sets. router.solve reads it
+# before the question is parsed and removes the clause, so the parser (rules and the language-model reader) sees
+# only the question itself ("doors" in the clause must not turn an area question into a door count).
+# The clause must open after a condition word (if, assuming, with, given ...) or a clause boundary (start, comma,
+# semicolon, "and"): "how many doors are 0.9 m wide" asks something and is not read as an assumption.
+
+_NUM = r"(\d+(?:[.,]\d+)?)"
+_UNIT = r"(mm|cm|m|metres?|meters?|millimet(?:re|er)s?|centimet(?:re|er)s?)\b"
+_LEAD = (r"(?:^|[,;:(]\s*|[.?!]\s+|\s(?:and|if|assuming|assume|supposing|suppose|given|with|when|where|taking|at|"
+         r"jos|kun|oletetaan|oletuksella|olettaen)\s+)")
+_BE = r"(?:\s+(?:are|is|were|was|be|on|ovat|ovat?)|\s*=)?(?:\s+(?:assumed|taken|set)(?:\s+(?:to\s+be|as|at))?)?(?:\s+(?:about|around|n\.?))?\s+"
+_OBJ_RE = {
+    "door_m": re.compile(_LEAD + r"(?:(?:that|the|all)\s+)?(?:door\s+openings?|doorways?|doors?|door\s+widths?|"
+                         r"oviaukot|oviaukko|ovet|ovi|ovien\s+leveys)(?:\s+widths?)?" + _BE + _NUM + r"\s*" + _UNIT
+                         + r"(?:\s+(?:wide|in\s+width|leveit[aä]|leve[aä]t?))?", re.I),
+    "wc_m": re.compile(_LEAD + r"(?:(?:that|the|all)\s+)?(?:wc\s+pans?|toilet\s+(?:bowls?|pans?)|wcs?|toilets?|"
+                       r"wc-istuimet|wc-istuin|pöntöt|pönttö)(?:\s+lengths?)?" + _BE + _NUM + r"\s*" + _UNIT
+                       + r"(?:\s+(?:long|in\s+length|pitk[aä]t?|pitki[aä]))?", re.I),
+    "bath_m": re.compile(_LEAD + r"(?:(?:that|the|all)\s+)?(?:bath\s*tubs?|baths?|tubs?|ammeet|amme)(?:\s+lengths?)?"
+                         + _BE + _NUM + r"\s*" + _UNIT + r"(?:\s+(?:long|in\s+length|pitk[aä]t?|pitki[aä]))?", re.I),
+}
+_RATIO_RE = re.compile(_LEAD + r"(?:(?:the|a)\s+)?(?:(?:scale|mittakaava)(?:\s+(?:is|of|=|on))?\s*(?:assumed\s+)?|(?<=at ))"
+                       r"1\s*:\s*(\d{1,4})(?:\s*(?:on|at|in|,)?\s*(?:an?\s+)?(?:sheet\s+|paper\s+)?(A[0-4])\b(?:\s+(?:sheet|paper))?)?",
+                       re.I)
+# "assuming 90 cm doors", "with 0.9 m wide doors": the size before the noun
+_OBJ_PRE = {"door_m": re.compile(_LEAD + r"(?:(?:the|all)\s+)?" + _NUM + r"\s*" + _UNIT + r"(?:\s+wide)?\s+(?:door\s+openings?|doorways?|doors?)\b", re.I)}
+_SHEET_RE = re.compile(_LEAD + r"(?:(?:the|a)\s+)?(?:sheet|paper)(?:\s+size)?(?:\s+(?:is|=))?\s+(?:an?\s+)?(A[0-4])\b", re.I)
+
+
+def _metres(num: str, unit: str) -> float:
+    v = float(num.replace(",", "."))
+    u = unit.lower()
+    return v / 1000 if u.startswith("mm") or u.startswith("millim") else v / 100 if u.startswith("c") else v
+
+
+def _cut(text: str, m) -> str:
+    """The text without the matched clause; a sentence end the clause opened with stays (\"area? The WC ...\")."""
+    keep = m.group(0)[0] if m.group(0)[:1] in ".?!" else ""
+    return text[:m.start()] + keep + text[m.end():]
+
+
+def parse_assumption(question: str) -> tuple[dict, str]:
+    """({"door_m": 0.9, "wc_m": .., "bath_m": .., "ratio": 100, "sheet": "A3"}, the question without the clause).
+    Sizes out of range (scale_objects.ASSUME) are not read, so the question is left as it was."""
+    from .scale_objects import ASSUME
+    said, rest = {}, question
+    for key, rx in _OBJ_RE.items():
+        m = rx.search(rest) or (_OBJ_PRE[key].search(rest) if key in _OBJ_PRE else None)
+        if not m:
+            continue
+        v = round(_metres(m.group(1), m.group(2)), 2)
+        if not ASSUME[key]["lo"] <= v <= ASSUME[key]["hi"]:
+            continue
+        said[key] = v
+        rest = _cut(rest, m)
+    m = _RATIO_RE.search(rest)
+    if m and 10 <= int(m.group(1)) <= 5000:
+        said["ratio"] = int(m.group(1))
+        if m.group(2):
+            said["sheet"] = m.group(2).upper()
+        rest = _cut(rest, m)
+    m = _SHEET_RE.search(rest)
+    if m and "sheet" not in said:
+        said["sheet"] = m.group(1).upper()
+        rest = _cut(rest, m)
+    if not said:
+        return {}, question
+    rest = re.sub(r"\s+([?.!,])", r"\1", re.sub(r"\s{2,}", " ", rest)).strip(" ,;:")
+    rest = re.sub(r"\b(if|assuming|and|with|given|when|jos)\s*([?.!]?)$", r"\2", rest, flags=re.I).strip(" ,;:")
+    if not re.findall(r"\w+", rest):          # nothing left to ask: keep the question whole
+        return said, question
+    return said, rest
+# ================================================================ END scale-assumption (builder BC)

@@ -38,6 +38,7 @@ from bpqa.data import Question
 from bpqa.router import Context, solve
 
 from bpqa.evidence import marks_path
+from bpqa.scale_objects import norm_assume
 
 from . import costs
 from . import precompute
@@ -56,7 +57,7 @@ PREVIEW_CACHE = APP_OUT / "preview"
 UPLOADS = Path(tempfile.gettempdir()) / "blueprint-evidence" / "uploads"
 UPLOAD_EXT = {"pdf", "dxf", "ifc", "png", "jpg", "jpeg", "tif", "tiff", "svg", "dwg"}
 MAX_UPLOAD = 200 * 1024 * 1024
-CACHE_VERSION = "5"       # 5: approximations on scans without printed areas (approx field); 4: wall openings z0_m / z1_m
+CACHE_VERSION = "6"       # 6: approx.assume (scale assumption controls); 5: approximations on scans without printed areas (approx field); 4: wall openings z0_m / z1_m
 
 for d in (EVIDENCE_DIR, RENDER_DIR, ANSWER_CACHE, PREVIEW_CACHE, UPLOADS):
     d.mkdir(parents=True, exist_ok=True)
@@ -308,6 +309,8 @@ def why(a: dict, query: dict, ext: str) -> list[dict]:
     out = []
     route = a.get("route") or ""
     out.append({"kind": "method", "text": ROUTES.get(route, (route, f"Route {route}."))[1]})
+    if assume_text(a):                         # scale-assumption: the size the approximation used, said up front
+        out.append({"kind": "assume", "text": assume_text(a)})
     q = {k: v for k, v in query.items() if k in ("measure", "obj", "scope", "level", "room", "apartment", "lang", "parser")}
     ex = query.get("extra") or {}
     if query.get("parser") == "llm" and ex.get("reading") and route != "parser":
@@ -365,10 +368,11 @@ def _evidence_geometry(ev: Path, src: Path | None) -> dict:
     return geo
 
 
-def _cache_key(root: Path, rel: str, question: str, pdf_only: bool) -> str:
+def _cache_key(root: Path, rel: str, question: str, pdf_only: bool, assume: dict | None = None) -> str:
     f = root / rel
     st = f.stat()
-    raw = json.dumps([CACHE_VERSION, str(f), st.st_size, int(st.st_mtime), question.strip(), pdf_only])
+    raw = json.dumps([CACHE_VERSION, str(f), st.st_size, int(st.st_mtime), question.strip(), pdf_only]
+                     + ([sorted(assume.items())] if assume is not None else []))     # scale-assumption
     return hashlib.sha1(raw.encode()).hexdigest()[:20]
 
 
@@ -377,6 +381,8 @@ class AskBody(BaseModel):
     question: str
     pdf_only: bool = False
     refresh: bool = False
+    # scale-assumption: sizes / ratio set in the Approximation box, e.g. {"door_m": 0.9} or {"ratio": 100, "sheet": "A3"}
+    assume: dict | None = None
 
 
 @app.post("/api/ask")
@@ -387,7 +393,8 @@ def ask(body: AskBody):
     if len(question) > 1000:
         raise HTTPException(400, "question longer than 1000 characters")
     root, rel = resolve(body.path)
-    key = _cache_key(root, rel, question, body.pdf_only)
+    assume = norm_assume(body.assume)          # scale-assumption: validated, None when not given
+    key = _cache_key(root, rel, question, body.pdf_only, assume)
     cached = ANSWER_CACHE / f"{key}.json"
     if cached.exists() and not body.refresh:
         rec = json.loads(cached.read_text(encoding="utf-8"))
@@ -397,7 +404,7 @@ def ask(body: AskBody):
             return rec
 
     q = Question(qid=-1, path=rel, question=question)
-    ctx = Context(root=root, q=q, out_dir=RENDER_DIR, evidence=True, pdf_only=body.pdf_only)
+    ctx = Context(root=root, q=q, out_dir=RENDER_DIR, evidence=True, pdf_only=body.pdf_only, assume=assume)
     # an upload still being read in the background: wait, outside the solve lock, for the part this question needs
     waited_s = precompute.wait_for(body.path, question) if body.path.startswith("upload:") else 0.0
     with SOLVE_LOCK:
@@ -448,7 +455,7 @@ def ask(body: AskBody):
         "path": body.path, "drawing": drawing_label(body.path, root, rel), "question": question, "query": qd,
         "value": a.get("value"), "unit": a.get("unit") or "", "route": a.get("route"),
         "confidence": a.get("confidence"), "abstain": a.get("abstain"), "explanation": a.get("explanation"),
-        "approx": a.get("approx"),
+        "approx": a.get("approx"), "assume": assume_used(a, ctx, qd),
         "checks": a.get("checks") or [], "items": a.get("items") or [], "cost_usd": (a.get("cost_usd") or 0.0) + parse_usd,
         "evidence_id": ev_id, "evidence_geometry": geo, "tried": list(ctx.tried),
         "status": status, "status_rule": rule,
@@ -463,6 +470,43 @@ def ask(body: AskBody):
     }
     cached.write_text(json.dumps(rec, ensure_ascii=False, default=str), encoding="utf-8")
     return JSONResponse(json.loads(json.dumps(rec, ensure_ascii=False, default=str)))
+
+
+# ---------------------------------------------------------------- BEGIN scale-assumption (builder BC)
+NAMES = {"door_m": ("door width", "door openings"), "wc_m": ("WC pan length", "WC pans"), "bath_m": ("bathtub length", "bathtubs")}
+
+
+def assume_used(a: dict, ctx, qd: dict) -> dict | None:
+    """The assumption this answer used: {"door_m": 0.9, ..., "said_in": "question" | "box"}, or None. Only an
+    approximation uses one (printed areas and vector drawings never do)."""
+    ap = (a.get("approx") or {}).get("assume") or {}
+    if ap.get("kind") == "objects":
+        used = {k: v for k, v in (ap.get("assumed") or {}).items() if v != (ap.get("defaults") or {}).get(k)}
+    elif ap.get("kind") == "ratio" and ap.get("assumed"):
+        used = {"ratio": ap["ratio"], "sheet": ap["sheet"]}
+    else:
+        return None
+    if not used:
+        return None
+    said = (qd.get("extra") or {}).get("assume_said") or {}
+    return {**used, "said_in": "question" if said and all(said.get(k) == v for k, v in used.items()) else "box"}
+
+
+def assume_text(a: dict) -> str:
+    """'Scale assumption: door openings 0.90 m wide (your value; default 0.84 m).' for the Why list."""
+    ap = (a.get("approx") or {}).get("assume") or {}
+    if ap.get("kind") == "objects":
+        bits = [f"{NAMES[k][1]} {v:.2f} m (your value; default {ap['defaults'][k]:.2f} m)"
+                for k, v in (ap.get("assumed") or {}).items() if k in NAMES and v != ap["defaults"].get(k)]
+        ign = ap.get("ignored") or []
+        if ign:
+            bits.append(f"{', '.join(NAMES[k][0] for k in ign if k in NAMES)} not used: {ap.get('ignored_why', '')}")
+        return ("Scale assumption: " + "; ".join(bits) + ".") if bits else ""
+    if ap.get("kind") == "ratio" and ap.get("assumed"):
+        return (f"Scale assumption: 1:{ap['ratio']} on {ap['sheet']} (your value; read on the sheet: "
+                f"1:{ap['read_ratio']} on {ap['read_sheet']}). Rooms keep the outlines traced at the read scale.")
+    return ""
+# ---------------------------------------------------------------- END scale-assumption (builder BC)
 
 
 class WitnessBody(BaseModel):
@@ -532,7 +576,7 @@ def witnesses(body: WitnessBody):
 
 CORRECTIONS = APP_OUT / "corrections.jsonl"
 CORR_COLS = ["at", "drawing", "question", "route", "status", "answer_value", "corrected_value", "unit", "removed", "added",
-             "evidence_id"]
+             "evidence_id", "scale_assumption"]
 
 
 class CorrectionBody(BaseModel):
@@ -547,6 +591,7 @@ class CorrectionBody(BaseModel):
     removed: list = []        # item numbers struck out ("not this one")
     added: list = []          # [{x, y}] points clicked on the evidence image, body pixels
     evidence_id: str | None = None
+    scale_assumption: str = ""     # scale-assumption: e.g. "door 0.90 m (default 0.84 m)"; empty when none
 
 
 @app.post("/api/corrections")

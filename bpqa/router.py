@@ -46,6 +46,9 @@ class Context:
     pdf_only: bool = False       # ignore DXF/IFC twins: answer from the file itself (eval.py --pdf-only)
     nemotron: bool = True        # Nemotron fallbacks (parse + last-resort route); also needs env NEMO_FALLBACK != 0
     tried: list = field(default_factory=list)
+    # scale-assumption: object sizes / printed ratio the person set for an approximation (scale_objects.norm_assume);
+    # None: none set, so a size said in the question applies; a dict (even empty) replaces what the question says
+    assume: dict | None = None
 
     @property
     def file(self) -> Path:
@@ -207,7 +210,8 @@ def _composite(ctx: Context) -> tuple[Query, Answer] | None:
 
     def solve_q(text: str, q: Query | None):
         sub = Context(root=ctx.root, q=Question(qid=ctx.q.qid, path=ctx.q.path, question=text), out_dir=ctx.out_dir,
-                      evidence=ctx.evidence, checks=ctx.checks, pdf_only=ctx.pdf_only, nemotron=ctx.nemotron)
+                      evidence=ctx.evidence, checks=ctx.checks, pdf_only=ctx.pdf_only, nemotron=ctx.nemotron,
+                      assume=ctx.assume)          # scale-assumption: the parts use the same sizes
         r = solve(sub, q)
         ctx.tried.extend(t for t in sub.tried if t not in ctx.tried)
         return r
@@ -219,6 +223,7 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     import time
     t0 = time.perf_counter()
     given = query is not None
+    said = _read_assumption(ctx) if not given else {}      # scale-assumption: before the question is read
     if not given:
         comp = _composite(ctx)
         if comp is not None:
@@ -234,7 +239,27 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         a.value = round(a.value, 2)     # areas are stated to the centimetre squared (QA 14 Nov: "536.718")
     if a.answered and query.extra.get("scope_resolved"):
         a.explanation = f"{query.extra['scope_resolved']}. {a.explanation or ''}".strip()
+    if said:
+        query.extra["assume_said"] = said      # scale-assumption: what the question said
     return query, a
+
+
+# ---------------------------------------------------------------- BEGIN scale-assumption (builder BC)
+def _read_assumption(ctx: Context) -> dict:
+    """A size or scale assumption said in the question (takeoff.parse_assumption) is taken out of the question the
+    parser and routes see, and becomes ctx.assume unless the request already set one (the Approximation box)."""
+    from dataclasses import replace
+    from .takeoff import parse_assumption
+    from .scale_objects import norm_assume
+    said, rest = parse_assumption(ctx.q.question)
+    said = norm_assume(said) or {}
+    if said:
+        if rest != ctx.q.question:
+            ctx.q = replace(ctx.q, question=rest)
+        if ctx.assume is None:
+            ctx.assume = said
+    return said
+# ---------------------------------------------------------------- END scale-assumption (builder BC)
 
 
 # The ground floor named without quotes on a plan sheet whose storey is the ground floor: the sheet's own storey

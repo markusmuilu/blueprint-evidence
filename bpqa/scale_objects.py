@@ -77,7 +77,7 @@ def candidates(dets_by_policy: dict, objects: dict | None = None) -> list[dict]:
             if lo <= 0 or hi < 4 or hi / lo < o["min_aspect"]:
                 continue
             out.append({"cls": cls, "conf": d["conf"], "xyxy": list(d["xyxy"]), "px": float(hi),
-                        "m_per_px": o["metres"] / float(hi)})
+                        "metres": o["metres"], "m_per_px": o["metres"] / float(hi)})   # metres: the size used (scale-assumption)
     return out
 
 
@@ -301,7 +301,7 @@ def obj_label(c: dict) -> str:
     """'door 0.84 m' (assumed size) or 'door 9x21 = 0.86 m' (printed module, box width it implies)."""
     if c["cls"] == "door_module":
         return f"door {c['text']} = {c['metres']:.2f} m"
-    return f"{OBJECTS[c['cls']]['name'].replace(' opening', '')} {OBJECTS[c['cls']]['metres']:.2f} m"
+    return f"{OBJECTS[c['cls']]['name'].replace(' opening', '')} {_m(c):.2f} m"
 
 
 def tag_range(used: list[dict], cls: str) -> str:
@@ -324,7 +324,7 @@ def summary(used: list[dict]) -> str:
     for cls, o in OBJECTS.items():
         n = sum(1 for c in used if c["cls"] == cls)
         if n:
-            parts.append(f"{n} {o['name']}{'s' if n > 1 else ''} ({o['metres']:.2f} m)")
+            parts.append(f"{n} {o['name']}{'s' if n > 1 else ''} ({metres_of(used, cls):.2f} m{YOURS if is_yours(used, cls) else ''})")
     return ", ".join(parts)
 
 
@@ -343,7 +343,8 @@ def scale_short(sc) -> str:
     for cls, o in OBJECTS.items():
         n = sum(1 for c in used if c["cls"] == cls)
         if n:
-            bits.append(f"{n} {NOUN[cls][3] if n > 1 else NOUN[cls][0].split()[0]} x {o['metres']:.2f} m")
+            bits.append(f"{n} {NOUN[cls][3] if n > 1 else NOUN[cls][0].split()[0]} x {metres_of(used, cls):.2f} m"
+                        + (YOURS if is_yours(used, cls) else ""))
     return " + ".join(bits)
 
 
@@ -363,13 +364,15 @@ def scale_sentence(sc) -> str:
             n = sum(1 for c in used if c["cls"] == cls)
             if n:
                 noun, plural, dim, _, ref = NOUN[cls]
-                bits.append(f"{n} {plural if n > 1 else noun} assumed {o['metres']:.2f} m {dim} "
+                bits.append(f"{n} {plural if n > 1 else noun} assumed {metres_of(used, cls):.2f} m {dim} "
+                            + (f"(your value, default {o['metres']:.2f} m) " if is_yours(used, cls) else "")
+                            + 
                             f"({(ref if n > 1 else ref.rstrip('s ') + ' ') if ref else ''}{tag_range(used, cls)})")
         what = ", ".join(bits)
     return f"Scale from {what}, {ppm:.0f} px per m, spread {sc.spread:.0%}."
 
 
-def object_scale(file, hyps, allow_run: bool = True, mirror: bool = False):
+def object_scale(file, hyps, allow_run: bool = True, mirror: bool = False, assume: dict | None = None):
     """(region set name, rooms, Scale) from printed door modules (source b) or, failing that, standard objects
     (source c); (None, None, why) when neither agrees. Called by raster_area.analyse only when the printed areas
     gave no scale. Scale.source is "modules" or "objects", Scale.objects the tagged objects that set it."""
@@ -379,7 +382,7 @@ def object_scale(file, hyps, allow_run: bool = True, mirror: bool = False):
     why = []
     for source in ("modules", "objects"):
         comb = (combine_modules(module_candidates(mods, dets.get("door") or [])) if source == "modules"
-                else combine(candidates(dets)))
+                else combine(candidates(dets, objects_with(assume))))
         if not comb.known:
             why.append(("printed door sizes: " if source == "modules" else "standard objects: ") + comb.why)
             continue
@@ -398,6 +401,9 @@ def object_scale(file, hyps, allow_run: bool = True, mirror: bool = False):
             detail += f" ({'; '.join(why)})"
         sc = Scale(comb.m_per_px ** 2, [], comb.iqr, f"{source} ({name})", detail)
         sc.objects, sc.source = used, source
+        # scale-assumption: the sizes the person set that this scale used (a printed door size is not assumed)
+        sc.assumed = {k: v for k, v in (assume or {}).items() if k in ASSUME and source == "objects"
+                      and any(c["cls"] == ASSUME[k]["cls"] for c in used)}
         return name, rooms, sc
     return None, None, "; ".join(why)
 
@@ -478,7 +484,7 @@ def draw(cv, sc, color, record=True):
         rect = (x0 - 2, y0 - 2, x1 + 2, y1 + 2)
         # short label on the drawing (the tag and the size); the full one is in the marks and the Steps card
         txt = (f"{c.get('tag', '')} {c['text']} = {c['metres']:.2f} m" if c["cls"] == "door_module" else
-               f"{c.get('tag', '')} {OBJECTS[c['cls']]['name'].replace(' opening', '')} {OBJECTS[c['cls']]['metres']:.2f} m").strip()
+               f"{c.get('tag', '')} {OBJECTS[c['cls']]['name'].replace(' opening', '')} {_m(c):.2f} m").strip()
         tw, th = cv.d.textbbox((0, 0), txt, font=f, anchor="lt")[2:]
         spots = [(rect[0], rect[1] - th - 3), (rect[0], rect[3] + 3), (rect[2] + 3, rect[1]), (rect[0] - tw - 3, rect[1]),
                  (rect[2] + 3, rect[3] - th), (rect[0], rect[1] - 2 * th - 6)]
@@ -493,3 +499,110 @@ def draw(cv, sc, color, record=True):
             dashed_rect(cv.d, (b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), color, max(1, round(cv.k)), max(3, round(3 * cv.k)))
         if record:
             record_context(cv.img, rect, "scale_object", tone="amber", label=txt)
+
+
+# ================================================================ BEGIN scale-assumption (builder BC)
+#
+# The person can change the size assumed for the standard objects (door opening, WC pan, bathtub) after an answer,
+# in the Approximation box or in the question ("if the doors are 0.9 m wide"); see CHANGELOG "scale assumption".
+# The scale is still the median of the candidates, each now measured with the size set for its class, so a door
+# width changes only the door candidates (with doors and a WC pan the median moves less than the door width).
+# A printed door size (scale source "modules") is read, not assumed: an assumed door width does not change it.
+# The same assumption request also carries a printed ratio and sheet size for big sheets (bpqa/sheet.py `assumed`).
+
+# request key -> class, allowed range (metres), slider range in the app
+ASSUME = {"door_m": {"cls": "door", "lo": 0.6, "hi": 1.5},
+          "wc_m": {"cls": "toilet", "lo": 0.5, "hi": 1.0},
+          "bath_m": {"cls": "bathtub", "lo": 1.2, "hi": 2.2}}
+SHEETS = ("A0", "A1", "A2", "A3", "A4")
+YOURS = " (your value)"
+
+
+def norm_assume(a) -> dict | None:
+    """A validated assumption: {"door_m", "wc_m", "bath_m"} in metres (2 decimals), "ratio" (1:n, 10 to 5000),
+    "sheet" (A0 to A4). Unknown keys and values out of range are dropped. None stays None (no assumption given);
+    an empty dict means "the defaults, whatever the question said"."""
+    if a is None or not isinstance(a, dict):
+        return None
+    out = {}
+    for k, v in a.items():
+        try:
+            if k in ASSUME:
+                v = round(float(v), 2)
+                if ASSUME[k]["lo"] <= v <= ASSUME[k]["hi"]:
+                    out[k] = v
+            elif k == "ratio":
+                v = int(round(float(v)))
+                if 10 <= v <= 5000:
+                    out[k] = v
+            elif k == "sheet" and str(v).upper() in SHEETS:
+                out[k] = str(v).upper()
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def assume_key(a) -> tuple:
+    """Hashable form of the object sizes of an assumption (for raster_area.analyse's cache); () for none."""
+    return tuple(sorted((k, v) for k, v in (a or {}).items() if k in ASSUME and v != OBJECTS[ASSUME[k]["cls"]]["metres"]))
+
+
+def objects_with(assume) -> dict:
+    """OBJECTS with the assumed sizes in place of the default ones (OBJECTS itself when nothing is assumed)."""
+    a = dict(assume or ())
+    if not any(k in ASSUME for k in a):
+        return OBJECTS
+    out = {cls: dict(o) for cls, o in OBJECTS.items()}
+    for k, v in a.items():
+        if k in ASSUME:
+            out[ASSUME[k]["cls"]]["metres"] = float(v)
+    return out
+
+
+def _m(c: dict) -> float:
+    """The size an object was measured with (older candidates without one: the default)."""
+    return float(c.get("metres") or OBJECTS[c["cls"]]["metres"])
+
+
+def metres_of(used: list[dict], cls: str) -> float:
+    for c in used:
+        if c["cls"] == cls:
+            return _m(c)
+    return OBJECTS[cls]["metres"]
+
+
+def is_yours(used: list[dict], cls: str) -> bool:
+    return cls in OBJECTS and abs(metres_of(used, cls) - OBJECTS[cls]["metres"]) > 1e-9
+
+
+def assume_payload(sc, asked: dict | None = None) -> dict:
+    """What the app needs to rescale an approximation itself and to show the controls: the per-object candidates
+    (class, box long side in px, size used), the sizes in use and their defaults, and which ones the person set."""
+    used = list(getattr(sc, "objects", None) or [])
+    src = getattr(sc, "source", "")
+    out = {"kind": "objects" if src == "objects" else src, "m_per_px": float(np.sqrt(sc.m2_per_px)),
+           "assumed": dict(getattr(sc, "assumed", None) or {}),
+           "defaults": {k: OBJECTS[o["cls"]]["metres"] for k, o in ASSUME.items()},
+           "ranges": {k: [o["lo"], o["hi"]] for k, o in ASSUME.items()}}
+    if src == "objects":
+        out["candidates"] = [{"cls": c["cls"], "tag": c.get("tag"), "px": round(float(c["px"]), 3), "metres": _m(c)}
+                             for c in used]
+        out["counts"] = {k: sum(1 for c in used if c["cls"] == o["cls"]) for k, o in ASSUME.items()}
+        out["using"] = {k: metres_of(used, o["cls"]) for k, o in ASSUME.items() if out["counts"][k]}
+    # sizes asked for that this scale does not rest on (no such object, or the doors' sizes are printed)
+    ign = sorted(k for k, v in (asked or {}).items() if k in ASSUME and k not in out["assumed"]
+                 and v != OBJECTS[ASSUME[k]["cls"]]["metres"])
+    if ign:
+        out["ignored"] = ign
+        out["ignored_why"] = ("the scale comes from door sizes printed on the drawing, not from an assumed size"
+                              if src == "modules" else "the scale does not use that object")
+    return out
+
+
+def median_m_per_px(cands: list[dict], sizes: dict) -> float:
+    """The scale the app recomputes: median of size / px over the candidates, each with the size set for its class
+    ({"door_m": 0.9}); the same median as combine() (numpy: the mean of the middle two for an even count)."""
+    by_cls = {o["cls"]: k for k, o in ASSUME.items()}
+    v = [float(sizes.get(by_cls.get(c["cls"]), c["metres"])) / float(c["px"]) for c in cands]
+    return float(np.median(v))
+# ================================================================ END scale-assumption (builder BC)

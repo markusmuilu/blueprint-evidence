@@ -1341,7 +1341,7 @@ function renderStrip() {
   $("#stripHead").innerHTML = `
     <h2 class="h-panel">Verify ${rows.length} ${noun}</h2>
     <span class="legend meta"><span class="key blue" aria-hidden="true"></span>${nBlue} proven${nAmber ? `<span class="key amber" aria-hidden="true"></span>${nAmber} to check` : ""}</span>
-    ${a.approx ? `<span class="meta scale-src approx" title="${esc(a.approx.scale)}">Approximate scale from ${esc(a.approx.short)}</span>`
+    ${a.approx ? `<span class="meta scale-src approx" title="${esc(a.approx.scale)}">Approximate scale from ${esc(a.approx.short || (a.approx.assume?.kind === "ratio" ? `1:${a.approx.assume.ratio} on ${a.approx.assume.sheet}` : ""))}</span>`
       : scale ? `<span class="meta scale-src" title="${esc(scale.text)}">Scale from ${esc(scale.text.split(" (")[0].replace(/^Scale found on the sheet$/, "the sheet"))}</span>` : ""}
     <span class="strip-gap"></span>
     ${own ? `<span class="corr" id="corrLine">${esc(corrLine(a))}</span>
@@ -1465,7 +1465,7 @@ async function saveCorrection() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: a.path, drawing: a.drawing, question: a.question, route: a.route, status: a.status,
         answer_value: a.value, corrected_value: correctedValue(a), unit: a.unit, removed: [...state.corr.removed],
-        added: state.corr.added, evidence_id: a.evidence_id }),
+        added: state.corr.added, evidence_id: a.evidence_id, scale_assumption: assumeLabel(a) }),
     });
     toast(`Correction saved, ${r.n} on record. Export downloads them as CSV.`);
   } catch (e) { toast("Could not save: " + e.message, true); }
@@ -1585,7 +1585,7 @@ function renderAnswer(a) {
         ${hasVal ? `${a.approx ? `<span class="about">About</span>` : ""}<span class="v${isText ? " text" : ""}" id="ansValue">${esc(valText)}</span><span class="u">${esc(fmtUnit(a.unit))}</span>`
                  : `<span class="v none">No answer</span>`}
       </div>
-      ${hasVal && a.approx ? `<p class="approx-note"><span class="approx-tag">${icon("estimate")}Approximation</span>${esc(m2(a.approx.text))}</p>` : ""}
+      ${hasVal && a.approx ? `<div class="approx-note"><p class="approx-text"><span class="approx-tag">${icon("estimate")}Approximation</span><span id="approxText">${esc(m2(a.approx.text || a.approx.sentence || ""))}</span></p>${scaleCtlHtml(a)}</div>` : ""}
       <p class="note corr-note" id="corrNote" hidden></p>
       <dl class="kv facts">
         <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span></dd>
@@ -1660,6 +1660,7 @@ function renderAnswer(a) {
     changed: () => OrderSheet.mountPanel(a, $("#orderSec"), orderHooks),
   };
   if (window.OrderSheet) OrderSheet.mountPanel(a, $("#orderSec"), orderHooks);
+  bindScaleCtl(a);                        // scale-assumption block
 }
 
 function shortReason(a) {
@@ -1842,7 +1843,7 @@ async function loadWitnessSummary() {
 }
 
 /* ---------------------------------------------------------------- CSV */
-const CSV_COLS = ["drawing", "question", "value", "unit", "status", "route", "confidence", "checks_passed", "checks_failed", "cost_usd", "response_ms", "evidence"];
+const CSV_COLS = ["drawing", "question", "value", "unit", "status", "route", "confidence", "checks_passed", "checks_failed", "cost_usd", "response_ms", "evidence", "scale_assumption"];
 function csvRow(a) {
   const checks = a.checks || [];
   const vals = {
@@ -1851,6 +1852,7 @@ function csvRow(a) {
     confidence: a.confidence, checks_passed: checks.filter((c) => c.status === "pass").length,
     checks_failed: checks.filter((c) => c.status === "fail").length, cost_usd: Number(a.cost_usd || 0).toFixed(4),
     response_ms: Math.round(a.time_ms), evidence: a.evidence_id ? location.origin + "/api/evidence/" + a.evidence_id + ".png" : "",
+    scale_assumption: assumeLabel(a),     // scale-assumption block: the size an approximation used, if not the default
   };
   const cell = (v) => { const s = String(v ?? ""); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   return CSV_COLS.map((c) => cell(vals[c])).join(",");
@@ -1877,6 +1879,274 @@ function saveCsv(text, filename) {
 function downloadCsv(a) {
   saveCsv(CSV_COLS.join(",") + "\n" + csvRow(a) + "\n", (a.drawing || "answer").replace(/\.[^.]+$/, "") + "_answer.csv");
 }
+
+/* ================================================================ BEGIN scale-assumption (app.js)
+   The size behind an approximation, editable after the answer (an idea from Taavi, Stoa's CPO): "Scale from 7 doors,
+   assumed [0.84] m wide" with a slider, or "1:[200] on [A2]" on a big sheet. A change rescales the answer at once in
+   the browser (areas x k^2, lengths x k, k = new metres per pixel / used), then, 600 ms after the last change, the
+   server measures again with the assumption ({assume} on /api/ask) and its answer replaces the preview. With doors
+   and a WC pan the scale is the median of all candidates, each with its own size, so the preview recomputes that
+   median from the per-object candidates in the answer instead of scaling by the door width alone. The preview can
+   still differ from the recompute: the server may pick another wall-gap setting for the new scale. */
+const SCALE_UI = {
+  door_m: { one: "door", many: "doors", dim: "wide", what: "door width", lo: 0.70, hi: 1.20 },
+  wc_m: { one: "WC pan", many: "WC pans", dim: "long", what: "WC pan length", lo: 0.55, hi: 0.95 },
+  bath_m: { one: "bathtub", many: "bathtubs", dim: "long", what: "bathtub length", lo: 1.40, hi: 2.00 },
+};
+const scaleCtl = { base: null, vals: null, ticket: 0, timer: null, k: 1, req: 0 };
+const AREA_KEYS = ["area_m2", "floor_m2", "gross_m2", "net_named_rooms_m2", "area"];
+const LEN_KEYS = ["perimeter_m", "net_m", "doors_m", "baseboard_m", "waste_m", "order_m", "width_m",
+  "gross_wall_m2", "net_wall_m2", "openings_m2", "walls_m2"];     // wall areas: perimeter x height, so x k
+
+function scaleKind(a) {
+  const s = a && a.approx && a.approx.assume;
+  if (!s) return null;
+  if (s.kind === "objects" && s.candidates && s.candidates.length) return "objects";
+  return s.kind === "ratio" ? "ratio" : null;
+}
+function median(v) { const s = [...v].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; }
+const R2 = (x) => Math.round(x * 100) / 100;
+const sameVal = (x, y) => Math.abs(x - y) <= 1e-9;
+
+/* the starting values: the sizes this answer used (default or the person's) */
+function scaleVals(a) {
+  const s = a.approx.assume;
+  if (scaleKind(a) === "ratio") return { ratio: s.ratio, sheet: s.sheet };
+  return { ...s.using };
+}
+function scaleIsDefault(base, vals) {
+  const s = base.approx.assume;
+  if (scaleKind(base) === "ratio") return vals.ratio === s.read_ratio && vals.sheet === s.read_sheet;
+  return Object.keys(vals).every((k) => sameVal(vals[k], s.defaults[k]));
+}
+/* length factor k for the values in the box against the answer they were set on */
+function scaleFactor(base, vals) {
+  const s = base.approx.assume;
+  if (scaleKind(base) === "ratio") {
+    const ppm = s.long_px / s.sheets[vals.sheet] * 1000 / vals.ratio;
+    return s.px_per_m / ppm;
+  }
+  const cls = { door: "door_m", toilet: "wc_m", bathtub: "bath_m" };
+  const m = median(s.candidates.map((c) => (vals[cls[c.cls]] ?? c.metres) / c.px));
+  return m / s.m_per_px;
+}
+/* a copy of the answer with every area x k^2 and every length x k; totals with waste are recomputed */
+function rescaleAnswer(a, k) {
+  const p = JSON.parse(JSON.stringify(a));
+  p.preview = true;
+  const scaleObj = (o) => {
+    if (!o || typeof o !== "object") return;
+    for (const key of AREA_KEYS) if (typeof o[key] === "number") o[key] = R2(o[key] * k * k);
+    for (const key of LEN_KEYS) if (typeof o[key] === "number") o[key] = R2(o[key] * k);
+  };
+  (p.items || []).forEach((it) => { scaleObj(it); if (it && it.totals) scaleObj(it.totals); });
+  (p.approx.rooms || []).forEach(scaleObj);
+  const t = (p.items || []).find((it) => it && it.totals)?.totals;
+  if (typeof p.value === "number") {
+    if (t && t.walls_m2 != null) {                 // tiling: floor x k^2 + walls x k, then the waste on both
+      t.net_m2 = R2((t.floor_m2 || 0) + (t.walls_m2 || 0));
+      t.waste_m2 = R2(t.net_m2 * (t.waste_pct || 0) / 100);
+      t.order_m2 = R2(t.net_m2 + t.waste_m2);
+      p.value = /order/.test(t.value_is || "") ? t.order_m2 : t.net_m2;
+    } else if (t && t.unit === "m") {             // baseboard: a length
+      t.waste_m = R2((t.net_m || 0) * (t.waste_pct || 0) / 100);
+      t.order_m = R2((t.net_m || 0) + t.waste_m);
+      p.value = R2(a.value * k);
+    } else p.value = R2(a.value * (a.unit === "m" ? k : k * k));
+  }
+  return p;
+}
+/* "door width 0.90 m (default 0.84 m)" for the CSV and the correction record; "" when nothing is assumed */
+function assumeLabel(a) {
+  if (!a || !a.approx || !a.approx.assume) return "";
+  const s = a.approx.assume;
+  const live = a === state.answer && scaleCtl.vals && scaleCtl.base && scaleCtl.base.path === a.path;
+  const tail = a.preview ? " (preview)" : "";
+  if (s.kind === "ratio") {
+    const r = live ? scaleCtl.vals.ratio : s.ratio, sh = live ? scaleCtl.vals.sheet : s.sheet;
+    return r !== s.read_ratio || sh !== s.read_sheet ? `ratio 1:${r} on ${sh} (read 1:${s.read_ratio} on ${s.read_sheet})${tail}` : "";
+  }
+  const use = (live ? scaleCtl.vals : s.using) || {};
+  const mine = Object.keys(SCALE_UI).filter((k) => use[k] != null && !sameVal(use[k], s.defaults[k]));
+  return mine.length ? mine.map((k) => `${SCALE_UI[k].what} ${use[k].toFixed(2)} m (default ${s.defaults[k].toFixed(2)} m)`).join("; ") + tail : "";
+}
+
+function scaleCtlHtml(a) {
+  const kind = scaleKind(a);
+  if (!kind) return "";
+  const s = a.approx.assume, v = scaleVals(a);
+  let rows;
+  if (kind === "ratio") {
+    rows = `<div class="sc-row"><label for="sc-ratio">Scale from the printed ratio 1:</label>
+      <input class="sc-num sc-den" id="sc-ratio" type="number" inputmode="numeric" min="10" max="5000" step="1" value="${v.ratio}" data-k="ratio">
+      <label for="sc-sheet">on</label>
+      <select class="sc-sheet" id="sc-sheet" data-k="sheet">${Object.keys(s.sheets).map((n) => `<option${n === v.sheet ? " selected" : ""}>${n}</option>`).join("")}</select></div>`;
+  } else {
+    const keys = Object.keys(SCALE_UI).filter((k) => (s.counts || {})[k]);
+    rows = keys.map((k, i) => {
+      const u = SCALE_UI[k], n = s.counts[k];
+      const lead = `${i === 0 ? "Scale from" : "and"} ${n} ${n > 1 ? u.many : u.one}, assumed`;
+      return `<div class="sc-row"><label for="sc-${k}">${lead}</label>
+        <input class="sc-num" id="sc-${k}" type="number" inputmode="decimal" min="${s.ranges[k][0]}" max="${s.ranges[k][1]}" step="0.01" value="${v[k].toFixed(2)}" data-k="${k}">
+        <span>m ${u.dim}</span>
+        <input class="sc-range" type="range" min="${u.lo.toFixed(2)}" max="${u.hi.toFixed(2)}" step="0.01" value="${v[k].toFixed(2)}" data-k="${k}" aria-label="${u.what[0].toUpperCase() + u.what.slice(1)} in metres"></div>`;
+    }).join("");
+  }
+  return `<div class="scale-ctl" role="group" aria-label="Scale assumption">${rows}
+    <p class="sc-status" id="scStatus" aria-live="polite"></p></div>`;
+}
+
+function scaleStatus(base, vals, phase) {
+  const s = base.approx.assume, said = (base.query && base.query.extra && base.query.extra.assume_said) || {};
+  let what;
+  if (scaleKind(base) === "ratio") {
+    what = scaleIsDefault(base, vals) ? `Using the scale read on the sheet, 1:${s.read_ratio} on ${s.read_sheet}`
+      : `Using your scale 1:${vals.ratio} on ${vals.sheet} (read on the sheet 1:${s.read_ratio} on ${s.read_sheet})`;
+  } else {
+    const mine = Object.keys(vals).filter((k) => !sameVal(vals[k], s.defaults[k]));
+    what = mine.length ? "Using " + mine.map((k) => `your ${SCALE_UI[k].what} ${vals[k].toFixed(2)} m${said[k] === vals[k] ? " from the question" : ""} (default ${s.defaults[k].toFixed(2)} m)`).join("; ")
+      : "Using the default sizes";
+  }
+  const still = scaleKind(base) === "objects" ? notInMedian(base, vals) : [];
+  if (still.length) what += `. The ${still.join(" and ")} ${still.length > 1 ? "are" : "is"} not one of the middle values of the median, so the scale does not move`;
+  const tail = phase === "preview" ? `. Preview: areas x${(scaleCtl.k ** 2).toFixed(2)}, lengths x${scaleCtl.k.toFixed(2)}; measuring again on the drawing.`
+    : phase === "busy" ? ". Measuring again on the drawing." : ".";
+  return `${esc(what + tail)}${scaleIsDefault(base, vals) ? "" : ` <button class="btn btn-quiet sc-reset" type="button" id="scReset">Reset</button>`}`;
+}
+
+/* the classes set away from the default whose size does not move the median at all ("WC pan" with 7 doors) */
+function notInMedian(base, vals) {
+  const s = base.approx.assume, k = scaleFactor(base, vals);
+  return Object.keys(vals).filter((key) => !sameVal(vals[key], s.defaults[key])
+    && Math.abs(scaleFactor(base, { ...vals, [key]: s.defaults[key] }) - k) < 1e-9).map((key) => SCALE_UI[key].one);
+}
+
+/* only the numbers change while the person drags: the panel is not rebuilt, so the slider keeps the pointer */
+function paintScaled(p, base) {
+  const v = $("#ansValue");
+  if (v) v.textContent = fmtValue(p.value);
+  const items = answerItems(p);
+  document.querySelectorAll("#itemList li").forEach((li, i) => {
+    const x = li.querySelector(".x");
+    if (x && items[i]) x.textContent = itemLabel(items[i], p.query && p.query.obj, p.route)[1];
+  });
+  const t = $("#approxText");
+  if (t) t.textContent = p === base ? m2(base.approx.text || base.approx.sentence || "")
+    : `About ${fmtValue(p.value)} ${fmtUnit(p.unit)} with the size below. The sentence, the drawing and the Steps card update when the new measurement arrives.`;
+  if (window.OrderSheet && $("#orderSec")) {
+    const hooks = { show3d: null, changed: () => OrderSheet.mountPanel(state.answer, $("#orderSec"), hooks) };
+    OrderSheet.mountPanel(p, $("#orderSec"), hooks);
+  }
+}
+
+function showScaled(base) {
+  scaleCtl.k = scaleFactor(base, scaleCtl.vals);
+  const p = Math.abs(scaleCtl.k - 1) < 1e-9 ? base : rescaleAnswer(base, scaleCtl.k);
+  state.answer = p;
+  paintScaled(p, base);
+  $("#scStatus").innerHTML = scaleStatus(base, scaleCtl.vals, p === base ? "" : "preview");
+  bindReset();
+}
+
+function onScaleInput(e) {
+  const el = e.target, key = el.dataset.k, base = scaleCtl.base;
+  if (!key || !base) return;
+  let val = key === "sheet" ? el.value : Number(el.value);
+  if (key !== "sheet") {
+    if (el.value === "" || !Number.isFinite(val)) return;
+    const [lo, hi] = key === "ratio" ? [10, 5000] : base.approx.assume.ranges[key];
+    if (val < lo || val > hi) { el.setAttribute("aria-invalid", "true"); return; }
+    el.removeAttribute("aria-invalid");
+    val = key === "ratio" ? Math.round(val) : R2(val);
+    document.querySelectorAll(`.scale-ctl [data-k="${key}"]`).forEach((o) => { if (o !== el) o.value = key === "ratio" ? val : val.toFixed(2); });
+  }
+  scaleCtl.vals = { ...scaleCtl.vals, [key]: val };
+  showScaled(base);
+  clearTimeout(scaleCtl.timer);
+  scaleCtl.timer = setTimeout(recomputeScale, 600);
+}
+
+/* the request's assumption: null asks the plain (cached) answer when nothing is assumed anywhere */
+function assumeBody(base, vals) {
+  const said = base.query && base.query.extra && base.query.extra.assume_said;
+  return scaleIsDefault(base, vals) && !said ? null : vals;
+}
+
+async function recomputeScale() {
+  const base = scaleCtl.base, vals = scaleCtl.vals;
+  if (!base || !vals) return;
+  const t = ++scaleCtl.ticket, req = ++scaleCtl.req;
+  const st = $("#scStatus");
+  if (st) { st.innerHTML = scaleStatus(base, vals, Math.abs(scaleCtl.k - 1) < 1e-9 ? "busy" : "preview"); bindReset(); }
+  $("#busyText").textContent = "Measuring again with your size";
+  $("#viewerBusy").hidden = false;
+  try {
+    const a2 = await api("/api/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: base.path, question: base.question, pdf_only: $("#pdfOnly").checked, assume: assumeBody(base, vals) }),
+    });
+    if (t !== scaleCtl.ticket || !state.drawing || state.drawing.path !== base.path || scaleCtl.base !== base) return;
+    if (a2.status === "cannot" || !scaleKind(a2)) {
+      toast("No answer with that size: " + shortReason(a2) + " Back to the size before.", true);
+      state.answer = base;
+      renderAnswer(base);
+      return;
+    }
+    const f = document.activeElement && document.activeElement.closest && document.activeElement.closest(".scale-ctl") ? document.activeElement : null;
+    const focusSel = f ? (f.classList.contains("sc-range") ? `.sc-range[data-k="${f.dataset.k}"]` : f.id ? "#" + f.id : null) : null;
+    state.answer = a2;
+    state.corr = { removed: new Set(), added: [] };
+    renderAnswer(a2);
+    if (a2.evidence_id) await showEvidence(a2, false);
+    if (focusSel) $(focusSel)?.focus();
+  } catch (e) {
+    if (t === scaleCtl.ticket) toast("Could not measure again: " + e.message, true);
+  } finally {
+    if (req === scaleCtl.req) $("#viewerBusy").hidden = true;      // the latest request ends the busy state
+  }
+}
+
+function bindReset() {
+  $("#scReset")?.addEventListener("click", () => {
+    const base = scaleCtl.base, s = base.approx.assume;
+    const def = scaleKind(base) === "ratio" ? { ratio: s.read_ratio, sheet: s.read_sheet }
+      : Object.fromEntries(Object.keys(scaleCtl.vals).map((k) => [k, s.defaults[k]]));
+    for (const [k, v] of Object.entries(def)) {
+      document.querySelectorAll(`.scale-ctl [data-k="${k}"]`).forEach((o) => { o.value = typeof v === "number" && k !== "ratio" ? v.toFixed(2) : v; });
+    }
+    scaleCtl.vals = def;
+    showScaled(base);
+    clearTimeout(scaleCtl.timer);
+    recomputeScale();
+  });
+}
+
+/* called at the end of renderAnswer: the answer just drawn is the base the next change scales from */
+function bindScaleCtl(a) {
+  clearTimeout(scaleCtl.timer);
+  scaleCtl.ticket++;                    // a recompute still on its way belongs to the answer before
+  if (!scaleKind(a)) { scaleCtl.base = null; return; }
+  scaleCtl.base = a;
+  scaleCtl.vals = scaleVals(a);
+  scaleCtl.k = 1;
+  const box = document.querySelector(".scale-ctl");
+  if (!box) return;
+  $("#scStatus").innerHTML = scaleStatus(a, scaleCtl.vals, "");
+  bindReset();
+  box.querySelectorAll("input, select").forEach((el) => el.addEventListener("input", onScaleInput));
+  box.querySelectorAll(".sc-num").forEach((el) => el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); clearTimeout(scaleCtl.timer); recomputeScale(); }
+  }));
+  // the CSV buttons follow the value on screen (preview included), not the answer the panel was drawn with
+  for (const [id, fn] of [["copyCsv", copyCsv], ["dlCsv", downloadCsv]]) {
+    const b = $("#" + id);
+    if (!b) continue;
+    const nb = b.cloneNode(true);
+    b.replaceWith(nb);
+    nb.addEventListener("click", () => fn(state.answer));
+  }
+}
+/* END scale-assumption (app.js) ================================================================ */
 
 /* ================================================================ BEGIN ask-several (app.js)
    One question across many drawings. Nothing here touches the single-drawing path except five one-line hooks

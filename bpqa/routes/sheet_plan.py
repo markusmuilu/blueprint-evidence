@@ -350,6 +350,7 @@ def answer(ctx, query) -> Answer:
     labels = room_labels(d)
     if measure in ("area", "length") or re.search(r"\b(area|perimeter|skirting|baseboard|m2|square)\b", q, re.I):
         d = S.analyse(ctx.file, regions=True)
+        d = S.assumed(d, getattr(ctx, "assume", None))     # scale-assumption: the person's ratio and sheet, if any
         labels = room_labels(d)
         ph, hits = match_phrase(q, labels)
         if PERIM_RE.search(q):
@@ -538,7 +539,7 @@ def measured(ctx, d: dict, ph: list[str], hits: list[dict], labels: list[dict], 
     doors_m = {}
     if baseboard:
         # a baseboard stops at a door: the door boxes in each room's walls are deducted (bpqa/baseboard.py's rule)
-        boxes, _ = detect(ctx.file, sc.ppm)
+        boxes, _ = detect(ctx.file, S.read_scale(d).ppm)     # scale-assumption: the detector's cached resolution
         for h in ok:
             doors_m[id(h)] = [o["width_m"] or 0.0 for o in door_openings(ctx.file, h, boxes=boxes, ppm=sc.ppm)]
         why += ("; door openings deducted are door detector boxes in the room's walls (the detector, checked by eye "
@@ -565,7 +566,8 @@ def measured(ctx, d: dict, ph: list[str], hits: list[dict], labels: list[dict], 
                          "xyxy": [round(v) for v in h["box"]], "split": bool(h.get("split"))} for i, h in enumerate(ok)],
                  approx={"sentence": expl.split(". Scale evidence")[0], "source": "sheet_scale", "scale": sc.source,
                          "px_per_m": round(sc.ppm, 2), "strong": sc.strong, "detail": sc.detail,
-                         "rooms": [{"label": h["text"], key: h[key]} for h in ok]})
+                         "rooms": [{"label": h["text"], key: h[key]} for h in ok],
+                         "assume": S.assume_payload(d)})      # scale-assumption
     if ctx.evidence:
         cv = Canvas(ctx.file)
         st = scale_steps(cv, sc)
@@ -615,7 +617,8 @@ def total_area(ctx, d: dict, labels: list[dict]) -> Answer:
                  tier_reason=why, explanation=expl,
                  items=[{"gross_m2": gross, "net_named_rooms_m2": round(net, 1), "rooms_measured": n}],
                  approx={"sentence": expl.split(". Scale evidence")[0], "source": "sheet_scale", "scale": sc.source,
-                         "px_per_m": round(sc.ppm, 2), "strong": sc.strong, "detail": sc.detail})
+                         "px_per_m": round(sc.ppm, 2), "strong": sc.strong, "detail": sc.detail,
+                         "assume": S.assume_payload(d)})      # scale-assumption
     if ctx.evidence:
         cv = Canvas(ctx.file)
         st = scale_steps(cv, sc)
