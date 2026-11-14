@@ -198,9 +198,8 @@ def wall_reason(tk: dict) -> str:
             "only (wall takeoffs: IFC models, Swiss DXF floors, and scans with a scale from printed room areas)")
 
 
-def answer_line(value, n_rooms: int, route: str, estimate: str = "") -> str:
-    tag = f" [ESTIMATE: {estimate}]" if estimate else ""
-    return f"Answer{tag}: {value:.2f} m2 total over {n_rooms} room(s), floor area only   route: {route} (cost $0)"
+def answer_line(value, n_rooms: int, route: str) -> str:
+    return f"Answer: {value:.2f} m2 total over {n_rooms} room(s), floor area only   route: {route} (cost $0)"
 
 
 def matches(name: str | None, tk: dict) -> bool:

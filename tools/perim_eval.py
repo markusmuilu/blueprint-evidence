@@ -100,11 +100,16 @@ def main():
             if hit is None or hit[0] < 50:
                 continue
             per = RA.region_perimeter_px(r.contour)
-            rows.append({"file": f.name, "label": r.label, "printed": r.printed, "cls": hit[2],
-                         "area_err": r.pixels / hit[0] - 1, "perim_err": per / hit[1] - 1})
+            row = {"file": f.name, "label": r.label, "printed": r.printed, "cls": hit[2], "px": r.pixels,
+                   "gt_area": hit[0], "gt_perim": hit[1], "area_err": r.pixels / hit[0] - 1, "perim_err": per / hit[1] - 1}
+            for eps in (1.0, 3.0, 5.0, 8.0, 12.0):                       # variants of the contour simplification
+                row[f"perim_err_e{eps:g}"] = RA.region_perimeter_px(r.contour, eps) / hit[1] - 1
+            hull = cv2.convexHull(r.contour)
+            row["perim_err_hull"] = float(cv2.arcLength(hull, True)) / hit[1] - 1
+            rows.append(row)
     print(f"plans with a scale: {plans}, rooms matched to an annotated space: {len(rows)}")
     if rows:
-        for k in ("perim_err", "area_err"):
+        for k in [k for k in rows[0] if k.endswith("_err") or "_err_" in k]:
             e = np.abs([r[k] for r in rows])
             s = np.array([r[k] for r in rows])
             print(f"{k}: median abs {np.median(e):.1%}, 80th {np.percentile(e, 80):.1%}, 90th {np.percentile(e, 90):.1%}, "

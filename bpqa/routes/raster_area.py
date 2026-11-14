@@ -416,23 +416,42 @@ ROUTE = "raster-area"
 # (tools/area_eval.py, CHANGELOG "raster area estimates"): each printed room measured with a scale from
 # the OTHER printed rooms only. Update BAND with the numbers of the latest run. Set False to abstain again.
 MEASURED_ANSWERS = True
-BAND = {"n": 0, "median": 0.0, "p80": 0.0, "p90": 0.0, "within10": 0.0, "within5": 0.0, "bias": 0.0,
-        "perim_median": 0.0, "perim_p90": 0.0}
+# Pooled leave-one-out rows of dev (193 rooms, 52 plans) and test (73 rooms, 22 plans): `python tools/area_band.py
+# loo_dev.jsonl loo_test.jsonl`. Classes are by the MEASURED area. Under 3 m2 the region is usually a fragment
+# of the room (median error 46%, nearly always too small, dev and test alike), so such a room is not answered.
+BANDS = {"n": 266, "plans": 74,
+         "under3": {"n": 73, "median": 0.463, "p80": 0.773, "within5": 0.137},
+         "3to6": {"n": 50, "median": 0.13, "p80": 0.384, "within5": 0.28},
+         "6up": {"n": 143, "median": 0.065, "p80": 0.2, "within5": 0.448}}
+MIN_MEASURED_M2 = 3.0
 
 
-def band_text() -> str:
-    b = BAND
-    return (f"typical error about {b['median']:.0%} (median), 8 in 10 rooms within {b['p80']:.0%}, "
-            f"worst tenth off by {b['p90']:.0%} or more; only {b['within5']:.0%} within 5%. Check before ordering")
+def _band_cls(area: float) -> str:
+    return "under3" if area < MIN_MEASURED_M2 else ("3to6" if area < 6.0 else "6up")
+
+
+def band_text(areas=None) -> str:
+    """The measured error band for the classes of the measured rooms (all classes answered when areas is None)."""
+    classes = {_band_cls(a) for a in areas} if areas else {"3to6", "6up"}
+    parts = []
+    for c, name in (("3to6", "measured rooms of 3 to 6 m2"), ("6up", "measured rooms of 6 m2 and over")):
+        if c in classes:
+            b = BANDS[c]
+            parts.append(f"{name}: typical error about {b['median']:.0%}, 8 in 10 within {b['p80']:.0%}, "
+                         f"only {b['within5']:.0%} within 5%")
+    return "; ".join(parts) + "; check before ordering"
 
 
 def _inside(contour, pt) -> bool:
     return contour is not None and cv2.pointPolygonTest(contour, (float(pt[0]), float(pt[1])), False) >= 0
 
 
-def region_perimeter_px(contour) -> float:
+PERIM_EPS = 2.0          # px, simplification of the traced contour before measuring its length
+
+
+def region_perimeter_px(contour, eps: float | None = None) -> float:
     """Perimeter of a room region in pixels: the traced pixel contour is staircased, so it is simplified first."""
-    c = cv2.approxPolyDP(contour, 2.0, True)
+    c = cv2.approxPolyDP(contour, PERIM_EPS if eps is None else eps, True)
     return float(cv2.arcLength(c, True))
 
 
@@ -488,9 +507,13 @@ def takeoff_answer(ctx, q, img):
             if r.measured is not None:
                 src += f" (measured {r.measured:.2f})"
             rows.append({"label": r.label, "area": r.printed, "source": src, "room": r, "kind": "printed"})
+        elif r.measured is not None and sc.known and MEASURED_ANSWERS and r.measured < MIN_MEASURED_M2:
+            missing.append(f"{r.label}: no printed area; its measured region is only {r.measured:.1f} m2, and regions under "
+                           f"{MIN_MEASURED_M2:g} m2 are too unreliable to answer (median error {BANDS['under3']['median']:.0%}, "
+                           f"nearly always too small)")
         elif r.measured is not None and sc.known and MEASURED_ANSWERS:
             rows.append({"label": r.label, "area": r.measured, "kind": "measured", "room": r,
-                         "source": f"MEASURED, not printed: region x scale, ESTIMATE ({band_text()})"})
+                         "source": f"MEASURED, not printed: region x scale, ESTIMATE ({band_text([r.measured])})"})
         else:
             missing.append(f"{r.label}: no printed area and " + ("no pixel scale" if not sc.known else (r.why or "no closed region")))
     if missing:
@@ -514,8 +537,9 @@ def takeoff_answer(ctx, q, img):
     if meas_rows:
         basis.append("MEASURED (pixel region x scale, not printed): " + ", ".join(f"{r['label']} {r['area']:.2f}" for r in meas_rows[:12]))
     basis_txt = "Floor areas " + "; ".join(basis) + "."
-    band_note = (f" Measured areas are estimates, {band_text()}. (Leave-one-out on {BAND['n']} printed dev rooms, "
-                 f"each measured with a scale from the other printed rooms.)") if meas_rows else ""
+    bt = band_text([r["area"] for r in meas_rows]) if meas_rows else ""
+    band_note = (f" Measured areas are estimates: {bt}. (Leave-one-out on {BANDS['n']} printed rooms of {BANDS['plans']} plans, "
+                 f"dev and test, each measured with a scale from the other printed rooms.)") if meas_rows else ""
     uncertain = [{"room": r["label"], "area_m2": round(r["area"], 2), "why": "measured, not printed"} for r in meas_rows]
 
     if want_walls:
@@ -534,8 +558,10 @@ def takeoff_answer(ctx, q, img):
                  f"(not detectable here), so the wall area is gross and an upper bound. ") + basis_txt + " " + scale_txt + "." + band_note
         est = "walls: perimeter x assumed height, openings not deducted" + ("; some rooms measured" if meas_rows else "")
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=0.45, items=items, explanation=expl)
-        ans.tier, ans.tier_reason = "estimate", est + ("; " + band_text() if meas_rows else "")
-        head = wallmod.answer_line(total, totals, ROUTE, est)
+        ans.tier, ans.tier_reason = "estimate", est + ("; " + bt if meas_rows else "")
+        head = (f"Answer [ESTIMATE]: {total:.2f} m2 = floor {totals['floor_m2'] or 0:.2f} + walls {totals['walls_m2']:.2f}"
+                f" + {totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}   route: {ROUTE}") if want_floor else                (f"Answer [ESTIMATE]: {total:.2f} m2 = walls {totals['walls_m2']:.2f} + {totals['waste_pct']:g}% waste "
+                f"{totals['waste_m2']:.2f}   route: {ROUTE}")
     else:
         total, items, expl = takeoff.summary([{k: v for k, v in r.items() if k not in ("room", "kind")} for r in rows], tk)
         for it, r in zip(items, rows):
@@ -545,11 +571,10 @@ def takeoff_answer(ctx, q, img):
         conf = 0.5 if conflict else (0.55 if meas_rows else 0.8)
         expl += " " + basis_txt + " " + scale_txt + "." + band_note
         ans = Answer(value=total, unit="m2", route=ROUTE, confidence=conf, items=items, explanation=expl)
-        est = ""
         if meas_rows:
-            est = f"{len(meas_rows)} of {len(rows)} rooms measured, about {BAND['median']:.0%} typical error"
-            ans.tier, ans.tier_reason = "estimate", f"{len(meas_rows)} room(s) have no printed area: measured region x scale; {band_text()}"
-        head = takeoff.answer_line(total, len(rows), ROUTE, est)
+            ans.tier, ans.tier_reason = "estimate", f"{len(meas_rows)} room(s) have no printed area: measured region x scale; {bt}"
+        head = (f"Answer [ESTIMATE]: {total:.2f} m2 over {len(rows)} room(s), floor only   route: {ROUTE}" if meas_rows
+                else takeoff.answer_line(total, len(rows), ROUTE))
     ans.uncertain = uncertain
 
     if ctx.evidence:
@@ -586,7 +611,7 @@ def takeoff_answer(ctx, q, img):
             extra = " Floor area only, no waste allowance."
         sc_note = f"Scale from printed rooms {', '.join(scale_names[:5])}" if sc.known else "No pixel scale"
         if meas_rows:
-            sc_note += f"; measured rooms amber, {band_text()}"
+            sc_note += f"; measured rooms amber, {bt}"
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                               head, note=f"{sc_note}. {lines}.{extra} Printed rooms blue, value boxed.")
     return ans
