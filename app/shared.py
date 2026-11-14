@@ -21,6 +21,7 @@ from pathlib import Path
 
 NAME = os.environ.get("BPE_SHARED_DICT") or ""
 _D = None
+SHARE_MAX_BYTES = int(os.environ.get("BPE_SHARE_MAX_MB", "40")) * 1024 * 1024
 STATS = {"puts": 0, "gets": 0, "get_miss": 0, "errors": 0}
 
 
@@ -54,10 +55,15 @@ def publish_upload(uid: str, folder: Path) -> None:
     """folder = <uploads>/<uid>; label.json is written last by uploads.ingest and marks a complete upload."""
     if not enabled():
         return
+    files = [p for p in folder.rglob("*") if p.is_file()]
+    if sum(p.stat().st_size for p in files) > SHARE_MAX_BYTES:
+        # a very large upload (e.g. a 139 MB TIFF) stays on the container that took it: copying it to the shared
+        # Dict hung the upload request (QA 14 Nov). Questions on it are served by this container.
+        print(f"[shared] upload {uid}: too large to share, kept local", flush=True)
+        return
     tree = {}
-    for p in folder.rglob("*"):
-        if p.is_file():
-            tree[p.relative_to(folder).as_posix()] = (p.read_bytes(), int(p.stat().st_mtime))
+    for p in files:
+        tree[p.relative_to(folder).as_posix()] = (p.read_bytes(), int(p.stat().st_mtime))
     try:
         _try(lambda: _d().put(f"up:{uid}", tree))
         _try(lambda: _d().put(f"upm:{uid}", time.time()))

@@ -52,7 +52,7 @@ image = (
         "YOLO_CONFIG_DIR": "/tmp/ultralytics",
         "OMP_NUM_THREADS": "8", "MKL_NUM_THREADS": "8",
         "STOA_DATA": "/root/demo_data",
-        "BPE_MAX_UPLOAD_MB": "30",
+        "BPE_MAX_UPLOAD_MB": "200",
         # 24 h only holds with the shared Dict: local disk dies when the container scales down (about 2 min idle)
         "BPE_UPLOAD_TTL": "86400" if MAX_CONTAINERS > 1 else "900",
         # fill the demo-scan cache at start only when warm: on a cold start it would make the first

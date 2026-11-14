@@ -509,6 +509,7 @@ function renderPanel() {
       <input type="range" id="v3dExplode" min="0" max="1" step="0.05" value="${V.explode}" aria-describedby="v3dExplodeV"><output class="mono meta" id="v3dExplodeV">${Math.round(V.explode * 100)}%</output></div>
     <label class="check"><input type="checkbox" id="v3dRooms" ${V.roomsOn ? "checked" : ""}> <span>Show all rooms</span></label>
     ${legend}
+    <p class="meta v3d-note">In brackets: the storey name in the model file.</p>
     <ul class="v3d-floors" aria-label="Storeys">${V.floors.slice().reverse().map((fl) => {
       const n = (fl.entry.solid?.elements.length || 0);
       const hot = V.hiFloors?.has(fl);
