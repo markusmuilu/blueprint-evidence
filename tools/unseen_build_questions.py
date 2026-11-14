@@ -146,6 +146,10 @@ man(folder, fn, "How many bedrooms are on this floor plan?", 5, "count",
     "left plan Bedroom 1, 2, 3; right plan Bedroom 1, 2 (the image holds the plans of two flats)")
 man(folder, fn, "How many kitchens are on this floor plan?", 2, "count", "one Kitchen label in each of the two plans")
 man(folder, fn, "How many floors (storeys) does this floor plan show?", 2, "count", "two plans side by side: upper flat and lower flat")
+man(folder, fn, "How many toilet bowls (WC seats) are drawn on this floor plan?", 2, "count",
+    "one toilet bowl in the Shower room of each of the two plans (zoomed crops)")
+man(folder, fn, "How many showers and bathtubs are drawn on this floor plan in total?", 2, "count",
+    "one shower tray in the Shower room of each of the two plans (zoomed crops)")
 
 folder, fn = "wm_ballymun_flat", "Typical floor plan of a Ballymun flat, drawn 1965.png"
 man(folder, fn, "How many bedrooms are on this floor plan?", 6, "count", "two mirrored four-room flats, bedroom 1, 2, 3 in each (poor 1965 scan)")
