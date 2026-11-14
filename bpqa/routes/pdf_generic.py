@@ -147,16 +147,33 @@ def _distinct(spans, tol):
     return out
 
 
+LEGEND_RE = re.compile(r"^(legend|legende|legenda|leyenda|selite|selitteet|teckenforklaring|tegnforklaring|"
+                       r"signaturen|zeichenerklarung|symbols?|symboles|simboli)\b")
+
+
+def legend_box(vp):
+    """Area under a legend heading: symbols there are explanations, not rooms or doors."""
+    from ..query import fold
+    W, H = vp.rect.width, vp.rect.height
+    heads = [s for s in vp.spans if LEGEND_RE.match(fold(s.text.strip()))]
+    return [(h.bbox[0] - 0.02 * W, h.bbox[1] - 0.01 * H, h.bbox[0] + 0.4 * W, h.bbox[3] + 0.25 * H) for h in heads]
+
+
+def _outside_legend(spans, boxes):
+    return [s for s in spans if not any(b[0] <= s.c[0] <= b[2] and b[1] <= s.c[1] <= b[3] for b in boxes)]
+
+
 def label_spans(vp, label: str):
     tol = 0.01 * max(vp.rect.width, vp.rect.height)
-    return _distinct([s for s in vp.spans if label_eq(s.text, label)], tol)
+    hits = _outside_legend([s for s in vp.spans if label_eq(s.text, label)], legend_box(vp))
+    return _distinct(hits, tol)
 
 
 def type_spans(vp, rtype: str):
     tol = 0.01 * max(vp.rect.width, vp.rect.height)
     hits = [s for s in vp.spans if len(s.text) <= 40 and not re.search(r"\d+[.,]?\d*\s*m", s.text.lower())
             and rtype in text_room_types(s.text)]
-    return _distinct(hits, tol)
+    return _distinct(_outside_legend(hits, legend_box(vp)), tol)
 
 
 def room_label_spans(vp):
