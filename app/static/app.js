@@ -506,11 +506,23 @@ const viewer = (() => {
   const mirror = () => setOrient(rot, !flip);
   const resetOrient = (silent = false) => setOrient(0, false, silent);
 
+  /* Wheel input, as map viewers do it (14 Nov: zoom felt awkward on a laptop):
+     pinch on a touchpad (browsers send it as ctrl+wheel) and ctrl+wheel zoom, at a pinch-friendly rate;
+     a mouse wheel notch zooms about 18% about the cursor; a two-finger touchpad scroll pans instead of zooming. */
   vp.addEventListener("wheel", (e) => {
     if (!img.naturalWidth) return;
     e.preventDefault();
     const r = vp.getBoundingClientRect();
-    zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? r.height : 1;
+    const dx = e.deltaX * unit, dy = e.deltaY * unit;
+    const cx = e.clientX - r.left, cy = e.clientY - r.top;
+    if (e.ctrlKey || e.metaKey) {
+      zoomAt(Math.exp(-Math.max(-60, Math.min(60, dy)) * 0.012), cx, cy);
+    } else if (e.deltaMode !== 0 || (dx === 0 && Math.abs(dy) >= 50)) {
+      zoomAt(Math.exp(-Math.sign(dy) * Math.min(Math.abs(dy), 150) * 0.0017), cx, cy);
+    } else {
+      x -= dx; y -= dy; atFit = false; apply();
+    }
   }, { passive: false });
   vp.addEventListener("pointerdown", (e) => {
     if (e.target.closest(".viewer-tools") || !img.naturalWidth) return;
