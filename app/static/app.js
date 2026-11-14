@@ -1503,6 +1503,7 @@ async function ask(refresh = false) {
   if (!state.drawing) { toast("Pick a drawing first", true); return; }
   if (!q) { $("#question").focus(); return; }
   leaveBatchView();                       // ask-several block: a single question shows its own answer
+  window.dispatchEvent(new Event("bpe-ask"));   // the first-visit tour offer steps aside
   const btn = $("#askBtn");
   btn.disabled = true;
   btn.setAttribute("aria-busy", "true");
@@ -2293,10 +2294,10 @@ function batchAddUploaded(res) {
 $("#multiToggle").addEventListener("click", () => setMulti(!batch.on));
 $("#multiClear").addEventListener("click", () => { batch.sel.clear(); batch.anchor = null; batchChanged(); });
 $("#multiShown").addEventListener("click", () => {
-  for (const x of document.querySelectorAll(".draw-item")) {
-    if (x.offsetParent === null) continue;
-    if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
-  }
+  const shown = [...document.querySelectorAll(".draw-item")].filter((x) => x.offsetParent !== null);
+  /* every group folded (the first visit starts so): say what to do instead of silently selecting nothing (QA 14 Nov) */
+  if (!shown.length) { toast("No drawings are listed yet. Open a group or search, then Select shown picks the listed ones.", true); return; }
+  for (const x of shown) if (!batchPick(x.dataset.path, { name: x.dataset.name, ext: x.dataset.ext }, true)) break;
   batchChanged();
 });
 $("#multiList").addEventListener("click", (e) => {
@@ -2759,7 +2760,13 @@ async function compareOpen(x) {
     { el: () => { const st = $("#strip"); return st && !st.hidden && st.offsetParent ? st : $("#viewer") || $("#viewerWrap"); }, side: ["top", "left"], text: "Every counted item is numbered on the drawing. Click one to see step by step how it was read." },
   ];
 
-  let shield, spot, bubble, idx = -1, returnFocus = null, busy = false;
+  let shield, spot, bubble, idx = -1, returnFocus = null, busy = false, watchRO = null;
+  /* the spotlight follows its element when it changes size (a library group opened under it) */
+  const watch = (el) => {
+    if (!watchRO) watchRO = new ResizeObserver(() => layout());
+    watchRO.disconnect();
+    if (el) watchRO.observe(el);
+  };
 
   async function runExample() {
     const t = { path: "data/swiss_dwellings/site3387_bldg5238_floor23498.pdf", q: "What is the floor area of the bathrooms?" };
@@ -2775,8 +2782,10 @@ async function compareOpen(x) {
     if (idx < 0) return;
     idx = -1;
     shield.remove(); spot.remove(); bubble.remove();
+    watch(null);
     document.removeEventListener("keydown", onKey, true);
     window.removeEventListener("resize", layout);
+    window.removeEventListener("scroll", layout, true);
     if (markDone) remember("done");
     if (returnFocus && returnFocus.focus) returnFocus.focus();
   }
@@ -2784,10 +2793,14 @@ async function compareOpen(x) {
   function layout() {
     if (idx < 0) return;
     const step = STEPS[idx], el = step.el();
-    if (!el || !el.offsetParent) { spot.hidden = true; bubble.style.left = "50%"; bubble.style.top = "40%"; return; }
+    if (!el || !el.offsetParent) { spot.hidden = true; shield.style.clipPath = ""; bubble.style.left = "50%"; bubble.style.top = "40%"; return; }
     spot.hidden = false;
     const r = el.getBoundingClientRect(), pad = 4;
     Object.assign(spot.style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + 2 * pad + "px", height: r.height + 2 * pad + "px" });
+    /* the shield has a hole over the highlighted element, so it can be used (open a group, type a question) while
+       everything else stays blocked (QA 14 Nov: the tour said "open a group" and the overlay took the click) */
+    const [x0, y0, x1, y1] = [r.left - pad, r.top - pad, r.right + pad, r.bottom + pad].map((v) => Math.round(v) + "px");
+    shield.style.clipPath = `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${x0} ${y0}, ${x1} ${y0}, ${x1} ${y1}, ${x0} ${y1}, ${x0} ${y0})`;
     const W = window.innerWidth, H = window.innerHeight, bw = bubble.offsetWidth, bh = bubble.offsetHeight, m = 14;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
     const spots = {
@@ -2813,6 +2826,7 @@ async function compareOpen(x) {
     bubble.removeAttribute("aria-busy");
     const el = STEPS[idx].el();
     if (el && el.offsetParent) el.scrollIntoView({ block: "nearest" });
+    watch(el && el.offsetParent ? el : null);
     layout();
     bubble.focus();
   }
@@ -2850,7 +2864,7 @@ async function compareOpen(x) {
       const first = f[0], lastB = f[f.length - 1], cur = document.activeElement;
       if (e.shiftKey && (cur === first || cur === bubble)) { e.preventDefault(); lastB.focus(); }
       else if (!e.shiftKey && cur === lastB) { e.preventDefault(); first.focus(); }
-      else if (!bubble.contains(cur)) { e.preventDefault(); first.focus(); }
+      else if (!bubble.contains(cur) && !STEPS[idx].el()?.contains(cur)) { e.preventDefault(); first.focus(); }
     }
   }
 
@@ -2868,6 +2882,7 @@ async function compareOpen(x) {
     document.body.append(shield, spot, bubble);
     document.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", layout);
+    window.addEventListener("scroll", layout, true);       // the highlighted list scrolled inside its panel
     idx = 0; render();
   }
 
@@ -2878,7 +2893,16 @@ async function compareOpen(x) {
     if (decided) return;
     /* BEGIN tour-offer-v2 */
     const o = mk("tour-offer"), dim = mk("tour-offer-dim");
-    const close = () => { o.remove(); dim.remove(); document.removeEventListener("keydown", onEsc); };
+    const close = () => {
+      o.remove(); dim.remove();
+      document.removeEventListener("keydown", onEsc);
+      document.removeEventListener("pointerdown", onAway, true);
+      window.removeEventListener("bpe-ask", onAsk);
+    };
+    /* the offer gets out of the way once the person starts on their own: a click elsewhere or a question asked
+       (judge review 14 Nov: it stayed over the question bar after a "Try these" example had answered) */
+    const onAway = (e) => { if (!o.contains(e.target)) { remember("declined"); close(); } };
+    const onAsk = () => close();
     const onEsc = (e) => { if (e.key === "Escape" && idx < 0) { remember("declined"); close(); } };
     o.innerHTML = `<h2>First time here?</h2>
       <p>A 30-second tour shows how to open a drawing, ask a question in your own words, and check the answer against the drawing.</p>
@@ -2887,10 +2911,12 @@ async function compareOpen(x) {
     o.id = "tourOffer"; o.setAttribute("role", "region"); o.setAttribute("aria-label", "Tour offer");
     o.addEventListener("click", (e) => {
       const b = e.target.closest("[data-a]"), a = b && b.dataset.a;
-      if (a === "start") { dim.remove(); document.removeEventListener("keydown", onEsc); start(); }
+      if (a === "start") { close(); start(); }
       else if (a === "no") { remember("declined"); close(); }
     });
     document.addEventListener("keydown", onEsc);
+    document.addEventListener("pointerdown", onAway, true);
+    window.addEventListener("bpe-ask", onAsk);
     document.body.append(dim, o);
     /* END tour-offer-v2 */
   }
