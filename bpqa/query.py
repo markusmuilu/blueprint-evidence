@@ -42,7 +42,7 @@ def fold(s: str) -> str:
 
 
 # Count / measure cues. Checked on accent-folded lower-case text.
-COUNT = (r"\b(how many|wie viele|wieviele|combien|quant[ie]|kuinka monta|montako|hvor mange|mitu|hur manga|"
+COUNT = (r"\b(how many|wie viele|wieviele|combien|quant[ie]|kuinka monta|kuinka moni|montako|hvor mange|mitu|hur manga|"
          r"^number of|count the|anzahl|antalet|antal|lukumaara|raekna|rakna|zahl mal|zahl die)\b")
 AREA = r"(area|flache|surface|superficie|nettoareal|areal|pind|pinta-ala|\byta\b|\bytan\b|golvyta)"
 LENGTH = r"(length|lange|laengde|langde|longueur|lunghezza|pituus|wie lang)"
@@ -77,6 +77,10 @@ OBJECTS: list[tuple[str, str]] = [
     ("sanitary", r"sanitary fixtures"),
     ("room", r"\brooms?\b|raume|raum\b|pieces?\b|piece\b|locali|locale\b|\brum\b|rummet|rummen\b|ruumi|ruumide|spaces|huonetta|huoneita|huoneiden|\bhuoneet\b"),
 ]
+
+STEPS_OBJ = re.compile(r"\bsteps\b|\brisers?\b|\btreads?\b|\baskel\w*|\bporrasaskel\w*|\bstufen\b|\bsteigungen\b|"
+                       r"\bauftritte\b|\btrappsteg\w*|\bmarches\b|\bgradini\b")
+STAIR_WORD = re.compile(r"stair\w*|porra\w*|portaa\w*|portai\w*|trepp\w*|trapp\w*|escalier\w*|scal[ae]\b")
 
 # Room types a count question can name without the fixed dataset phrasing above ("how many bedrooms?",
 # "combien de chambres", "wie viele Badezimmer"): the takeoff room-type words (bpqa/takeoff.py, EN FI DE
@@ -291,11 +295,84 @@ class QueryParser:
         raise NotImplementedError
 
 
+# Colloquial Finnish fillers that carry no meaning for the reading: "Kuinkas monta ovea sitten kerroksessa 3 on?" reads as
+# "Kuinka monta ovea kerroksessa 3 on?" (QA 14 Nov, box round 2). The -s / -kos question clitics are dropped and the
+# filler words removed; the original wording stays in Query.raw.
+_FILLER_CLITIC = re.compile(r"\b(kuinka|montako|paljonko|mika|mikä|missa|missä|onko)(s|kos|kohan|han|hän)\b", re.I)
+_FILLER_WORDS = re.compile(r"\s*\b(sitten|nyt|siis|oikein|niinku|ihan|vaan|muuten)\b", re.I)
+
+
+def defiller(question: str) -> str:
+    out = _FILLER_WORDS.sub("", _FILLER_CLITIC.sub(lambda m: m.group(1), question))
+    return re.sub(r"\s{2,}", " ", out).strip() if out != question else question
+
+
+# Finnish "laatta" is a slab or a tile. It reads as a slab when the question also speaks of thickness, concrete, load
+# bearing or a slab kind (QA 14 Nov: "laattojen pinta-ala paksuuksittain" was summed as room areas, marked proven).
+# Alone ("laattaa kylpyhuoneeseen") it stays the tile of the takeoff (bpqa/takeoff.py).
+FI_LAATTA = re.compile(r"\blaat(?:ta|an|at|alla|alle|asta|aksi|oissa|oista|oille|oilla|ojen|tojen|toja|taa)\b|"
+                       r"\b\w+laat(?:ta|an|at|oissa|oista|ojen|tojen|toja|taa)\b")
+FI_SLAB_CTX = re.compile(r"\bpaksu\w*|\bbetoni\w*|\bkantav\w*|\bvalipohj\w*|\balapohj\w*|\bylapohj\w*|\bholvi\w*|"
+                         r"\bontelolaat\w*|\braudoit\w*|\bkuutio\w*|\btilavuu\w*|\bm3\b")
+
+
+def fi_slab(f: str) -> bool:
+    return bool(FI_LAATTA.search(f) and FI_SLAB_CTX.search(f)) and not re.search(r"\blaatoit\w*", f)
+
+
+# how much concrete: "paljonko betonia on laatoissa", "how much concrete is in the slabs": the volume of the elements
+CONCRETE_AMOUNT = re.compile(r"\b(paljonko|kuinka paljon|montako kuutiota|kuinka monta kuutiota|how much|wie viel|"
+                             r"combien de|hur mycket)\b(?:\W+\w+){0,3}?\W+(betoni\w*|concrete|beton\w*|betong\w*)\b")
+# "doors wider than 0.9 m", "ovet leveämpiä kuin 0.9 metriä": a size filter on doors / windows (IFC OverallWidth / Height)
+SIZE_FILTER = re.compile(r"\b(?P<adj>wider|narrower|taller|higher|lower|shorter|breiter|schmaler|hoher|niedriger|"
+                         r"leveampi\w*|leveampia|kapeampi\w*|kapeampia|korkeampi\w*|korkeampia|matalampi\w*|matalampia)"
+                         r"\s+(?:than\s+|als\s+|kuin\s+)?(?P<v>\d+(?:[.,]\d+)?)\s*(?P<u>mm|cm|m\b|metres?|meters?|metri\w*)?")
+SIZE_ADJ = {"wider": ("width", ">"), "narrower": ("width", "<"), "taller": ("height", ">"), "higher": ("height", ">"),
+            "lower": ("height", "<"), "shorter": ("height", "<"), "breiter": ("width", ">"), "schmaler": ("width", "<"),
+            "hoher": ("height", ">"), "niedriger": ("height", "<"), "leveampi": ("width", ">"), "kapeampi": ("width", "<"),
+            "korkeampi": ("height", ">"), "matalampi": ("height", "<")}
+# "how wide are the doors", "kuinka leveitä ovet ovat": the distinct widths with counts
+SIZE_ASK = re.compile(r"\bhow (?P<w>wide|tall|high) (?:are|is)\b|\bwhat (?P<w2>widths|heights) (?:are|do)\b|"
+                      r"\bkuinka (?P<w3>leve\w*|korke\w*)|\bmitka (?:ovat )?\w* ?(?P<w4>leveydet|korkeudet)\b")
+# a superlative, an average or one named element is the property lookup's question (routes/ifc_props.py), not a listing
+SIZE_ASK_NOT = re.compile(r"\b(widest|narrowest|largest|greatest|smallest|biggest|tallest|highest|lowest|average|mean|"
+                          r"median|maximum|minimum|max|min|top|which|each|per|type|types|levein\w*|kapein\w*|korkein\w*|"
+                          r"matalin\w*|keskim\w*|suurin|pienin)\b|\d|['\"]")
+
+
+def size_filter(f: str) -> dict | None:
+    m = SIZE_FILTER.search(f)
+    if not m:
+        return None
+    adj = next((k for k in SIZE_ADJ if m.group("adj").startswith(k)), None)
+    if adj is None:
+        return None
+    dim, op = SIZE_ADJ[adj]
+    v = float(m.group("v").replace(",", "."))
+    u = (m.group("u") or "").lower()
+    if u == "mm":
+        v /= 1000
+    elif u == "cm":
+        v /= 100
+    elif not u and v > 20:       # "wider than 900": millimetres
+        v /= 1000
+    return {"dim": dim, "op": op, "value_m": round(v, 4), "phrase": m.group(0).strip()}
+
+
+def size_asked(f: str) -> str | None:
+    m = SIZE_ASK.search(f)
+    if not m or SIZE_ASK_NOT.search(f):
+        return None
+    w = next(g for g in m.groups() if g)
+    return "width" if re.match(r"wid|leve|breit", w) else "height"
+
+
 class RuleParser(QueryParser):
     name = "rules"
 
     def parse(self, question: str) -> Query:
         q = Query(raw=question)
+        question = defiller(question)
         f = fold(question)
         q.lang = detect_lang(f)
         qs = quotes(question)
@@ -320,6 +397,15 @@ class RuleParser(QueryParser):
             if q.obj:
                 break
 
+        if q.obj in (None, "room") and fi_slab(f_obj):
+            q.obj = "slab"                      # "laattojen pinta-ala paksuuksittain": slabs, not tiles or rooms
+        if STEPS_OBJ.search(f_obj) and (q.obj in (None, "stair") or STAIR_WORD.search(f_obj)):
+            q.obj = "stair_step"                # the steps of a stair, never the number of stairs
+            if q.measure is None and (CASUAL_COUNT.search(f) or re.search(r"\bhow many|kuinka monta|montako", f)):
+                q.measure = "count"
+        if q.obj in ("slab", "wall") and CONCRETE_AMOUNT.search(f_obj) and not re.search(AREA, f_obj):
+            q.measure = "volume"                # "paljonko betonia on laatoissa": the concrete volume
+            q.extra["concrete_amount"] = True
         # "paljonko ikkunoita", "bedrooms?", "ulko-ovet?": a count when an object that is counted is named
         if q.measure is None and (CASUAL_COUNT.search(f) or bare_plural_question(question)):
             if q.obj in COUNTABLE:
@@ -463,6 +549,14 @@ class RuleParser(QueryParser):
                     # unlike a quoted room name, which keeps the abstaining guard (routes/scope_guard.py)
                     tk["single_type"] = True
                 q.extra["takeoff"] = tk
+        if q.obj in ("door", "window"):
+            sf = size_filter(f_obj)
+            if sf and q.measure in (None, "count", "area"):
+                q.measure, q.variant = "count", None
+                q.extra["size_filter"] = sf
+            elif q.measure in (None, "text") and size_asked(f_obj):
+                q.measure, q.variant = "text", "size_list"
+                q.extra["size_dim"] = size_asked(f_obj)
         from .slabs import apply as slab_apply
         q = attach_qualifier(question, q)
         if q.obj in (None, "slab"):                      # slab area by type / thickness (bpqa/slabs.py)

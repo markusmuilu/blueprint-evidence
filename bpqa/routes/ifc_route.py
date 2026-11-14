@@ -646,6 +646,124 @@ def self_zero(ctx, M, storey, floor, tk, q, path, sheet_note) -> Answer:
     return ans
 
 
+# ---- steps of a stair, door / window sizes (QA 14 Nov, box round 2) ----------------------------------------
+RISER_KEYS = ("NumberOfRisers", "NumberOfRiser")
+TREAD_KEYS = ("NumberOfTreads", "NumberOfTread")
+
+
+def _num_attr(e, keys, psets):
+    """(value, source) of the first positive count among the entity attributes and the named psets."""
+    for k in keys:
+        v = getattr(e, k, None) if hasattr(e, k) else None
+        if isinstance(v, (int, float)) and v > 0:
+            return int(v), f"{e.is_a()}.{k}"
+    for pset, vals in E.get_psets(e, psets_only=True).items():
+        if pset not in psets:
+            continue
+        for k in keys:
+            v = vals.get(k)
+            if isinstance(v, (int, float)) and v > 0:
+                return int(v), f"{pset}.{k}"
+    return None, None
+
+
+def stair_steps(M, storey) -> dict:
+    """The steps of the stairs on the storey: the risers recorded per flight (IfcStairFlight.NumberOfRisers or
+    Pset_StairFlightCommon), else per stair (Pset_StairCommon). A count of stairs is never a count of steps, so a model
+    that records no riser or tread numbers is a cannot."""
+    def here(e):
+        if storey is None:
+            return True
+        st = M.storey_of(e)
+        return st == storey
+    try:
+        flights = [f for f in M.m.by_type("IfcStairFlight") if here(f)]
+    except RuntimeError:
+        flights = []
+    stairs = [s for s in M.entities("stair") if here(s)]
+    where = f"on storey {storey.Name}" if storey is not None else "in the model"
+    used, srcs, missing, treads = [], set(), 0, 0
+    for f in flights:
+        v, src = _num_attr(f, RISER_KEYS, ("Pset_StairFlightCommon",))
+        t, tsrc = _num_attr(f, TREAD_KEYS, ("Pset_StairFlightCommon",))
+        if v is None and t is not None:
+            v, src = t + 1, f"{tsrc} + 1"
+        if v is None:
+            missing += 1
+            continue
+        used.append((f, float(v)))
+        srcs.add(src)
+    if not used:
+        for s in stairs:
+            v, src = _num_attr(s, RISER_KEYS, ("Pset_StairCommon",))
+            if v is not None:
+                used.append((s, float(v)))
+                srcs.add(src)
+    if not used:
+        return {"why": (f"cannot prove: the model records no number of risers or treads for its {len(stairs)} stair(s) "
+                        f"{where} ({len(flights)} IfcStairFlight; no NumberOfRisers / NumberOfTreads attribute or "
+                        f"Pset_StairFlightCommon / Pset_StairCommon value). A count of stairs is not a count of steps")}
+    if missing:
+        return {"why": (f"cannot prove: only {len(used)} of {len(flights)} stair flights {where} record a number of risers; "
+                        f"the steps of the others are not in the model")}
+    value = int(sum(v for _, v in used))
+    return {"used": used, "value": value,
+            "note": f"{value} risers (steps) from {', '.join(sorted(srcs))} over {len(used)} stair flight(s) {where}",
+            "estimate": "steps read as risers; a stair has one tread fewer than risers, so 'steps' can mean either"}
+
+
+SIZE_FILTER_REASON = ("door / window sizes are read straight from the model (OverallWidth / OverallHeight), but size "
+                      "filters have no measured dev questions yet, so this is not marked proven")
+_OPS = {">": lambda a, b: a > b + 1e-6, "<": lambda a, b: a < b - 1e-6}
+
+
+def _size(M, e, dim):
+    v = getattr(e, "OverallWidth" if dim == "width" else "OverallHeight", None)
+    return float(v) * M.len_scale if isinstance(v, (int, float)) and v > 0 else None
+
+
+def size_filter_ents(M, ents, obj, sf):
+    """(matching entities, note, why) for a size filter such as 'wider than 0.9 m'."""
+    attr = "OverallWidth" if sf["dim"] == "width" else "OverallHeight"
+    vals = [(e, _size(M, e, sf["dim"])) for e in ents]
+    miss = [e for e, v in vals if v is None]
+    if miss:
+        return ents, "", (f"cannot prove: {len(miss)} of {len(ents)} {obj}s have no {attr} in the model, so "
+                          f"'{sf['phrase']}' cannot be checked for them")
+    keep = [e for e, v in vals if _OPS[sf["op"]](v, sf["value_m"])]
+    word = {("width", ">"): "wider than", ("width", "<"): "narrower than", ("height", ">"): "taller than",
+            ("height", "<"): "lower than"}[(sf["dim"], sf["op"])]
+    sizes = ", ".join(f"{v:.3f} m" for v in sorted({round(v, 3) for _, v in vals}))
+    return keep, (f"{len(keep)} of {len(ents)} {obj}s with {attr} {word} {sf['value_m']:g} m "
+                  f"({attr} values: {sizes})"), None
+
+
+def size_list(M, storey, q) -> dict:
+    """'how wide are the doors': the distinct OverallWidth (or OverallHeight) values with how many have each."""
+    dim = q.extra.get("size_dim") or "width"
+    attr = "OverallWidth" if dim == "width" else "OverallHeight"
+    ents = M.entities(q.obj)
+    if storey is not None:
+        ents = [e for e in ents if M.storey_of(e) == storey]
+    where = f"on storey {storey.Name}" if storey is not None else "in the model"
+    if not ents:
+        return {"why": f"no {q.obj}s {where}"}
+    vals = [(e, _size(M, e, dim)) for e in ents]
+    known = [(e, v) for e, v in vals if v is not None]
+    if not known:
+        return {"why": f"cannot prove: none of the {len(ents)} {q.obj}s {where} has an {attr} in the model"}
+    from collections import Counter
+    c = Counter(round(v, 3) for _, v in known)
+    parts = [f"{v:.3f} m: {n}" for v, n in sorted(c.items())]
+    value = f"{dim.capitalize()}s of the {q.obj}s {where}: " + "; ".join(parts)
+    if len(known) < len(ents):
+        value += f" ({len(ents) - len(known)} without an {attr})"
+    items = [{"guid": e.GlobalId, "name": getattr(e, "Name", None), "value": round(v, 3)} for e, v in known]
+    return {"value": value, "items": items,
+            "note": f"{attr} of {len(known)} of {len(ents)} {CLASSES[q.obj][0]} {where}",
+            "estimate": SIZE_FILTER_REASON.replace("size filters have", "size listings have")}
+
+
 def answer(ctx, q) -> Answer:
     path = ctx.model_ifc()
     if path is None:
@@ -709,6 +827,23 @@ def answer(ctx, q) -> Answer:
         if fl.get("why"):
             return abstain(ROUTE, fl["why"])
         used, value, unit, note, tier_reason = fl["used"], fl["value"], "count", fl["note"], fl["estimate"]
+    elif q.measure == "count" and q.obj == "stair_step":
+        st = stair_steps(M, storey)
+        if st.get("why"):
+            a = abstain(ROUTE, st["why"])
+            a.final = True
+            return a
+        used, value, unit, note, tier_reason = st["used"], st["value"], "count", st["note"], st["estimate"]
+    elif q.measure == "text" and q.variant == "size_list" and q.obj in ("door", "window"):
+        sz = size_list(M, storey, q)
+        if sz.get("why"):
+            a = abstain(ROUTE, sz["why"])
+            a.final = True
+            return a
+        ans = Answer(value=sz["value"], unit="", route=ROUTE, confidence=0.9, items=sz["items"],
+                     explanation=f"{sz['note']} in {path.name}" + (f"; {sheet_note}" if sheet_note else ""))
+        ans.tier, ans.tier_reason = "estimate", sz["estimate"]
+        return ans
     elif q.measure == "count":
         if q.obj not in CLASSES:
             return abstain(ROUTE, f"no IFC class for {q.obj}")
@@ -718,6 +853,15 @@ def answer(ctx, q) -> Answer:
         ents, qnote, qtier, qwhy = qualifiers.filter_ifc(M, ents, q, storey)
         if qwhy:
             return qualifier_abstain(qwhy, len(ents), q, storey)
+        sf = q.extra.get("size_filter")
+        snote = ""
+        if sf:
+            ents, snote, swhy = size_filter_ents(M, ents, q.obj, sf)
+            if swhy:
+                a = abstain(ROUTE, swhy)
+                a.final = True
+                return a
+            tier_reason = tier_reason or SIZE_FILTER_REASON
         ents_pre = ents
         ents = _external_filter(M, ents, q)
         if ents is None:
@@ -727,6 +871,8 @@ def answer(ctx, q) -> Answer:
         where = f" on storey {storey.Name}" if storey else " in the model"
         note = f"{len(ents)} x {CLASSES[q.obj][0]}" + where
         filters = [qnote.removesuffix(where)] if qnote else []
+        if snote:
+            filters.append(snote)
         if external_note(M, ents_pre, ents, q):
             filters.append(external_note(M, ents_pre, ents, q))
         if filters:
