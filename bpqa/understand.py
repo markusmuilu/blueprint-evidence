@@ -112,7 +112,7 @@ _NAME = {
                          r"^0+$|level 0|^00\b|piano terra|^1\.? ?korrus|grundplan"),
     "basement": re.compile(r"basement|cellar|keller|untergeschoss|^ug\b|kellari|kallare|sous-sol|interrato|"
                            r"underground|^-\d|^b\d\b|level -|kjeller|kaelder|kalder|souterrain|"
-                           r"^u\.? ?etg|underetasje|sotano"),
+                           r"sotano"),
     "attic": re.compile(r"attic|loft|dachgeschoss|^dg\b|ullakko|vind|combles|sottotetto|mansard"),
     "roof": re.compile(r"roof|dach(?!geschoss)|katto|^tak\b|toit|tetto|copertura"),
 }
@@ -161,10 +161,10 @@ def resolve_storey(M, kind: str) -> tuple[object | None, str]:
         if len(named) > 1:
             return None, f"several storeys could be the {kind}: {', '.join(s.Name for s in named)}"
         if kind == "ground":
-            above = [s for s in floors if _elev(s) * M.len_scale >= -0.5]
+            above = [s for s in floors if _elev(s) * M.len_scale >= -0.5 and not _NAME["basement"].search(nm(s))]
             if above:
                 g = min(above, key=lambda s: abs(_elev(s)))
-                return g, f"'ground floor' read as storey {g.Name}, the floor nearest elevation 0 (storeys: {names})"
+                return g, f"'ground floor' read as storey {g.Name}, the lowest floor at or above elevation 0 that is not a basement (storeys: {names})"
         if kind == "basement":
             below = [s for s in floors if _elev(s) * M.len_scale < -1.0]
             if len(below) == 1:
