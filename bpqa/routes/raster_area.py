@@ -801,6 +801,11 @@ class PlanAreas:
 @lru_cache(maxsize=8)
 def analyse(path: str, allow_run: bool = True, assume: tuple = ()) -> PlanAreas | None:
     """`assume`: object sizes the person set (scale_objects.assume_key), used only by an object scale."""
+    if assume:          # scale-assumption: the rooms of the default answer, only the conversion changes
+        base = analyse(path, allow_run)
+        kept = OS.keep_regions(base, path, dict(assume), allow_run) if base is not None else None
+        if kept is not None:
+            return kept
     f = Path(path)
     orient, toks, extra = plan_tokens(f, allow_run=allow_run)
     img = cv2.imread(str(f))

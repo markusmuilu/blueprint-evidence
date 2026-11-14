@@ -196,3 +196,29 @@ def test_js_scale_factor_matches_the_server_median():
                                 "sheets": {"A2": 594, "A3": 420}}}}
     r = _js(f"console.log(JSON.stringify(scaleFactor({json.dumps(sh)}, {{ratio: 100, sheet: 'A3'}})));")
     assert r == pytest.approx((14000 / 594 * 1000 / 200) / (14000 / 420 * 1000 / 100))
+
+
+# ---------------------------------------------------------------- an override keeps the default rooms (QA 14 Nov)
+
+def test_override_keeps_the_rooms_and_changes_only_the_conversion(monkeypatch):
+    from bpqa.routes import raster_area as RA
+    monkeypatch.setattr(OS, "detections", lambda f, allow_run=True: _dets())
+    comb = OS.combine(OS.candidates(_dets()))
+    sc = RA.Scale(comb.m_per_px ** 2, [], comb.iqr, "objects (walls@43)", "default")
+    sc.objects, sc.source, sc.assumed = OS.tag_objects(comb.used), "objects", {}
+    rooms = [RA.Room("MH", None, None, None, (0, 0)), RA.Room("KPH", None, None, None, (5, 5))]
+    for r, px in zip(rooms, (30000, 12000)):
+        r.pixels, r.region_ok, r.extra = px, True, {}
+        r.measured = round(px * sc.m2_per_px, 2)
+    pa = RA.PlanAreas(rooms, [], sc, "walls@43")
+    for door in (0.7, 0.9, 1.2):
+        kept = OS.keep_regions(pa, "plan.png", {"door_m": door})
+        k = OS.median_m_per_px([{"cls": c["cls"], "px": c["px"], "metres": c["metres"]} for c in comb.used], {"door_m": door}) / comb.m_per_px
+        assert kept.regions == "walls@43" and [r.pixels for r in kept.rooms] == [30000, 12000]
+        for r0, r1 in zip(pa.rooms, kept.rooms):
+            assert r1.measured == pytest.approx(r0.pixels * sc.m2_per_px * k * k, abs=0.006)
+        assert kept.scale.assumed == {"door_m": door} and "your value" in OS.scale_short(kept.scale)
+    assert pa.rooms[0].measured == round(30000 * sc.m2_per_px, 2)        # the cached default is not touched
+    printed = RA.PlanAreas(rooms, [], RA.Scale(0.0004, [0, 1], 0.01, "printed-areas", ""), "walls@43")
+    assert OS.keep_regions(printed, "plan.png", {"door_m": 0.9}) is printed      # printed areas assume nothing
+    assert OS.keep_regions(RA.PlanAreas(rooms, [], RA.Scale(None, [], 0, "none", ""), "x"), "plan.png", {"door_m": 0.9}) is None
