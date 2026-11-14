@@ -341,7 +341,7 @@ def find_room(M, question):
 def find_element(M, question, classes):
     """An element named in the question ('door D-12', 'window W03'): a token after the class word
     that equals an element's Name or Tag, or an element type name."""
-    toks = re.findall(r"\b([A-Za-z]{0,4}[-.]?\d[\w.\-/]*)\b", question)
+    toks = re.findall(r"(?<![\w-])([^\W\d_]{0,12}[-.]?\d[\w.\-/]*)", question)
     toks = [t.rstrip(".") for t in toks]
     if not toks or not classes:
         return None
@@ -351,6 +351,8 @@ def find_element(M, question, classes):
         hits = [e for e in pool if k in {norm(e.Name), norm(getattr(e, "Tag", None))}]
         if len(hits) == 1:
             return hits[0]
+        if 1 < len(hits) <= 300:        # several elements carry the same name: answer for all of them
+            return hits
     return None
 
 
@@ -459,11 +461,12 @@ def plan(M, question) -> Lookup | None:
                  r"floor[- ]to[- ]floor|how many (levels|storeys|stories|floors)|which (levels|storeys|floors)|"
                  r"list (of )?(the )?(levels|storeys))\b", f):
         return Lookup(intent="storeys")
+    named = find_element(M, question, classes) if classes and room is None else None
     if re.search(r"\bmaterials?\b|made of|what (is|are) .* built (of|from)", f) and classes:
-        return Lookup(intent="materials", **base)
+        return Lookup(intent="materials", element=named, **base)
     if re.search(r"\bthickness(es)?\b", f) and classes and not unknown_terms(f, M):
         return Lookup(intent="types", attr="thickness", **base)
-    if re.search(r"\b(dimensions?|sizes?|sizing|width and height|heights?|widths?)\b", f) and classes and \
+    if re.search(r"\b(dimensions?|sizes?|sizing|width and height|heights?|widths?)\b", f) and classes and named is None and \
             classes != ["IfcSpace"] and not re.search(r"\b(widest|narrowest|tallest|largest|smallest)\b", f):
         return Lookup(intent="types", attr="dims", **base)
     # extremes: widest door, largest room, tallest ceilings, narrowest window
@@ -486,15 +489,20 @@ def plan(M, question) -> Lookup | None:
             if m:
                 k = NUM_WORDS.get(m.group(1)) or int(m.group(1))
             return Lookup(intent="extreme", attr=attr, order=order, k=k, **base)
+    prop = None
+    for rx, p in ((r"width|wide", "width"), (r"height|high|tall", "height"), (r"area|big|large", "area"), (r"volume", "volume"),
+                  (r"level|storey|floor", "storey"), (r"type", "type")):
+        if re.search(rf"\b(?:{rx})\b", f):
+            prop = p
+            break
+    if room is not None and re.search(r"\bceiling\b", f) and re.search(r"high|height|tall", f):
+        base.update(classes=["IfcSpace"], label="space")
+        return Lookup(intent="element", element=room, prop="height", **base)
     elem = find_element(M, question, classes) if classes and not room else None
     if elem is not None and not re.search(r"\bhow many\b", f):
-        prop = None
-        for rx, p in ((r"width", "width"), (r"height", "height"), (r"area", "area"), (r"volume", "volume"),
-                      (r"level|storey|floor", "storey"), (r"type", "type")):
-            if re.search(rf"\b{rx}\b", f):
-                prop = p
-                break
         return Lookup(intent="element", element=elem, prop=prop, **base)
+    if room is not None and classes and classes != ["IfcSpace"]:
+        return Lookup(intent="types", **base)
     total_attr = None
     for rx, a in ((r"volume", "volume"), (r"length", "length"), (r"\b(area|square)", "area")):
         if re.search(rx, f):
@@ -508,7 +516,7 @@ def plan(M, question) -> Lookup | None:
         base.update(classes=["IfcSpace"], label="space")
         grp = "function" if re.search(r"function|usage|use\b|purpose|grouped", f) else "none"
         if room is not None:
-            return Lookup(intent="element", element=room, **base)
+            return Lookup(intent="element", element=room, prop=prop, **base)
         return Lookup(intent="spaces", group=grp, attr="area", **base)
     if total_attr and classes and re.search(r"\b(total|sum|combined|overall|how much)\b", f):
         return Lookup(intent="total", attr=total_attr, **base)
@@ -578,6 +586,32 @@ def _fmt(v, nd=2):
 
 def run(M, L):
     """Returns (text, rows, cited entities, note) or raises LookupError(reason)."""
+    if isinstance(L.element, list):
+        group = L.element
+        if L.intent in ("fire", "materials"):
+            L.element = None
+            L.storey = L.external = None
+            L.classes = sorted({e.is_a() for e in group})
+            es0 = group
+        elif L.intent == "element":
+            lab = L.label or group[0].is_a()
+            rows = Counter()
+            for e in group:
+                st = M.storey_of(e)
+                parts = [f"type {type_name(e)}"]
+                if L.prop in (None, "width"):
+                    w, _ = width_of(M, e)
+                    parts.append(f"width {_fmt(w)} m" if w is not None else "width -")
+                if L.prop in (None, "height"):
+                    h, _ = height_of(M, e)
+                    parts.append(f"height {_fmt(h)} m" if h is not None else "height -")
+                if L.prop in (None, "storey") and st is not None:
+                    parts.append(f"storey {st.Name}")
+                rows[", ".join(parts)] += 1
+            text = (f"{len(group)} {lab}s are named '{group[0].Name}' in the model (names are not unique); "
+                    + "; ".join(f"{k}: {v}" for k, v in rows.most_common(12)))
+            return text, [{"key": k, "count": v} for k, v in rows.most_common()], group, \
+                "element attributes (OverallWidth/OverallHeight or quantity sets) of every element with that name"
     if L.intent == "unresolved":
         raise LookupError(L.storey_note or "storey in the question not found in the model")
     if L.intent == "meta":
@@ -618,6 +652,8 @@ def run(M, L):
     scope = f" ({fnote})" if fnote else ""
     lab = L.label or L.classes[0]
 
+    if "es0" in locals():
+        es, scope = es0, f" (the {len(es0)} elements named '{es0[0].Name}')"
     if L.intent == "absent":
         vals = Counter()
         for e in es:
@@ -635,7 +671,7 @@ def run(M, L):
         by_type = OrderedDict()
         for e in pool:
             for ps, k, v in flat_props(e):
-                if FIRE.search(str(k)) and v not in (None, "", " "):
+                if FIRE.search(str(k)) and v not in (None, "", " ") and str(v) != str(k):
                     by_type.setdefault(type_name(e), {"values": Counter(), "guids": []})
                     by_type[type_name(e)]["values"][str(v)] += 1
                     by_type[type_name(e)]["guids"].append(e.GlobalId)
@@ -785,6 +821,9 @@ def run(M, L):
         return "\n".join(lines[:200]), rows, es, f"IfcSpace areas ({', '.join(sorted(s for s in srcs if s))})"
 
     if L.intent == "materials":
+        if L.element is not None:
+            es = [L.element]
+            scope = f" ({lab} {L.element.Name})"
         by_mat = OrderedDict()
         for e in es:
             for m, t in materials_of(e) or [("(no material assigned)", None)]:
