@@ -1,6 +1,7 @@
 """Answer record shared by all routes."""
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 
 
@@ -52,3 +53,46 @@ def estimate(ans: Answer, reason: str) -> Answer:
 
 def abstain(route: str, reason: str) -> Answer:
     return Answer(route=route, abstain=reason)
+
+
+# ---------------------------------------------------------------- what the app shows
+# Reasons are written for the log and for tests: they name env flags, exception classes and model files. The app
+# shows `public_reason(...)`, the same sentence with those parts removed or put in plain words.
+_INTERNAL = re.compile(
+    r"NEMO_\w+|STOA_\w+|NVIDIA_\w+|[A-Z][A-Z0-9]*_[A-Z0-9_]{2,}=\S*|Traceback|[A-Z]\w*(?:Error|Exception)|"
+    r"Invalid device|CUDA|\.pt|tools/\w+\.py")
+_PLAIN = [
+    (re.compile(r"image estimate switched off|NEMO_IMAGE_ESTIMATE", re.I), ""),
+    (re.compile(r"model call failed|invalid model output", re.I), "the image model could not give a usable reading"),
+    (re.compile(r"detector model missing|image unreadable", re.I), "the symbol detector could not read this image"),
+    (re.compile(r"fixture model not trained|no .* head in the fixture model", re.I), "fixtures cannot be counted on scans here"),
+]
+
+
+def public_reason(reason: str | None) -> str | None:
+    """A reason fit for the app: internal settings, exception text and file names of models are dropped or put in
+    plain words; what the drawing does or does not carry is kept. Keeps `None` and empty as they are. The raw
+    reason belongs in the log."""
+    if not reason:
+        return reason
+    out = []
+    for part in re.split(r";\s+", reason):
+        msg = part.split(": ", 1)[1] if ": " in part else part
+        route = part.split(": ", 1)[0] if ": " in part else ""
+        plain = next((p for rx, p in _PLAIN if rx.search(part)), None)
+        if plain is not None:
+            text = plain
+        elif re.match(r"error\b", msg, re.I) or _INTERNAL.search(msg):
+            text = "this reading could not be completed for this drawing"
+        else:
+            out.append(part)
+            continue
+        if text:
+            out.append(f"{route}: {text}" if route and " " not in route else text)
+    seen, uniq = set(), []
+    for p in out:
+        k = p.split(": ", 1)[-1]
+        if k not in seen:
+            seen.add(k)
+            uniq.append(p)
+    return "; ".join(uniq) or "No route could answer this from the drawing."

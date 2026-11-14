@@ -104,8 +104,44 @@ def _pdf(ctx, q) -> Answer:
     return ans
 
 
+def _sheet(ctx, q) -> Answer:
+    """A large drawing sheet: printed ratio with the printed sheet size, and the scale bar, cross-checked."""
+    from .. import sheet as S
+    from . import sheet_plan as SP
+    d = S.analyse(ctx.file, regions=False)
+    sc = S.scale_of(d)
+    r = sc.ratio.get("denom") if sc.ratio else None
+    if not r and not sc.ppm:
+        return abstain(ROUTE, f"no printed scale ratio or scale bar read on the sheet ({sc.detail})")
+    if r:
+        val = f"1:{r}"
+        ans = Answer(value=val, unit="ratio", route=ROUTE, confidence=0.95 if sc.strong else 0.8,
+                     explanation=(f"{val}, read from the ratio printed on the sheet"
+                                  + (", cross-checked with the scale bar (they agree)" if sc.strong else
+                                     ", the scale bar disagrees" if sc.bar and sc.sheet else "") + f": {sc.detail}"),
+                     items=[{"printed": val, "px_per_m": round(sc.ppm, 2) if sc.ppm else None, "source": sc.source}])
+        if sc.ppm and sc.bar and not sc.strong and sc.sheet:
+            ans.tier, ans.tier_reason = "estimate", "the printed ratio and the scale bar disagree on this image"
+    else:
+        ans = Answer(value=f"{sc.ppm:.1f} px per m", unit="px/m", route=ROUTE, confidence=0.6, tier="estimate",
+                     tier_reason="no ratio printed; the scale bar gives pixels per metre on this image, not a paper ratio",
+                     explanation=sc.detail)
+    if ctx.evidence:
+        cv = SP.Canvas(ctx.file)
+        st = SP.scale_steps(cv, sc)
+        from ..evidence import record_steps
+        record_steps(cv.cv.img, 1, [st])
+        ans.evidence = finish(cv.cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
+                              f"Answer: {ans.value}{'   ESTIMATE' if ans.tier == 'estimate' else ''}   route: {ROUTE} (cost €0)",
+                              note="boxed: the printed ratio, the sheet size and the scale bar labels. " + sc.detail[:300])
+    return ans
+
+
 def _raster(ctx, q) -> Answer:
     from .labels import quad_box
+    from .. import sheet as S
+    if S.is_large(ctx.file):
+        return _sheet(ctx, q)
     from .ocr import ocr_image
     toks = ocr_image(ctx.file) or []
     hits = []

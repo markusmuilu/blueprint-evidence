@@ -199,7 +199,7 @@ def test_approximation_evidence_steps(monkeypatch, tmp_path):
     assert not [m for m in mk["marks"] if m["kind"] == "box" and m.get("tone") == "amber" and m.get("n") is None]
 
 
-def test_no_approximation_for_kitchens(monkeypatch):
+def _kitchen_ctx(monkeypatch):
     m2 = 1 / PPM ** 2
     r = RA.Room("K", (10, 10, 18, 18), None, None, (10, 10), pixels=140 * 140, region_ok=True, contour=square(140))
     r.measured = round(r.pixels * m2, 2)
@@ -209,5 +209,18 @@ def test_no_approximation_for_kitchens(monkeypatch):
     qtext = "How big is the kitchen?"
     ctx = SimpleNamespace(file=Path("none.png"), q=SimpleNamespace(path="data/x/none.png", question=qtext),
                           evidence=False, out_dir=Path("."))
+    return ctx, qtext
+
+
+def test_kitchen_approximation_answers_with_a_warning(monkeypatch):
+    ctx, qtext = _kitchen_ctx(monkeypatch)
+    a = RA.takeoff_answer(ctx, parse(qtext), None)
+    assert a.answered and a.tier == "estimate"
+    assert "(approximation)" in a.approx["text"] and "open living area next to the kitchen" in a.approx["text"]
+
+
+def test_kitchen_can_be_made_to_abstain_again(monkeypatch):
+    ctx, qtext = _kitchen_ctx(monkeypatch)
+    monkeypatch.setattr(OS, "NO_APPROX_TYPES", {"kitchen": "measured kitchens were off by a median of 87%"})
     a = RA.takeoff_answer(ctx, parse(qtext), None)
     assert not a.answered and "no approximation for kitchen" in a.abstain and "87%" in a.abstain

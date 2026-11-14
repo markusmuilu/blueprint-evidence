@@ -120,6 +120,12 @@ def ents(M, classes):
                    if (t := E.get_type(e)) is not None and t.is_a("IfcSanitaryTerminalType")]
         except RuntimeError:
             pass
+    if "IfcPipeSegment" in classes and not out:             # IFC2X3: pipes are IfcFlowSegment of a pipe type (bpqa/piping.py)
+        from .. import piping
+        out = list(piping.pipe_segments(M)[0])
+    if "IfcPipeFitting" in classes and not out:
+        from .. import piping
+        out = list(piping.pipe_fittings(M, piping.pipe_segments(M)[0])[0])
     if "IfcRoof" in classes:
         try:
             out += [e for e in M.m.by_type("IfcSlab") if getattr(e, "PredefinedType", None) == "ROOF"]

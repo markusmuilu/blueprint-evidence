@@ -30,11 +30,13 @@ ROOM_PATTERNS = {
 # Not included on purpose: BATH, SHOWER, DUSCHE (also printed next to the fixture symbol), generic
 # ROOM / ZIMMER (no type).
 ROOM_WORDS = {
-    "bedroom": ("BEDROOM", "BEDRM", "SCHLAFZIMMER", "SCHLAFEN", "KINDERZIMMER", "ELTERNZIMMER", "GASTZIMMER"),
-    "kitchen": ("KITCHEN", "KITCHENETTE", "KUCHE", "KUECHE", "KOCHEN", "KOCHNISCHE", "WOHNKUCHE"),
-    "sauna": (),
+    "bedroom": ("BEDROOM", "BEDRM", "SCHLAFZIMMER", "SCHLAFEN", "KINDERZIMMER", "ELTERNZIMMER", "GASTZIMMER",
+                "MAKUUHUONE"),
+    "kitchen": ("KITCHEN", "KITCHENETTE", "KUCHE", "KUECHE", "KOCHEN", "KOCHNISCHE", "WOHNKUCHE", "KEITTIO"),
+    "sauna": ("SAUNA",),
     "wc_room": ("TOILET", "TOILETS", "LAVATORY", "CLOAKROOM", "GASTEWC"),
-    "bathroom": ("BATHROOM", "SHOWERROOM", "WASHROOM", "ENSUITE", "BADEZIMMER", "DUSCHBAD"),
+    "bathroom": ("BATHROOM", "SHOWERROOM", "WASHROOM", "ENSUITE", "BADEZIMMER", "DUSCHBAD", "PESUHUONE", "KYLPYHUONE",
+                 "SUIHKUHUONE"),
     "balcony": ("BALCONY", "BALKON", "LOGGIA"),
 }
 # two-word labels joined before splitting ("BED ROOM" -> BEDROOM, "LIVING ROOM" -> LIVINGROOM)
@@ -76,7 +78,8 @@ def _split_combo(p: str) -> list[str]:
 def parts(text: str) -> list[str]:
     t = norm(text)
     t = re.sub(r"\(.*?\)", " ", t)           # "MH (VARAUS)" -> "MH"
-    t = re.sub(r"(?<=[A-Z])\.(?=[A-Z])", "", t)  # "W.C" -> "WC"
+    # "W.C" -> "WC", but two words joined by a dot stay two ("KEITTIO.RUOKAILU" -> KEITTIO, RUOKAILU)
+    t = re.sub(r"([A-Z]+)\.(?=[A-Z])", lambda m: m.group(1) + (" " if len(m.group(1)) >= 3 and len(m.string[m.end():].split(None, 1)[0].split(".")[0]) >= 3 else ""), t)
     ps = [p for p in re.split(r"[+/,;&\s()\[\]=]+", t) if p]
     ps = [q for p in ps for q in _split_combo(p)]
     # apartment-type summaries ("3H+K+S", "1H+KK 32.5 m2") describe the flat, they are not room labels
@@ -133,7 +136,7 @@ def _overlap(b, c, thr):
 
 # common plan words (rooms that are not asked about), used to decide whether an image is mirrored and
 # whether enough of the plan's labels were readable for a zero to mean something
-PLAN_WORDS = (r"OH|ET|KHH|VH|AULA|RT|TK|ETEINEN|OLOHUONE|VAR|VARASTO|TERASSI|KERROS|PUKUH(UONE)?|TEKN|"
+PLAN_WORDS = (r"RUOKAILU|RUOKAILUTILA|RUOKAH(UONE)?|OH|ET|KHH|VH|AULA|RT|TK|ETEINEN|OLOHUONE|VAR|VARASTO|TERASSI|KERROS|PUKUH(UONE)?|TEKN|"
               r"TUULIKAAPPI|TK|ASKH|LVH|IV|VAATEH(UONE)?|KUISTI|TAKKA|PORRAS|KELLARI|ALAKERTA|YLAKERTA|PARVI|"
               # English
               r"LIVINGROOM|LOUNGE|DININGROOM|SITTINGROOM|FAMILYROOM|DRAWINGROOM|HALL|HALLWAY|LANDING|LOBBY|"

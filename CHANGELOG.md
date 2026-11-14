@@ -3,6 +3,85 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: rooms on generic drawings, preview, plain reasons, branch `generic-rooms`
+
+QA tried the unseen plan (architecture-floor-plan.dxf, 18 labelled rooms in a 6 x 3 grid): "How many rooms?" was
+"no generic DXF rule for count of room", "area of the cafe" had no answer, the DXF had no preview and a cannot showed
+"image estimate switched off (NEMO_IMAGE_ESTIMATE=0)".
+
+- **Rooms from walls** (`routes/wall_regions.py`, used by `dxf_generic` and, for PDFs with no room shapes, `pdf_vector`
+  through `pdf_generic.wall_regions`). Wall-class lines (wall, window, column layers) are thickened by 2.5 cm and cut out of
+  a box around the drawing; what is left is one region per room. Door openings are sealed by the closed leaf of each
+  door swing (hinge to arc end), then any remaining gap between two wall ends on the same line is bridged, trying
+  0, 1.0, 1.3 and 1.8 m in turn. Each label (room-name text on room, plain annotation or unclassed layers, not numbers,
+  areas, door or furniture tags) is attached to the region holding its centre. Proven only when every label lies in a
+  closed region and no region holds two labels; otherwise an estimate that says which labels sit outside or share a
+  region. Areas use $INSUNITS (or the door-swing check) and are proven on the same condition.
+- **Questions answered this way:** room count (no label named), count of rooms by label or by a word in the label
+  ("how many open offices"), area of a named room, also when the parser lost the label ("how big is MEETING 01":
+  the label is found in the question text). Several rooms with one label ("OPEN OFFICE" twice) are added up as an
+  estimate. The unseen DXF: 18 rooms proven (was a cannot), CAFE 9.23 m2, MEETING 01 9.23 m2 proven. Its PDF twin is
+  answered from the DXF; the PDF alone has no text layer (labels are outlined glyphs), so it still cannot name rooms
+  and says so.
+- **"List the rooms"** is not parsed by the rule parser (query.py belongs to the phrasing work); the count answer's
+  explanation lists every room with its area, so it is ready for when the parser maps it.
+- **DXF preview.** `/api/preview` shows the PDF twin when there is one, else a PNG drawn from the DXF with the ezdxf
+  drawing add-on (matplotlib Agg, in requirements.txt already), cached with the PDF previews.
+- **Plain reasons.** `answer.public_reason` drops env flags (NEMO_*), exception text ("AssertionError: Invalid device
+  id"), model file names and script paths from what the app shows and puts model failures in a sentence; the raw text is
+  printed to the server log. Failed checks show "this check could not run on this drawing".
+- **Used-line:** a cannot answer says "Tried: ...; none could prove it" instead of "Answered with: ...".
+- No change on dev: swiss_dwellings, ifc_bench, cubicasa5k and ifc_models room/door/window/toilet rows are identical
+  before and after (see commit message); tests/test_wall_rooms.py adds 15 cases.
+## 2026-11-14: known failures, branch `specific-failures`
+
+Five failures from his own testing, fixed in general ways (no per-file cases). Not merged.
+
+- **Kitchens answer in the area approximation** (his decision). `NO_APPROX_TYPES` is empty: "How big is the kitchen?" on a
+  scan that prints no areas gives "About N m2 (approximation)" as tier estimate with "Check: this outline may include the
+  open living area next to the kitchen", and the traced outline is drawn on the evidence. Put `"kitchen": "<why>"` back in
+  `NO_APPROX_TYPES` to abstain again. Measured: kitchens with a printed label in the object-scale leave-one-out: 12 rooms,
+  median error 35% (signed -9%, within 10%: 25%); 87% in the end-to-end test. The cheap outline cut (at the counter run or a
+  large opening) was not built: 12 kitchens are too few to tune or to verify a cut against.
+- **high_quality-14334** (upside-down plan, text reads in every pass): the label route already pools all eight OCR passes,
+  and the passes read this plan about equally well (the OCR corrects the 180-degree turn inside a box), so a "best
+  orientation by room words" does not separate them. What was missing was vocabulary: Finnish full words (PESUHUONE,
+  KYLPYHUONE, SUIHKUHUONE, MAKUUHUONE, KEITTIO, SAUNA) are room words (with one OCR error for 8+ letters: "PESUIHUONE"), a
+  dot between two words of 3+ letters splits them ("KEITTIO.RUOKAILU" is a kitchen label; "W.C" is still WC), RUOKAILU is a
+  plan word, and labels that are full words win over the detector as for English and German. Kitchen, bathroom, sauna
+  0, 0, 0 (gold 1, 1, 1) -> 1, 1, 1 (estimates). WC rooms still 4 (gold 2): the detector's 4 outvote 2 "WC" labels, an
+  abbreviation. The room detector also gets a retry on the plan turned 180 degrees when its own drawn score is low and the
+  turned view scores at least 1.5x and +1.0 higher (`STOA_ROOMS_ORIENT=0` turns it off); on 14334 the turned view scores
+  2.0 against 1.5 (gain 1.35), so it does not trigger there: the detector is weak on this plan in every orientation.
+- **Narrow rooms cut by the doorway bridge** (high_quality_architectural-10372 WC): a printed room whose region holds under
+  75% of its printed area is measured again with a smaller bridge (75%, 50%, minimum of the hypothesis' doorway width), for
+  that room only, and the region nearest the printed area is kept when within 25% of it (`retry_narrow`,
+  `STOA_NARROW_RETRY=0` turns it off). WC 1.8 m2: region 0.80 -> 1.77. It uses the printed area as the target, so it only
+  changes outlines and measured values of printed rooms, never an answer's printed value. `tools/narrow_eval.py` ran on
+  only 3 plans with cached OCR (1 retried room, no other room changed).
+- **high_quality-10241 bathroom outline** (same family: the legacy wall mask closes fixtures against a wall into it): in the
+  object-scale approximation each room takes the thick-stroke mask's region when it is closed and 15% larger than the
+  legacy region (`merge_stroke`, `STOA_STROKE_MERGE=0` off). KPH 5.89 -> 8.24 m2, outline now covers the whole bathroom.
+  `tools/region_family_eval.py` (object scale from standard objects, printed areas hidden, 10 plans with a stroke mask, 93
+  rooms): median error against printed 19.8% (legacy) -> 5.2% (rule), better in 12 rooms, worse in 0; stroke alone
+  4.1% but closes fewer rooms. A small sample: the cache build is slow.
+- **Tyneside "how many bathrooms" 4 -> 2.** A drawn room whose box holds another type's label read exactly (Bedroom, 0.39
+  and 0.35) is dropped, and a printed "Shower" inside a drawn bathroom counts as its label (never proven on that alone).
+  `STOA_ROOMS_LABEL_FILTER=0` turns both off.
+- **"Not to scale" notes** (`bpqa/not_to_scale.py`): ei mittakaavassa, ohjeellinen, suuntaa antava, not to scale, NTS,
+  unmassstaeblich, ej skalenlig, pas a l'echelle (squashed text, one OCR error allowed in long phrases). 26 of the 279
+  scans with OCR caches carry one. Printed areas stay stated values; the approximation, measured areas and wall
+  perimeters get "The drawing says it is not to scale (...): this approximation may be off." in the answer, the amber
+  approximation box and the tier reason, and the note is boxed dashed amber on the evidence and added as a step.
+  Other routes (sheet scale on PDFs) are unchanged.
+
+Dev check (room-type counts, CubiCasa dev, `eval.py --split dev --sources cubicasa5k --objects bedroom,kitchen,bathroom,
+sauna,balcony,wc_room,wc`, main behaviour against all of the above, first 557 of the 21,398 such questions in path order, so
+colorful plans only: the full run was too slow on a shared machine): 521 -> 523 correct (93.5% -> 93.9%), proven 132 -> 132
+(all correct both times), 2 answers differ (colorful-14927 bedrooms 1 -> 0, gold 0), no regression. High_quality plans
+(14334, 10241, 10372) were checked by hand only. pytest: 252 passed.
+
+
 ## 2026-11-14: casual phrasings, branch `phrasing-2`
 
 QA asked 50 casual questions on the live app: 30 fine, 3 wrong proven, the rest not understood. Fixed in general ways.
@@ -66,6 +145,86 @@ cubicasa5k, 5,245 questions, after merging main): 0 answers changed correctness,
 before and after. Area values are rounded to 2 decimals; two scan answers (high_quality_architectural-11769, showers
 and bathtubs) went 3 -> 4, gold 1, wrong both times: a printed BATH next to a tub now reads as a bathroom label, the
 reason BATH had been left out. Kept because it changed no dev result; watch it.
+## 2026-11-14: large raster drawing sheets, branch `big-raster-plans` (not merged)
+
+Builders AQ and AQ2. Stoa's sample drawing is a whole A2 sheet exported as one 14000 x 9902 px PNG (a UK special
+school plan, "1:200", scale bar 0 / 10 / 20 m, English room names, no printed areas). The scan routes were built for
+CubiCasa images of 240 to 2000 px and run out of memory on it. Images with a long side of 5000 px or more now go to
+a new route, `raster-sheet` (`bpqa/sheet.py` reads the sheet once and caches it, `bpqa/routes/sheet_plan.py` answers):
+
+- Text: tiled OCR on a copy 5000 px long, lines of one label joined ("Secondary" / "Classroom" / "(Severe Needs)")
+  unless a wall line runs between them.
+- Scale: the printed ratio with the printed sheet size (A2, image aspect checked), cross-checked with the scale bar:
+  117.8 px per m against 118.0 (0.2%). `What is the scale` answers 1:200 from it.
+- Rooms: wall-bounded regions traced on a copy at 50 px per m with the scan route's wall code (wall-line gaps up to
+  4.5 m closed), each room-name label flood filled; gross footprint from the outer walls.
+- Questions matched to the room names printed on the sheet: the longest run of question words found in a name, its
+  head noun preferred ("store" matches "Secure Store", "lift" matches "Lift" and not "Lift Landing"), a few English
+  synonyms (staircase / stair, WC / toilet, disabled / accessible, class room / classroom, elevator / lift). Counts,
+  areas, perimeters, "is there a ...?" (yes, or an abstention when no name matches: a name not read is not a no),
+  total floor area (gross, with the named rooms' net sum stated). Skirting / baseboard questions deduct the door
+  boxes in each room's walls.
+- Doors and windows: the scan detector on tiles of a copy at 80 px per m. Windows count only boxes in the outer
+  walls: the detector also boxes vision panels and glazed screens in internal walls (12 on the sample).
+- `sheet_plan.rooms(file)` gives each named room its perimeter and the door boxes in its walls in the record shape
+  `bpqa/baseboard.py` reads (`perimeter`, `openings` [{kind, width, ...}], `doors_m`, `baseboard_m`), for builder
+  AT's baseboard takeoff.
+- Everything is tier "estimate".
+
+Doors and windows checked by eye on the sample (every region of the plan, crops at full resolution): of 125 door
+boxes 3 were not doors (two glazed panels, one cubicle partition) and 7 doors were missed (two sliding doors, three
+plant-room double doors drawn without swing arcs, two double doors in the thin walls of the covered walkway): about
+129 doors, each double door one. All 68 window boxes on the outer walls were windows and none was missed there.
+
+Truth list, the sample sheet, answered by eye from the drawing against the route:
+
+| question | by eye | ours |
+|---|---|---|
+| scale | 1:200 (printed, scale bar agrees) | 1:200 |
+| classrooms | 8 (6 Secondary Classroom, 2 Severe Needs) | 8 |
+| group rooms | 10 | 10 |
+| toilets | 7 rooms named toilet (2 of them accessible) | 7 |
+| accessible toilets | 2 | 2 |
+| stores | 12 names with "store" (8 Store, 3 Secure Store, Servery and Furniture Store) | 12 |
+| offices | 4 (Staff Office x2, Admin Office, Head's Office) | 4 |
+| staircases | 3 (2 "Stair (Ground)", 1 escape stair drawn without a name) | 2 (wrong: the unnamed stair) |
+| area of the hall | 245.2 m2 (17.82 x 13.76 m between wall faces, measured in pixels) | 244.7 m2 |
+| area of the library | 25.8 m2 (7.77 x 3.32 m) | 26.3 m2 |
+| doors | about 129 | 125 |
+| windows | 68 in the outer walls (plus 12 internal glazed panels) | 68 (80 before the outer-wall rule) |
+
+Known wrong: a wall-line bridge from a short wall stub to the facade cuts some rooms (Therapy Room 8.4 m2 against
+about 13 by eye, the south Staff Office 12.8 against about 20, Interview Room 4.3 against about 9). Lowering the 4.5 m
+bridge limit to 2.0 m fixes those but merges the hall with the servery (a 4 m serving hatch) and lets Reception reach
+the sheet edge, so the limit stays; the fix would be to bridge only gaps continuing a wall line. Rooms with a cut
+outline also lose their door openings. Each count by name misses a room drawn without a name.
+
+Timing on 8 pinned CPU cores, cold cache, with evidence drawn (`bpqa.router.solve` in one process): first question
+(area of the hall: OCR, scale, wall tracing) 90 s; first door question after it 251 s (the detector on about a hundred
+1024 px tiles); every later question 0.4 s; peak memory 2.5 GB. The machine was at 100% CPU from other sessions'
+processes during the run, so these are upper bounds (AQ measured 50 s for the first question on 4 idle cores). The
+detector run is the slow step: reading the sheet and running the detector at upload, before the first question,
+would hide both.
+## 2026-11-14: question types for the final evaluation, branch `new-qtypes` (not merged)
+
+Stoa's list of tricky types on unreleased drawings: baseboard linear metres, slab area by type with thickness and bars, piping.
+
+- Baseboards (`bpqa/baseboard.py`): perimeter minus door openings, per room, on IFC, Swiss DXF and scans.
+- Slabs (`bpqa/slabs.py`): area by type and thickness from IfcSlab quantities; computed footprint is an estimate; rebar questions are
+  "cannot prove" because no dataset model has reinforcement objects.
+- Piping (`bpqa/piping.py`, text route): total pipe length, by system or diameter, pipe segment count, fittings. Read from quantities it is
+  proven; a segment without a length is computed from its geometry and the answer becomes an estimate that says so. Read lengths are
+  compared with the geometry of up to 200 segments. IFC2x3 plumbing models export pipes as IfcFlowSegment: `ifc_props.ents` now maps
+  IfcPipeSegment / IfcPipeFitting to them too. Piping without an IFC model is "cannot prove" with the reason.
+- Hand checks: duplex plumbing 151.44 m (231 segments), 227 fittings; clinic plumbing 3246.91 m (2893 segments), 3282 fittings (about 5 min);
+  fzk-haus slabs 384.96 m2, baseboard 136.19 m.
+- Regression: question parses over all 6789 distinct dataset questions differ in one (the skirting question, which the rules did not read
+  before).
+- `eval.py --split dev` on Swiss, ifc_models and ifc_bench (28839 questions) against main: answers and correctness identical on every
+  question except 7, all in ifc_bench: the duplex skirting question (abstained, now answered 317.13 m, gold is another quantity so it
+  stays wrong) and 6 sixty5_plumbing property questions, which now see the model's IFC2x3 pipes and fittings (before: "No pipe
+  elements in this model"; one more correct, none lost). Overall 27819 correct against 27818. Swiss and ifc_models unchanged.
+  Type and breakdown questions ("pipe fitting types and quantities") are kept off the piping route and stay with ifc-props.
 
 ## 2026-11-14: area approximation on scans that print no areas, branch `scale-approximation` (ON)
 

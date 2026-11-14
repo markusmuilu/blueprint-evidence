@@ -25,6 +25,7 @@ from shapely.ops import unary_union
 
 from .. import takeoff
 from .. import walls as wallmod
+from .. import baseboard
 from ..answer import Answer, abstain, estimate
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish, record_steps
 from .scope_guard import ambiguous_room, single_room_problem
@@ -520,7 +521,11 @@ def answer(ctx, q) -> Answer:
             note = f"rooms labelled '{q.label}'"
         elif q.variant == "type_sum":
             tk = q.extra["takeoff"]
-            rooms_used, generic, tk = takeoff.toilet_fallback(fl.rooms, tk, has_toilet=swiss_has_toilet(fl))
+            if tk.get("all_rooms"):         # baseboard for every indoor room (bpqa/baseboard.py)
+                rooms_used = baseboard.select_rooms([r for r in fl.rooms if fl.counts_as_indoor(r) and not fl.is_shaft(r)], tk)
+                generic = []
+            else:
+                rooms_used, generic, tk = takeoff.toilet_fallback(fl.rooms, tk, has_toilet=swiss_has_toilet(fl))
             tku = tk
             if not rooms_used:
                 rooms_used, tk = takeoff.fixture_room_fallback(fl.rooms, tk, lambda r: swiss_room_fixtures(fl, r))
@@ -577,9 +582,10 @@ def answer(ctx, q) -> Answer:
         if wallmod.surfaces(tk)[1]:
             wrooms = swiss_wall_rooms(fl, rooms_used)
             ans.value, ans.items, wexpl, totals = wallmod.summary(wrooms, tk, ctx.q.question)
+            ans.unit = totals.get("unit", ans.unit)
             ans.items.append({"totals": totals})
             ans.explanation = wexpl + f" Source: {dxf.name}."
-            ans.tier = "estimate" if not wallmod.parse_inputs(ctx.q.question, tk).get("ceiling_m") else None
+            ans.tier = "estimate" if not wallmod.parse_inputs(ctx.q.question, tk).get("ceiling_m") and not baseboard.is_baseboard(tk) else None
             ans.tier_reason = "room height, door and window heights are assumptions (a floor plan does not carry them)" if ans.tier else ""
             if fb:
                 estimate(ans, fb)
@@ -596,8 +602,7 @@ def answer(ctx, q) -> Answer:
                     for o, d in zip(r["openings"], w["deductions"]):
                         o["deducted"] = d["area"]
                 wallmod.draw_rooms(cv, wrooms, PALETTE[0], PALETTE[0], (231, 140, 8),
-                                   lambda i, r: f"{i + 1}. {r['label']}: floor {r['floor_area']:.2f}, walls "
-                                                f"{wallmod.room_walls(r, inp)['net']:.2f} m²",
+                                   lambda i, r: wallmod.room_caption(i, r, inp),
                                    label_at=lambda i, r: label_point(rooms_used[i]))
                 for i, r in enumerate(rooms_used):
                     draw_room_texts(cv, r)
@@ -605,8 +610,10 @@ def answer(ctx, q) -> Answer:
                 out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
                 est = "; ".join(x for x in ("assumed heights" if ans.tier and "room height" in ans.tier_reason else "",
                                              takeoff.fallback_label(tk) if fb else "") if x)
+                bb_note = (f"Baseboard = ROOM_OUTLINE (thick blue) minus door openings (amber boxes: DOOR leaf widths, in m); windows "
+                           f"do not interrupt it. Surfaces: {totals['surfaces']}.") if baseboard.is_baseboard(tk) else ""
                 ans.evidence = finish(cv.img, out, ctx.q.question, wallmod.answer_line(ans.value, totals, ROUTE, est),
-                                      note=((takeoff.interpretation(tk, [(f"{r['label']} {r['number'] or ''}".strip(), r["floor_area"]) for r in wrooms]) + " ") if fb else "") + (f"Walls = ROOM_OUTLINE (thick blue) x height - openings (amber: doors from DOOR "
+                                      note=bb_note or ((takeoff.interpretation(tk, [(f"{r['label']} {r['number'] or ''}".strip(), r["floor_area"]) for r in wrooms]) + " ") if fb else "") + (f"Walls = ROOM_OUTLINE (thick blue) x height - openings (amber: doors from DOOR "
                                             f"leaves, windows from WINDOW strips). {wallmod.room_walls(wrooms[0], inp)['height_src'] if wrooms else ''}. "
                                             f"Door height {wallmod.DOOR_H_M:.2f} m, window {wallmod.WINDOW_H_M:.2f} m on a "
                                             f"{wallmod.WINDOW_SILL_M:.2f} m sill: assumptions. Surfaces: {totals['surfaces']}."))

@@ -28,9 +28,10 @@ from .data import Question
 from .query import Query, parse
 from . import nemotron as nemo_client
 from . import phrasing
+from . import piping
 from . import understand
 from . import second_opinion
-from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_scale
+from .routes import dxf_swiss, ifc_props, ifc_route, nemotron, pdf_text, pdf_vector, raster, raster_rooms, sheet_plan, sheet_scale
 
 RASTER_EXT = {"png", "jpg", "jpeg", "tif", "tiff"}
 
@@ -109,6 +110,8 @@ def text_routes(ctx: Context):
     the IFC model (ifc-props) and over PDF schedules (pdf-text). Every value comes from the file."""
     routes = []
     twins = not ctx.pdf_only or ctx.q.ext != "pdf"
+    if piping.parse_piping(ctx.q.question) is not None:
+        routes.append(piping.text_answer)     # numeric piping questions (bpqa/piping.py): length, by system / diameter, fittings
     if ctx.q.ext == "pdf":
         routes.append(pdf_text.answer)
     if twins and ctx.model_ifc() is not None:
@@ -194,7 +197,8 @@ def _composite(ctx: Context) -> tuple[Query, Answer] | None:
         # a list or superlative the property lookups already answer (IFC: "what are all the spaces on level 2 with
         # their areas", "which room is the largest") keeps that answer: names, storeys and heights included
         rq = phrasing.read(ctx.q.question, use_llm=False)
-        if rq.ok() and (rq.extra.get("compound") or rq.extra.get("unresolved_scope") or rq.measure == "text")                 and text_routes(ctx):
+        if rq.ok() and (rq.extra.get("compound") or rq.extra.get("unresolved_scope") or rq.measure == "text") \
+                and text_routes(ctx):
             tried = list(ctx.tried)
             q0, a0 = _solve(ctx, rq)
             if a0.answered and (a0.route or "").startswith(("ifc-props", "pdf-text")):
@@ -326,7 +330,19 @@ def _solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         # rules first; the language model reads the question only when the rules read nothing, read something no
         # route answers, or ignored a room type the question names (bpqa/phrasing.py), and its reading is
         # validated into the same Query shape the rules build
-        query = phrasing.read(ctx.q.question, use_llm=use_nemo)
+        # on a large drawing sheet the sheet route reads the question against the room names printed on it, so the
+        # language-model reading (a network call) is not needed
+        big = ctx.q.ext in RASTER_EXT and sheet_plan.applies(ctx)
+        query = phrasing.read(ctx.q.question, use_llm=use_nemo and not big)
+    if ctx.q.ext in RASTER_EXT and query.obj != "scale" and sheet_plan.applies(ctx):
+        # a large drawing sheet: read once at the resolution each step needs (bpqa/sheet.py); the scan routes below
+        # were built for 2000 px images and would run out of memory on it
+        try:
+            a = sheet_plan.answer(ctx, query)
+        except Exception as ex:
+            a = abstain(sheet_plan.ROUTE, f"error: {type(ex).__name__}: {ex}")
+        ctx.tried.append(a.route)
+        return query, a
     if not query.ok():
         return query, _try_text(ctx, query, "question not understood by the rule parser (language-model parse off, or it found no measurable question)")
     ns = None if query.extra.get("compound") or query.obj == "storey" else named_storey(ctx, query)
@@ -349,7 +365,8 @@ def _solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
             query.extra["scope_resolved"] = f"'ground floor' read as this sheet's storey {st}"
             from .query import attach_qualifier
             query = attach_qualifier(ctx.q.question, query)    # qualifiers are not read under an unresolved scope
-    if query.extra.get("storey_ref") and query.extra.get("unresolved_scope") and not query.level             and not query.extra.get("compound") and not query.extra.get("takeoff", {}).get("scope_named"):
+    if query.extra.get("storey_ref") and query.extra.get("unresolved_scope") and not query.level \
+            and not query.extra.get("compound") and not query.extra.get("takeoff", {}).get("scope_named"):
         # "windows on the top floor", "kellarissa", "im Obergeschoss": the storey of the model it names (bpqa/understand.py)
         name, note = understand.storey_scope(ctx, query)
         if name is None:

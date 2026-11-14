@@ -468,6 +468,34 @@ def _match_room_label(fl, label):
     return [r for r in fl.rooms if any(name_eq(t, label) for t in r["texts"])]
 
 
+def _rooms_from_walls(fl, ctx, q, label):
+    """Rooms of a PDF with no room shapes: regions enclosed by dark wall linework with a printed label inside
+    (pdf_generic.wall_regions). Returns (room dicts like the shape route's, note, clean, reason)."""
+    sc = fl.scale
+    got, why = pdf_generic.wall_regions(fl.vp, sc.m_per_pt if sc.known else None)
+    if got is None:
+        return [], "", None, why
+    res, labels = got
+    from .dxf_generic import label_eq
+    rooms = []
+    for r in res.regions:
+        spans = [labels[i]["span"] for i in r["labels"]]
+        txt = [labels[i]["text"] for i in r["labels"]]
+        if label is not None and not any(label_eq(t, label) for t in txt):
+            continue
+        rooms.append({"poly": r["poly"], "outline": r["poly"], "path": None, "name": " / ".join(dict.fromkeys(txt)),
+                      "number": None, "area_label": None, "unit": None, "texts": txt, "spans": spans, "fill": None})
+    if not rooms:
+        return [], "", None, f"no wall-enclosed region holds the label '{label}'" if label else "no closed region holds a label"
+    from . import wall_regions as wr
+    note = (f"{len(rooms)} " + (f"region(s) with the label '{label}' inside, " if label else "room region(s), ")
+            + wr.describe(res, sc.m_per_pt if sc.known else None))
+    clean = res.clean
+    if not clean:
+        note += "; not proven: " + "; ".join(res.problems)
+    return rooms, note, clean, ""
+
+
 def answer(ctx, q) -> Answer:
     if ctx.q.ext != "pdf":
         return abstain(ROUTE, "not a PDF")
@@ -478,6 +506,7 @@ def answer(ctx, q) -> Answer:
     items, value, rooms_used, boxes, note = [], None, [], [], ""
     tku = {}               # takeoff interpretation when the toilet fallback was needed (bpqa/takeoff.py)
     gen_conf = None        # set when a convention-free reading (pdf_generic) produced the count
+    wr_clean = None        # set when the rooms were read from wall regions: True when every label maps to one region
 
     if q.measure == "count":
         table = {"door": fl.doors, "window": fl.windows, "toilet": fl.toilets, "washbasin": fl.washbasins,
@@ -514,9 +543,20 @@ def answer(ctx, q) -> Answer:
             value = len(fl.units)
             items = [u["label"] for u in fl.units]
             note = "apartment labels " + ", ".join(items)
+        elif q.obj == "room" and not q.label:
+            rooms_used, note, wr_clean, why = _rooms_from_walls(fl, ctx, q, label=None)
+            if not rooms_used:
+                return abstain(ROUTE, f"no PDF rule for count of room; rooms from walls: {why}")
+            value, gen_conf = len(rooms_used), (0.85 if wr_clean else 0.7)
         elif q.obj == "room" and q.label:
             rooms_used = _match_room_label(fl, q.label)
             if not rooms_used and not any(r["name"] for r in fl.rooms):
+                rooms_used, note, wr_clean, _ = _rooms_from_walls(fl, ctx, q, label=q.label)
+                if rooms_used:
+                    value, gen_conf = len(rooms_used), (0.85 if wr_clean else 0.7)
+            if rooms_used and wr_clean is not None:
+                pass
+            elif not rooms_used and not any(r["name"] for r in fl.rooms):
                 # rooms drawn without closed shapes: each printed label is one room
                 spans = pdf_generic.label_spans(fl.vp, q.label)
                 if not spans:
@@ -554,6 +594,10 @@ def answer(ctx, q) -> Answer:
             note = "numbered indoor rooms (named, or unnamed with a fixture inside or wider than 1 m; outdoor, shafts and voids excluded)"
         elif q.label and q.obj == "room":
             rooms_used = _match_room_label(fl, q.label)
+            if not rooms_used and not any(r["name"] for r in fl.rooms):
+                rooms_used, note, wr_clean, _ = _rooms_from_walls(fl, ctx, q, label=q.label)
+                if rooms_used:
+                    gen_conf = 0.85 if wr_clean else 0.7
             if not rooms_used:
                 return abstain(ROUTE, f"no room labelled '{q.label}'")
             if len(rooms_used) > 1 and re.search(r"\(", q.label):
@@ -611,7 +655,9 @@ def answer(ctx, q) -> Answer:
     if q.obj == "sink" and q.measure == "count":
         from .dxf_swiss import SINK_REASON
         estimate(ans, SINK_REASON)
-    if gen_conf is not None:      # door swings or text labels, not a recognised drawing convention
+    if wr_clean:                  # wall regions that close, one label each: proven (see wall_regions.py)
+        ans.tier = "proven"
+    elif gen_conf is not None:    # door swings or text labels, not a recognised drawing convention
         estimate(ans, f"convention-free reading ({note}), confidence {conf}")
         ans.uncertain = items or [{"n": i + 1, "bbox_pt": [round(v, 1) for v in b]} for i, b in enumerate(boxes)]
     if q.variant == "type_sum":

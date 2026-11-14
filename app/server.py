@@ -31,6 +31,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from bpqa.answer import public_reason
 from bpqa.data import Question
 from bpqa.router import Context, solve
 
@@ -39,7 +40,7 @@ from bpqa.evidence import marks_path
 from . import costs
 from . import ifc3d
 from . import results as results_mod
-from . import uploads
+from . import shared, uploads
 from .catalog import SOURCE_NAMES, Catalog, find_data_root
 
 REPO = Path(__file__).resolve().parent.parent
@@ -80,6 +81,9 @@ def resolve(ref: str) -> tuple[Path, str]:
             raise HTTPException(404, "no dataset configured; set STOA_DATA or upload a drawing")
         root, rel = DATA_ROOT, ref
     f = (root / rel).resolve()
+    if not f.is_file() and ref.startswith("upload:") and shared.enabled():
+        shared.fetch_upload(m.group(1), UPLOADS)         # uploaded through another container
+        f = (root / rel).resolve()
     if not f.is_file() or root.resolve() not in f.parents:
         raise HTTPException(404, f"drawing not found: {ref}")
     return root, rel
@@ -109,13 +113,18 @@ async def upload(files: list[UploadFile] = File(...)):
         res = await run_in_threadpool(uploads.ingest, blobs, UPLOADS, UPLOAD_EXT, MAX_UPLOAD)
     except uploads.UploadError as ex:
         raise HTTPException(ex.status, ex.message)
+    if shared.enabled():             # so another container can serve the next question on it
+        for dr in res["drawings"]:
+            uid = dr["path"].split(":")[1].split("/")[0]
+            await run_in_threadpool(shared.publish_upload, uid, UPLOADS / uid)
     first = res["drawings"][0]
     return {"path": first["path"], "name": first["name"], "ext": first["ext"], "files": first["files"], **res}
 
 
 @app.get("/api/drawings")
-def drawings(source: str = "", q: str = "", ext: str = "", offset: int = 0, limit: int = Query(60, le=200)):
-    res = CATALOG.search(source=source, q=q, ext=ext, offset=max(offset, 0), limit=limit)
+def drawings(source: str = "", q: str = "", ext: str = "", offset: int = 0, limit: int = Query(60, le=200),
+             not_source: str = ""):
+    res = CATALOG.search(source=source, q=q, ext=ext, offset=max(offset, 0), limit=limit, not_source=not_source)
     res["sources"] = CATALOG.sources()
     return res
 
@@ -136,6 +145,33 @@ def drawing(path: str):
     return d
 
 
+def _dxf_preview(f: Path) -> Path:
+    """Flat PNG of a DXF's model space (ezdxf drawing add-on, matplotlib Agg), cached beside the PDF previews."""
+    st = f.stat()
+    key = hashlib.sha1(f"dxf|{f}|{st.st_size}|{int(st.st_mtime)}".encode()).hexdigest()[:16]
+    out = PREVIEW_CACHE / f"{key}.png"
+    if out.exists():
+        return out
+    try:
+        import ezdxf
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from ezdxf.addons.drawing import Frontend, RenderContext
+        from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
+        doc = ezdxf.readfile(str(f))
+        fig = plt.figure(figsize=(16, 11), dpi=150)
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_axis_off()
+        Frontend(RenderContext(doc), MatplotlibBackend(ax)).draw_layout(doc.modelspace(), finalize=True)
+        fig.savefig(str(out), dpi=150, facecolor="white")
+        plt.close(fig)
+    except Exception as ex:
+        print(f"[stoa] dxf preview failed for {f.name}: {type(ex).__name__}: {ex}", flush=True)
+        raise HTTPException(415, "this DXF could not be drawn flat; ask a question to render the evidence")
+    return out
+
+
 @app.get("/api/preview")
 def preview(path: str):
     root, rel = resolve(path)
@@ -143,6 +179,12 @@ def preview(path: str):
     ext = f.suffix.lower()[1:]
     if ext in ("png", "jpg", "jpeg"):
         return FileResponse(f)
+    if ext == "dxf":
+        twin = f.with_suffix(".pdf")          # a PDF twin of the drawing is the better picture: show it
+        if twin.exists():
+            f, ext = twin, "pdf"
+        else:
+            return FileResponse(_dxf_preview(f), media_type="image/png")
     if ext != "pdf":
         raise HTTPException(415, f"no preview for .{ext}; ask a question to render the evidence")
     st = f.stat()
@@ -335,6 +377,14 @@ def ask(body: AskBody):
         ms = (time.perf_counter() - t0) * 1000
         cpu_s = time.process_time() - c0
     a = ans.as_dict()
+    if a.get("abstain"):
+        print(f"[stoa] reason (raw) for {rel!r}: {a['abstain']}", flush=True)     # internal text stays in the log
+    a["abstain"] = public_reason(a.get("abstain"))
+    a["tier_reason"] = public_reason(a.get("tier_reason")) if a.get("tier_reason") else a.get("tier_reason")
+    for c in a.get("checks") or []:
+        if c.get("status") == "error":
+            print(f"[stoa] check error: {c.get('name')}: {c.get('detail')}", flush=True)
+            c["detail"] = "this check could not run on this drawing"
     qd = query.as_dict()
 
     ev_id, geo, marks = None, None, None
@@ -354,6 +404,7 @@ def ask(body: AskBody):
                     marks = json.loads(mk.read_text(encoding="utf-8"))
                 except ValueError:
                     marks = None
+            shared.publish_evidence(ev_id, evp, marks_path(evp))
             try:
                 geo = _evidence_geometry(evp, root / rel)
                 if marks:
@@ -404,6 +455,8 @@ def _keep_evidence(drawn: str | None, key: str) -> tuple[str | None, dict | None
     marks = None
     if marks_path(d).exists():
         shutil.copyfile(marks_path(d), marks_path(evp))
+    shared.publish_evidence(ev_id, evp, marks_path(evp))
+    if marks_path(d).exists():
         try:
             marks = json.loads(marks_path(d).read_text(encoding="utf-8"))
         except ValueError:
@@ -526,6 +579,8 @@ def evidence(eid: str, body: int = 0):
     if not re.fullmatch(r"[\w.\-]{1,120}", eid):
         raise HTTPException(400, "bad id")
     f = EVIDENCE_DIR / f"{eid}.png"
+    if not f.exists() and shared.enabled():
+        shared.fetch_evidence(eid, f, marks_path(f))     # made by another container
     if not f.exists():
         raise HTTPException(404, "evidence not found")
     if not body:

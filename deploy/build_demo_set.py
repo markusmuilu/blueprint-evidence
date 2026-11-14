@@ -32,15 +32,20 @@ SWISS = [  # PDF + DXF twins; the first two are the README examples (tiling take
 SWISS_EXTRA = 5            # more Swiss drawings, picked deterministically from the test split
 IFC = {  # model -> plan PDFs (the model .ifc is copied with them so the IFC route can read it)
     "kit-fzk-haus_ac20-fzk-haus": ["plan-01-erdgeschoss", "plan-02-dachgeschoss"],
-    "bsc-esplanades_1807-ep-ar-v18": ["plan-01-1-korrus", "plan-02-2-korrus"],
+    "bsc-esplanades_1807-ep-ar-v18": ["plan-01-1-korrus", "plan-02-2-korrus", "plan-04-4-korrus"],   # plan-04: Compare tab
     "bsc-molio_molio-with-uris": ["plan-03-grundplan", "plan-04-1-sal"],
 }
 CUBICASA = {  # two per drawing style; the first of each is a README/search example where one exists
-    "high_quality_architectural": ["high_quality_architectural-10372"],
+    "high_quality_architectural": ["high_quality_architectural-10372", "high_quality_architectural-10026",
+                                   "high_quality_architectural-1241"],   # 10026 and 1241: Compare tab examples
     "high_quality": [],
     "colorful": ["colorful-11960"],
 }
 CUBICASA_PER_STYLE = 2
+# BEGIN compare-tab: drawings of the prepared examples in the Compare tab (tools/build_compare.py), so that
+# "Open in Ask" finds them. Added after the deterministic Swiss pick below so the other picks do not move.
+COMPARE_SWISS = ["site3421_bldg5295_floor23605", "site3238_bldg4922_floor22515"]
+# END compare-tab
 UNSEEN = [  # (folder, files); public drawings never seen in development
     ("kjdraw_architecture_floor_plan", ["architecture-floor-plan.pdf", "architecture-floor-plan.dxf"]),
     ("wm_tyneside_flat", ["Tyneside flat floorplan.png"]),
@@ -131,6 +136,7 @@ def main():
             and (sw_dir / f"{n}.dxf").exists()
             and any(r["type"] == "area" for r in qs.get(f"data/swiss_dwellings/{n}.pdf", []))]
     names += pool[:: max(1, len(pool) // SWISS_EXTRA)][:SWISS_EXTRA]
+    names += [n for n in COMPARE_SWISS if n not in names]       # compare-tab
     for n in names:
         for ext in ("pdf", "dxf"):
             take(f"data/swiss_dwellings/{n}.{ext}", {"source": "Swiss Dwellings", "licence": sw_lic, "credit": sw_cred,

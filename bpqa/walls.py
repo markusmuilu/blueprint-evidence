@@ -48,6 +48,8 @@ def parse_inputs(question: str, tk: dict | None = None) -> dict:
     for k, v in ((tk or {}).get("inputs") or {}).items():
         if k not in out or (k == "waste_pct" and out.get(k) is None):
             out[k] = v
+    if (tk or {}).get("surface") == "baseboard":
+        out["baseboard"] = True       # a length, not an area: bpqa/baseboard.py
     return out
 
 
@@ -93,6 +95,8 @@ def _parse_inputs(question: str) -> dict:
 def surfaces(tk: dict) -> tuple[bool, bool, str]:
     """(floor, walls, how it was read) for a takeoff interpretation."""
     s = tk.get("surface", "floor")
+    if s == "baseboard":
+        return False, True, "baseboard length (asked): room perimeter minus door openings"
     if s == "walls":
         return False, True, "walls only (asked)"
     if s == "floor+walls":
@@ -106,6 +110,9 @@ def surfaces(tk: dict) -> tuple[bool, bool, str]:
 def room_walls(room: dict, inp: dict) -> dict:
     """room: {label, perimeter, height, height_src, openings: [{kind, id, width, z0, z1, src}]}.
     Returns gross, deductions and net wall area of the tiled band."""
+    if inp.get("baseboard"):
+        from .baseboard import room_baseboard
+        return room_baseboard(room)
     h = room.get("height")
     hsrc = room.get("height_src", "")
     if inp.get("ceiling_m"):
@@ -133,6 +140,9 @@ def room_walls(room: dict, inp: dict) -> dict:
 def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, str, dict]:
     """rooms: {label, number, floor_area, floor_src, perimeter, perimeter_src, height, height_src, openings}.
     Returns (value, items, explanation, totals)."""
+    if tk.get("surface") == "baseboard":
+        from .baseboard import summary as baseboard_summary
+        return baseboard_summary(rooms, tk, question)
     inp = parse_inputs(question, tk)
     want_floor, want_walls, how = surfaces(tk)
     waste = inp.get("waste_pct", DEFAULT_WASTE_PCT)
@@ -203,7 +213,19 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
     return value, items, (head + " " + expl) if head else expl, totals
 
 
+def room_caption(i: int, r: dict, inp: dict) -> str:
+    """Label of a room on the evidence image: floor and net wall area, or the baseboard length."""
+    w = room_walls(r, inp)
+    if inp.get("baseboard"):
+        from .baseboard import room_caption as cap
+        return cap(i, r, w)
+    return f"{i + 1}. {r['label'][:22]}: floor {r['floor_area']:.2f}, walls {w['net']:.2f} m²"
+
+
 def answer_line(value: float, totals: dict, route: str, estimate: str = "") -> str:
+    if totals.get("unit") == "m":
+        from .baseboard import answer_line as bl
+        return bl(value, totals, route, estimate)
     parts = []
     if totals.get("floor_m2") is not None:
         parts.append(f"floor {totals['floor_m2']:.2f}")

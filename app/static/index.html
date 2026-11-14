@@ -16,6 +16,7 @@
   <defs>
     <symbol id="i-ask" viewBox="0 0 16 16"><path d="M3 2.75h6.5L13 6.25v7H3z"/><path d="M9.5 2.75v3.5H13"/><path d="M5.5 9h5M5.5 11h3"/></symbol>
     <symbol id="i-results" viewBox="0 0 16 16"><path d="M2.75 13.25h10.5"/><path d="M4.5 13.25V8.5M8 13.25V4.5M11.5 13.25V7"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 16 16"><path d="M2.75 3.25h4.5v9.5h-4.5zM8.75 3.25h4.5v9.5h-4.5z"/><path d="M4.25 6h1.5M4.25 8h1.5M10.25 6h1.5M10.25 8h1.5M10.25 10h1.5"/></symbol>
     <symbol id="i-library" viewBox="0 0 16 16"><path d="M2.75 3.25h3.5v9.5h-3.5zM6.25 3.25h3.5v9.5h-3.5z"/><path d="M10.4 3.6l2.9-.8 2 9.1-2.9.8z" transform="translate(-1.2 .4)"/></symbol>
     <symbol id="i-upload" viewBox="0 0 16 16"><path d="M8 10.5V2.75M5 5.5l3-2.75 3 2.75"/><path d="M2.75 10v3.25h10.5V10"/></symbol>
     <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.25"/><path d="M10.25 10.25l3 3"/></symbol>
@@ -49,6 +50,9 @@
   <nav class="rail" aria-label="Main">
     <button class="rail-btn" data-view="ask" aria-current="page" aria-label="Ask a drawing" data-tip="Ask"><svg class="ico"><use href="#i-ask"/></svg></button>
     <button class="rail-btn" data-view="results" aria-label="Results" data-tip="Results"><svg class="ico"><use href="#i-results"/></svg></button>
+    <!-- BEGIN compare-tab -->
+    <button class="rail-btn" data-view="compare" aria-label="Compare with a vision model" data-tip="Compare"><svg class="ico"><use href="#i-compare"/></svg></button>
+    <!-- END compare-tab -->
     <button class="rail-btn" id="pickerToggle" aria-label="Show or hide the drawing library" aria-expanded="true" aria-controls="picker" data-tip="Drawings"><svg class="ico"><use href="#i-library"/></svg></button>
     <div class="rail-gap"></div>
     <button class="rail-btn" id="statusBtn" aria-label="System status" data-tip="Status"><svg class="ico"><use href="#i-status"/></svg></button>
@@ -96,8 +100,6 @@
           <input id="search" type="search" placeholder="site1000, colorful-11960, esplanades" autocomplete="off" spellcheck="false">
         </div>
       </div>
-
-      <div class="sources" id="sources" role="radiogroup" aria-label="Source"></div>
 
       <div class="draw-list" id="drawList" aria-label="Dataset drawings"></div>
     </aside>
@@ -218,6 +220,18 @@
       <div id="detailBody" hidden></div>
     </aside>
   </section>
+
+  <!-- BEGIN compare-tab -->
+  <section class="view view-compare" id="view-compare" hidden>
+    <div class="compare">
+      <header class="compare-head">
+        <h1 class="h-page">Compare</h1>
+        <p class="meta">The same question about the same drawing, answered two ways: the drawing sent as an image to a large vision model, and read by Blueprint Evidence. Prepared examples; nothing here calls a model live.</p>
+      </header>
+      <div id="compareBody"><p class="meta">Loading</p></div>
+    </div>
+  </section>
+  <!-- END compare-tab -->
 
   <!-- ============================================================ RESULTS -->
   <section class="view view-results" id="view-results" hidden>
