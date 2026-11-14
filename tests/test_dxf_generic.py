@@ -130,7 +130,7 @@ CASES = [
     ("aia", "What is the total net area in m² of all rooms labelled 'Kitchen' on this floor?", 12.0),
     ("aia", "How many square meters of flooring do I need for the bedrooms?", 21.0),
     ("aia", "What is the net floor area of the room 'Kitchen', in m²?", 12.0),
-    ("aia", "What is the net floor area of the living room in m²?", None),          # two living rooms: no silent sum
+    ("aia", "What is the net floor area of the living room in m²?", 42.0),          # two living rooms: summed, listed, estimate
     ("aia", "What is the net floor area of the room 'Living Room', in m²?", None),
     ("aia", "What is the total net area in m² of all rooms labelled 'Living Room' on this floor?", 42.0),
     ("aia", "How many showers and bathtubs are drawn on this floor plan in total?", None),

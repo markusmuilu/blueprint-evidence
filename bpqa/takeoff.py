@@ -241,7 +241,7 @@ def wall_reason(tk: dict) -> str:
 
 def answer_line(value, n_rooms: int, route: str, estimate: str = "") -> str:
     tag = f" [ESTIMATE: {estimate}]" if estimate else ""
-    return f"Answer{tag}: {value:.2f} m2 total over {n_rooms} room(s), floor area only   route: {route} (cost $0)"
+    return f"Answer{tag}: {value:.2f} m2 total over {n_rooms} room(s), floor area only   route: {route} (cost €0)"
 
 
 def matches(name: str | None, tk: dict) -> bool:

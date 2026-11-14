@@ -709,7 +709,7 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
         out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
         ans.evidence = finish(cv.img, out, ctx.q.question,
                               f"Answer: {value} {unit}{'   ESTIMATE' if ans.tier == 'estimate' else '   proven'}"
-                              f"   route: {ROUTE} (cost $0)", note=note)
+                              f"   route: {ROUTE} (cost €0)", note=note)
     return ans
 
 

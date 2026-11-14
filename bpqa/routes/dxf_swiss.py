@@ -597,6 +597,6 @@ def answer(ctx, q) -> Answer:
             note = takeoff.interpretation(tku, [(f"{r['name'] or 'unlabelled room'} {r['number'] or ''}".strip(), fl.room_area(r))
                                                 for r in rooms_used]) + " " + note
         ans.evidence = finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), ROUTE, takeoff.fallback_label(tku))
-                                                            if q.variant == "type_sum" else f"Answer: {value} {unit}   route: {ROUTE} (cost $0)"),
+                                                            if q.variant == "type_sum" else f"Answer: {value} {unit}   route: {ROUTE} (cost €0)"),
                               note=(note + (": " + sum_note if sum_note else "")))
     return ans

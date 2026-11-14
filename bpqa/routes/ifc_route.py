@@ -888,6 +888,6 @@ def render(ctx, M, storey, used, q, value, unit, note):
             cv.text((c.x, c.y), lab if q.measure != "count" else f"#{i + 1}", size=11)
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     shown = sum(1 for _, _, g in hl if g is not None)
-    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(used), ROUTE) if q.variant == "type_sum" else f"Answer: {value} {unit}   route: ifc (cost $0)"),
+    return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(used), ROUTE) if q.variant == "type_sum" else f"Answer: {value} {unit}   route: ifc (cost €0)"),
                   note=f"{note}. Storey {storey.Name}: {shown} highlighted."
                   + (" Floor area only, no waste allowance." if q.variant == "type_sum" else ""))

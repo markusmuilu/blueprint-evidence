@@ -1500,11 +1500,14 @@ function whyText(w) {
 
 /* ---------------------------------------------------------------- cost meter */
 function fmtSec(s) { return s == null ? "-" : s < 1 ? Math.round(s * 1000) + " ms" : s.toFixed(1) + " s"; }
+/* costs are computed from USD list prices and shown in euros at one stated rate (his request, 14 Nov) */
+const USD_PER_EUR = 1.1052, FX_NOTE = "Prices converted from USD at the ECB reference rate of 13 Nov 2026 (1 EUR = 1.1052 USD).";
 function fmtUsd(v) {
   if (v == null) return "-";
-  if (v === 0) return "$0";
-  if (v < 0.01) return "$" + v.toPrecision(2);
-  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const e = v / USD_PER_EUR;
+  if (e === 0) return "€0";
+  if (e < 0.01) return "€" + e.toPrecision(2);
+  return "€" + e.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 /* log scale from $0.0001 to $1,000 per 1,000 questions */
 function meterW(v) { return v <= 0 ? 0 : Math.max(2, Math.min(100, ((Math.log10(v) + 4) / 7) * 100)); }
@@ -1518,7 +1521,7 @@ function costMeter(a) {
     <span class="label">Cost per 1,000 questions like this</span>
     ${row("This answer", c.usd_per_1000, "ours")}
     ${base ? row("Nemotron, plain prompt", base.usd_per_1000, "base") : ""}
-    <p class="note">CPU ${fmtSec(c.cpu_s)}${c.gpu_s ? `, GPU ${fmtSec(c.gpu_s)}` : ""}${c.model_usd ? `, model ${fmtUsd(c.model_usd)}` : ""} at an assumed $${as.cpu_vcpu_hour_usd} per vCPU-hour${c.gpu_s ? ` and $${as.gpu_hour_usd} per GPU-hour` : ""}.${base ? ` Nemotron: ${num(Math.round(base.prompt_tokens_mean + base.completion_tokens_mean))} measured tokens per question at an assumed $${base.price_in_per_mtok} / $${base.price_out_per_mtok} per million in / out.` : ""} Log scale.</p>
+    <p class="note">CPU ${fmtSec(c.cpu_s)}${c.gpu_s ? `, GPU ${fmtSec(c.gpu_s)}` : ""}${c.model_usd ? `, model ${fmtUsd(c.model_usd)}` : ""} at an assumed $${as.cpu_vcpu_hour_usd} per vCPU-hour${c.gpu_s ? ` and $${as.gpu_hour_usd} per GPU-hour` : ""}.${base ? ` Nemotron: ${num(Math.round(base.prompt_tokens_mean + base.completion_tokens_mean))} measured tokens per question at an assumed $${base.price_in_per_mtok} / $${base.price_out_per_mtok} per million in / out.` : ""} ${FX_NOTE} Log scale.</p>
   </div>`;
 }
 
@@ -1601,7 +1604,7 @@ async function loadCosts() {
   const el = $("#costTable");
   if (!el) return;
   const as = c.assumed || {};
-  const head = `<thead><tr><th>Route</th><th class="num">Questions</th><th class="num">Answered</th><th class="num">Median wall</th><th class="num">p90 wall</th><th class="num">Cold median</th><th class="num">CPU s, mean</th><th class="num">$ per 1,000, CPU</th><th class="num">$ per 1,000, detector on a GPU</th></tr></thead>`;
+  const head = `<thead><tr><th>Route</th><th class="num">Questions</th><th class="num">Answered</th><th class="num">Median wall</th><th class="num">p90 wall</th><th class="num">Cold median</th><th class="num">CPU s, mean</th><th class="num">€ per 1,000, CPU</th><th class="num">€ per 1,000, detector on a GPU</th></tr></thead>`;
   const line = (r, cls = "") => `<tr class="${cls}"><td>${esc(r.label || ROUTE_LABEL[r.route] || r.route)}${r.route && r.route !== "all" ? ` <span class="mono dim">${esc(r.route)}</span>` : ""}</td><td class="num">${num(r.n)}</td><td class="num">${num(r.answered)}</td>
     <td class="num">${fmtSec(r.wall_median_s)}</td><td class="num">${fmtSec(r.wall_p90_s)}</td><td class="num">${fmtSec(r.cold_median_s)}</td>
     <td class="num">${r.cpu_mean_s == null ? "-" : r.cpu_mean_s.toFixed(2)}</td><td class="num">${fmtUsd(r.usd_per_1000_cpu)}</td><td class="num">${r.route === "raster-detector" ? fmtUsd(r.usd_per_1000_if_gpu) : "-"}</td></tr>`;
@@ -1611,7 +1614,7 @@ async function loadCosts() {
   if (b) body += `<tr class="base"><td>Nemotron, plain prompt <span class="dim">baseline</span></td><td class="num">${num(b.n)}</td><td class="num">-</td><td class="num">${fmtSec(b.latency_median_s)}</td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num" colspan="2">${fmtUsd(b.usd_per_1000)} at measured tokens</td></tr>`;
   el.innerHTML = head + "<tbody>" + (body || `<tr><td colspan="9" class="dim">${esc(c.missing || "No measurements yet.")}</td></tr>`) + "</tbody>";
   $("#costNote").textContent = `Assumed prices, not quotes: $${as.cpu_vcpu_hour_usd} per vCPU-hour, $${as.gpu_hour_usd} per GPU-hour (L4 or A10G class)${b ? `, and $${b.price_in_per_mtok} / $${b.price_out_per_mtok} per million input / output tokens for Nemotron, applied to its measured ${num(Math.round(b.prompt_tokens_mean))} input and ${num(Math.round(b.completion_tokens_mean))} output tokens per question (${b.source})` : ""}. `
-    + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off (tools/cost_eval.py, out/cost/cost_by_route.json). CPU seconds count every thread; a cold question is the first one on its drawing; a question every route abstained on is booked under the first route tried.` : "");
+    + (c.questions ? `Measured on ${num(c.questions)} ${esc(c.split || "")} questions of the ${esc(datasetName(c.data))}, ${esc(c.machine?.device || "")}, evidence rendering on, Nemotron off . CPU seconds count every thread; a cold question is the first one on its drawing; a question every route abstained on is booked under the first route tried.` : "") + " " + FX_NOTE;
 }
 const ROUTE_LABEL = { "dxf-geometry": "DXF geometry", "dxf-generic": "DXF layers, generic", ifc: "IFC model", "ifc-props": "IFC properties", "pdf-text": "PDF text layer", "pdf-vector": "PDF linework", "pdf-generic": "PDF, convention-free", "raster-detector": "Scan, symbol detector", "raster-ocr-labels": "Scan, room labels", "raster-cv": "Scan, panel analysis", "raster-cv-fixtures": "Scan, outlines", "raster-area": "Scan, printed areas" };
 function datasetName(p) { return /preview/.test(p || "") ? "Stoa preview set" : /junction-dataset/.test(p || "") ? "Stoa full set" : (p || "dataset"); }
@@ -1702,7 +1705,7 @@ async function loadRun(id) {
   const where = d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
   const flags = d.flags && d.flags.length ? ` (${esc(d.flags.join("; "))})` : "";
   $("#runHeadline").innerHTML = all
-    ? `On ${where}${flags}, <strong>${pct(all.accuracy)}</strong> of ${num(all.n)} questions were answered correctly. The system answered <strong>${pct(all.coverage)}</strong> of them and was right on <strong>${pct(all.precision)}</strong> of those, at <strong>$${Number(all.cost_per_q || 0).toFixed(4)}</strong> per question.`
+    ? `On ${where}${flags}, <strong>${pct(all.accuracy)}</strong> of ${num(all.n)} questions were answered correctly. The system answered <strong>${pct(all.coverage)}</strong> of them and was right on <strong>${pct(all.precision)}</strong> of those, at <strong>${fmtUsd(all.cost_per_q || 0)}</strong> per question.`
     : "";
   renderSrcTable(d);
   renderChart(d);
@@ -1744,7 +1747,7 @@ async function loadBaseline() {
     <p class="value-na">Nemotron ${pct(b.nemo_accuracy)} vs router ${pct(b.ours_accuracy)}</p>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Questions</th><th class="num">n</th><th class="num">Nemotron</th><th class="num">Router</th></tr></thead>
     <tbody>${rows}<tr class="total"><td>All</td><td class="num">${b.n}</td><td class="num">${b.nemo_correct}</td><td class="num">${b.ours_correct}</td></tr></tbody></table></div>
-    <p class="meta">Sample: Stoa preview set, test split, ${num(b.n)} questions (${esc(b.sample)}). Nemotron got the drawing as one image and was asked for just the number: no regions, no checks. Median latency ${esc(b.latency_median_s)} s; about $${Number(b.cost_per_q || 0).toFixed(3)} per question at ${esc(price)} (free on NVIDIA Build). Router: $0, ${esc(b.ours_source)}. Source: out/baseline_nemotron.json.</p>`;
+    <p class="meta">Sample: Stoa preview set, test split, ${num(b.n)} questions (${esc(b.sample)}). Nemotron got the drawing as one image and was asked for just the number: no regions, no checks. Median latency ${esc(b.latency_median_s)} s; about ${fmtUsd(b.cost_per_q || 0)} per question at ${esc(price)} (free on NVIDIA Build). Router: €0 in model calls, ${esc(b.ours_source)}. ${FX_NOTE}</p>`;
 }
 
 function renderSrcTable(d) {

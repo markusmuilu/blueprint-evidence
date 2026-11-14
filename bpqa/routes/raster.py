@@ -71,7 +71,7 @@ def answer(ctx, q) -> Answer:
                 cv.box((x, y, x + w, y + h), n=i + 1, color=PALETTE[i % len(PALETTE)], width=4)
             ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                                   f"Answer: {value}" + ("   ESTIMATE" if ans.tier == "estimate" else "   proven")
-                                  + f"   route: {ROUTE} (cost $0)",
+                                  + f"   route: {ROUTE} (cost €0)",
                                   note="each numbered box is one separately scanned floor panel"
                                        + (f". Estimate because: {ans.tier_reason}" if ans.tier == "estimate" else ""))
         return ans
@@ -225,6 +225,6 @@ def fixture_count(ctx, q, img) -> Answer:
             x, y, w, h = it["xywh"]
             cv.box((x - 4, y - 4, x + w + 4, y + h + 4), n=it["n"], color=BLUE, width=3)
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {n}   route: {FIXTURE_ROUTE} (cost $0)",
+                              f"Answer: {n}   route: {FIXTURE_ROUTE} (cost €0)",
                               note=f"each numbered box is the inside of one drawn {FIXTURE_NAMES[q.obj]} outline")
     return ans

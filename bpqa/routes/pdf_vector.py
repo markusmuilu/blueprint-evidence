@@ -717,5 +717,5 @@ def render_evidence(ctx, fl, q, value, unit, note, rooms_used, boxes, route=ROUT
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     return finish(cv.img, out, ctx.q.question, (takeoff.answer_line(value, len(rooms_used), route, "rooms with a toilet, no WC room" if estimate else "")
                                                        if q.variant == "type_sum" else
-                   f"Answer: {value} {unit}{'   ESTIMATE' if estimate else ''}   route: {route} (cost $0)"),
+                   f"Answer: {value} {unit}{'   ESTIMATE' if estimate else ''}   route: {route} (cost €0)"),
                   note=note + (": " + sum_note if sum_note else "") + f"; {scale_line} (scale sources boxed blue)")

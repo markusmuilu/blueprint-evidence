@@ -198,7 +198,7 @@ def answer_line(value: float, totals: dict, route: str, estimate: str = "") -> s
         parts.append(f"walls {totals['walls_m2']:.2f}")
     parts.append(f"{totals['waste_pct']:g}% waste {totals['waste_m2']:.2f}")
     tag = f" [ESTIMATE: {estimate}]" if estimate else ""
-    return f"Answer{tag}: {value:.2f} m2 ({' + '.join(parts)}; {totals['value_is']})   route: {route} (cost $0)"
+    return f"Answer{tag}: {value:.2f} m2 ({' + '.join(parts)}; {totals['value_is']})   route: {route} (cost €0)"
 
 
 def ring_length(poly) -> float:

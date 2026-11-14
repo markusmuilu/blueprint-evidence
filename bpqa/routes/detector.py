@@ -297,7 +297,7 @@ def answer(ctx, q, img=None) -> Answer:
         head = f"Answer: {n}" + ("   ESTIMATE: check the numbered boxes" if cal and not unsure else
                                  "   ESTIMATE: check the amber boxes" if why else "   proven")
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"{head}   ({ROUTE}, local model, $0)",
+                              f"{head}   ({ROUTE}, local model, €0)",
                               note=f"{'amber' if why else 'blue'} numbered boxes: each counted {NAMES[q.obj]} with its detector score >= {t:.2f}; "
                                    f"amber plain boxes: scored close to the threshold, not counted; "
                                    f"grey: lower-scored boxes, not counted"

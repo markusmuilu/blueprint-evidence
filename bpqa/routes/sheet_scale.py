@@ -99,7 +99,7 @@ def _pdf(ctx, q) -> Answer:
             a, c = pymupdf.Point(b[0], b[1]) * mat, pymupdf.Point(b[2], b[3]) * mat
             cv.box((min(a.x, c.x) - 4, min(a.y, c.y) - 4, max(a.x, c.x) + 4, max(a.y, c.y) + 4), n=i + 1, color=BLUE, width=3)
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                              f"Answer: {ans.value}{'   ESTIMATE' if ans.tier == 'estimate' else ''}   route: {ROUTE} (cost $0)",
+                              f"Answer: {ans.value}{'   ESTIMATE' if ans.tier == 'estimate' else ''}   route: {ROUTE} (cost €0)",
                               note="boxed: the text that sets the scale. " + ans.explanation[:300])
     return ans
 
@@ -142,6 +142,6 @@ def _raster(ctx, q) -> Answer:
                 b = quad_box(t["quad"])
                 cv.box((b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3), n=i + 1, color=BLUE, width=3)
             ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
-                                  f"Answer: {ans.value}{'   ESTIMATE' if ans.tier == 'estimate' else ''}   route: {ROUTE} (cost $0)",
+                                  f"Answer: {ans.value}{'   ESTIMATE' if ans.tier == 'estimate' else ''}   route: {ROUTE} (cost €0)",
                                   note="boxed: the scale text read by OCR")
     return ans

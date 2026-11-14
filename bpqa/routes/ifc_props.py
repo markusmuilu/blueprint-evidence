@@ -1318,5 +1318,5 @@ def render(ctx, M, L, text, cited, estimate=False):
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
     first = lines[0] if lines else ""
     tag = "ESTIMATE (broad lookup, check it answers the question)" if estimate else "proven"
-    return finish(img, out, ctx.q.question, f"Answer [{tag}]: {first[:90]}   route: {ROUTE} (cost $0)",
+    return finish(img, out, ctx.q.question, f"Answer [{tag}]: {first[:90]}   route: {ROUTE} (cost €0)",
                   note=f"Lookup: {L.describe()}" + (f"; {L.storey_note}" if L.storey_note else ""))

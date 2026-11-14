@@ -33,7 +33,7 @@ def main():
     for text, want in CASES:
         q = parse(text)
         got = {"obj": q.obj, "label": q.label, "variant": q.variant, "level": q.level,
-               "single": bool(q.extra.get("single_room"))}
+               "single": bool(q.extra.get("single_room") or (q.extra.get("takeoff") or {}).get("single_type"))}
         diff = {k: (got[k], v) for k, v in want.items() if got[k] != v}
         if diff:
             bad += 1

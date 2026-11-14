@@ -93,7 +93,7 @@ def _render(pdf_path, boxes, ctx, value, unit, note):
         r.normalize()
         cv.box((r.x0 - 2, r.y0 - 2, r.x1 + 2, r.y1 + 2), n=i + 1, color=PALETTE[i % len(PALETTE)], width=2)
     out = evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question)
-    return finish(cv.img, out, ctx.q.question, f"Answer: {value} {unit}   route: {ROUTE} (cost $0)", note=note)
+    return finish(cv.img, out, ctx.q.question, f"Answer: {value} {unit}   route: {ROUTE} (cost €0)", note=note)
 
 
 def answer(ctx, q) -> Answer:
