@@ -31,13 +31,18 @@ drawing  --> router: cheapest route that can prove the answer
                                 room shapes, scale, doors, windows, fixtures; scanned PDFs abstain
                4. raster        scans (CubiCasa): panel segmentation, room labels read by local OCR,
                                 a trained detector for fixtures, doors and windows;
-                                abstains where the count is not provable
-          --> checking layer (raster answers): consistency checks across routes; abstain on conflict
-          --> answer JSON {value, unit, route, confidence, evidence, explanation, items, checks}
+                                every count in a tier: "proven" or "estimate" (with the reason)
+          --> checking layer (raster answers): consistency checks across routes; a conflict makes an estimate
+          --> answer JSON {value, unit, route, tier, tier_reason, uncertain, confidence, evidence, explanation,
+                           items, checks}
           --> evidence PNG: counted items boxed and numbered, measured rooms filled with their area
 ```
 
-A route either proves an answer or abstains with a reason, and the router then tries the next one. All
+A route either proves an answer or abstains with a reason, and the router then tries the next one. The
+raster routes (labels and detector) instead give their best count in one of two tiers: "proven" when the
+conditions tuned for a provable answer hold, "estimate" otherwise, with the reason and the boxes or labels
+a person should check (drawn amber on the evidence image). They abstain only when there is nothing to go
+on. All
 routes are deterministic and cost $0 per question in model calls; the eval reports cost per question so
 an LLM route can be compared on the same table later.
 
@@ -66,8 +71,8 @@ Raster (CubiCasa scans):
 |---|---|
 | storeys | multi-storey plans paste each floor as its own scan onto a white canvas; count the large non-white panels |
 | bedrooms, kitchens, saunas, WC rooms, bathrooms, balconies | room labels read by a local OCR model (RapidOCR, ONNX, CPU) in four orientations and on the mirrored image (some scans are mirrored), matched against the Finnish abbreviations (MH, K, KK, S, SAUNA, WC, KH, KPH, PH, PESUH, SH, PARVEKE) and a few Swedish ones; apartment summaries like "3H+K+S" are skipped |
-| when to answer | kitchen, bathroom, sauna only when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels |
-| toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold; abstains when any box scores close to the threshold (see "Detector") |
+| proven or estimate | proven: kitchen, bathroom, sauna when exactly one label is read (two or more is usually a neighbouring flat in the scan); bedrooms when at least one MH is read; WC rooms always; balconies 0 or 1; a zero needs at least three readable room labels. Every other count is an estimate |
+| toilets, sinks, showers/baths, doors, windows | `raster-detector` route: boxes from a YOLO detector counted above a per-object score threshold, over the eight rotations and mirrors of the image; an estimate when boxes score close to the threshold, the views disagree, or the object is one the detector is wrong on more often than right (see "Detector") |
 
 Every counted label is boxed and numbered on the scan; the other room labels that were read are boxed in
 grey, so a zero answer can be checked too. The OCR is the slow part (about 5-15 s per image for eight
@@ -76,7 +81,9 @@ passes); `tools/ocr_cache.py` fills the cache in `out/ocr/` up front.
 ### Checking layer
 
 Before a raster answer is returned, `bpqa/checks.py` compares it with what the other raster signals
-on the same image imply, and abstains when they conflict. Examples: a label "MH3" means at least three
+on the same image imply, and makes the answer an estimate when they conflict (for seven checks the
+implied value also replaces the count, because on dev it was right more often: a "MH3" label, a summary
+listing K or S, floor names, a stair label, bathrooms needing a shower or bath). Examples: a label "MH3" means at least three
 bedrooms; an apartment summary "3H+K" means two bedrooms; two floor names on the sheet mean at least
 two storeys; every WC room label implies a WC seat, every bathroom and kitchen a sink, every bathroom a
 shower or bath, n room labels at least n-1 doors, every bedroom and the living room a window. Each
@@ -140,7 +147,16 @@ Toilets, sinks, showers, bathtubs, doors and windows on the scans are counted by
   white, random scale and rotation, boxes from the same rules the DXF route uses.
 
 The count threshold per object, and an uncertainty band around it, are tuned on the held-out
-train-split images (`tools/tune_detector.py`). Test answers are never read while tuning.
+train-split images (`tools/tune_detector.py`). Test answers are never read while tuning. The tuner
+also tries test-time augmentation (the eight rotations and mirrors, boxes fused across views or the
+median per-view count) and the tiled detector below; `tools/pick_detector.py` keeps, per object, the
+model and mode with the higher cross-validated exact-count accuracy on those images.
+
+Tiled detector (`tools/build_tile_dataset.py`, model `detector_tiles.pt`): the same plans, re-read at
+native resolution from the public `F1_original.png`, resized 2x (long side capped at 4,096 px) and cut
+into 1,024 px tiles with 192 px overlap (17,596 training tiles), and a `yolo26s` started from
+Ultralytics' pretrained weights. At inference the image gets the same resize and tiling; boxes found
+twice where tiles overlap are merged (same class, IoU >= 0.5 or the smaller box 60% inside the larger).
 
 ## Run it
 
