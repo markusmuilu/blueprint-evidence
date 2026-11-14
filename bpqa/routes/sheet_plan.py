@@ -56,6 +56,9 @@ COUNT_RE = re.compile(r"\bhow many\b|\bnumber of\b|\bcount\b|\bkuinka monta\b|\b
                       r"\bcombien\b|\bhvor mange\b|\bhur manga\b", re.I)
 AREA_Q_RE = re.compile(r"\b(area|perimeter|skirting|baseboard|m2|square)\b|\bhow (big|large)\b|kuinka (iso|suuri)|"
                        r"\b(?:combined|total) are of\b|"
+                       # a floor material named without a unit: "how much flooring do I need for the classrooms" (his find)
+                       r"flooring|floor covering|parquet|laminat|vinyl|carpet|linoleum|lattiapaallyste|lattiapäällyste|"
+                       r"parketti|laminaatti|bodenbelag|parkett|"
                        r"kokonais\w*ala|pinta-?\s?ala|neliometri|neliömetri|fl(a|ä)che|"
                        r"quadratmeter|m²", re.I)
 
@@ -396,6 +399,15 @@ def answer(ctx, query) -> Answer:
     d = S.analyse(ctx.file, regions=False)
     labels = room_labels(d)
     tk = (query.extra.get("takeoff") if query is not None else None) or None
+    if tk is None:
+        # a floor material over rooms the takeoff has no type for ("flooring for the classrooms"): the same takeoff
+        # rules (stated waste applied, floor only) on the rooms named on the sheet (his find 15 Nov)
+        from .. import takeoff as TK
+        from ..query import fold as _fold
+        mat = next((m for m, rx in TK._MATERIALS.items() if rx.search(_fold(ctx.q.question))), None)
+        if mat in ("flooring", "tiles"):
+            tk = {"types": [], "group": None, "material": mat, "surface": "floor", "aggregation": "sum"}
+            TK.settle(tk, ctx.q.question)
     if measure in ("area", "length") or AREA_Q_RE.search(q) or tk:
         d = S.analyse(ctx.file, regions=True)
         d = S.assumed(d, getattr(ctx, "assume", None))     # scale-assumption: the person's ratio and sheet, if any
