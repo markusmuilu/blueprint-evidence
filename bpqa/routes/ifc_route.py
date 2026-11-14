@@ -27,6 +27,7 @@ from shapely.ops import unary_union
 from .. import takeoff
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
+from .scope_guard import single_room_problem
 
 ROUTE = "ifc"
 CLASSES = {"door": ["IfcDoor"], "window": ["IfcWindow"], "wall": ["IfcWall"], "column": ["IfcColumn"],
@@ -268,6 +269,10 @@ def answer(ctx, q) -> Answer:
                     srcs.add(src)
             if not used:
                 return abstain(ROUTE, "no space areas")
+            why = single_room_problem(q, [s for s, _ in used], lambda s: space_display(s) + (
+                f" on {M.storey_of(s).Name}" if M.storey_of(s) is not None else ""))
+            if why:
+                return abstain(ROUTE, why)
             value, unit = round(sum(a for _, a in used), 3), "m2"
             note = f"sum of {len(used)} IfcSpace areas ({', '.join(sorted(srcs))})"
         elif (q.obj, q.measure) in QTO_KEYS:

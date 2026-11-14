@@ -65,7 +65,7 @@ def aia_file(path):
     msp.add_blockref("WC-01", (7000, 2000), dxfattribs={"layer": "P-FIXT"})
     msp.add_blockref("LAV-STD", (2500, 2000), dxfattribs={"layer": "P-FIXT"})
     rooms = [((0, 0, 4000, 3000), "Kitchen"), ((4000, 0, 4000, 3000), "Bedroom 1"), ((8000, 0, 3000, 3000), "Bedroom 2"),
-             ((0, 3000, 11000, 3000), "Living Room")]
+             ((0, 3000, 11000, 3000), "Living Room"), ((11000, 0, 3000, 3000), "Living Room")]
     for (x, y, ww, hh), lab in rooms:
         rect(msp, x, y, ww, hh, "A-AREA")
         msp.add_text(lab, dxfattribs={"layer": "A-AREA-IDEN", "insert": (x + ww / 2, y + hh / 2)})
@@ -129,6 +129,10 @@ CASES = [
     ("aia", "How many rooms labelled 'Kitchen' are there on this floor?", 1),
     ("aia", "What is the total net area in m² of all rooms labelled 'Kitchen' on this floor?", 12.0),
     ("aia", "How many square meters of flooring do I need for the bedrooms?", 21.0),
+    ("aia", "What is the net floor area of the room 'Kitchen', in m²?", 12.0),
+    ("aia", "What is the net floor area of the living room in m²?", None),          # two living rooms: no silent sum
+    ("aia", "What is the net floor area of the room 'Living Room', in m²?", None),
+    ("aia", "What is the total net area in m² of all rooms labelled 'Living Room' on this floor?", 42.0),
     ("aia", "How many showers and bathtubs are drawn on this floor plan in total?", None),
     ("de", "Wie viele Türen gibt es auf diesem Grundriss?", 3),
     ("de", "How many windows are drawn on this floor plan?", 3),

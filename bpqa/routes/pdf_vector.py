@@ -36,6 +36,7 @@ from ..answer import Answer, abstain
 from ..evidence import PALETTE, ImageCanvas, evidence_path, finish
 from ..pdfvec import PT_M, load_page
 from .dxf_swiss import AREA_RE, NUM_RE, OUTDOOR, SHAFT_VOID, UNIT_RE, _window_groups
+from .scope_guard import single_room_problem
 
 ROUTE = "pdf-vector"
 NOMINAL_M_PER_PT = 100 * PT_M        # size gates only, never areas, when no scale is found
@@ -541,6 +542,9 @@ def answer(ctx, q) -> Answer:
             return abstain(ROUTE, "area query not understood")
         if not rooms_used:
             return abstain(ROUTE, "no rooms matched")
+        why = single_room_problem(q, rooms_used, lambda r: r.get("tname") or r["name"] or r["number"])
+        if why:
+            return abstain(ROUTE, why)
         value = round(sum(fl.room_area(r) for r in rooms_used), 2)
     else:
         return abstain(ROUTE, f"measure {q.measure} not supported from a PDF")

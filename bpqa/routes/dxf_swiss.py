@@ -26,6 +26,7 @@ from shapely.ops import unary_union
 from .. import takeoff
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
+from .scope_guard import single_room_problem
 
 ROUTE = "dxf-geometry"
 NUM_RE = re.compile(r"^[A-Z]?\d+\.\d+$")
@@ -297,6 +298,9 @@ def answer(ctx, q) -> Answer:
                                            if generic else "")
         else:
             return abstain(ROUTE, "area query not understood")
+        why = single_room_problem(q, rooms_used, lambda r: f"{r['name']} {r['number'] or ''}".strip())
+        if why:
+            return abstain(ROUTE, why)
         value = round(sum(fl.room_area(r) for r in rooms_used), 2)
     else:
         return abstain(ROUTE, f"measure {q.measure} not supported on DXF")

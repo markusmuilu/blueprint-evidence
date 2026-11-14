@@ -39,6 +39,7 @@ from .. import takeoff
 from ..answer import Answer, abstain
 from ..evidence import PALETTE, VectorCanvas, evidence_path, finish
 from ..query import fold
+from .scope_guard import single_room_problem
 
 ROUTE = "dxf-generic"
 
@@ -634,6 +635,9 @@ def answer(ctx, q, dxf: Path | None = None) -> Answer:
             note = takeoff.describe(tk)
         else:
             return abstain(ROUTE, "area question not specific enough for a generic DXF (no room label)")
+        why = single_room_problem(q, rooms_used, lambda r: r["name"])
+        if why:
+            return abstain(ROUTE, why)
         value = round(sum(r["poly"].area * fl.m_per_unit ** 2 for r in rooms_used), 2)
         note += f"; units {fl.units_source}"
     else:

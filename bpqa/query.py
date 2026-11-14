@@ -86,6 +86,22 @@ def quotes(q: str) -> list[str]:
     return [next(g for g in m.groups() if g is not None) for m in QUOTE_RE.finditer(q)]
 
 
+# Quoted names (a model, building, storey or room name) must not be read as the asked object:
+# "doors in the model '10 Appartementen Schependomlaan'" asks for doors, not apartments.
+DQUOTE_RE = re.compile(r'(?<![\w])"([^"]{1,120})"(?![\w])')
+
+
+def strip_quoted(q: str) -> str:
+    return DQUOTE_RE.sub(" ", QUOTE_RE.sub(" ", q))
+
+
+# "the room 'X'", "space «X»", "Raum 'X'": the quote names one room, it is not a model or storey
+ROOM_BEFORE_QUOTE = re.compile(r"\b(room|space|raums?|raumes|zimmers?|piece|locale|stanza|huone|ruum|ruumi|rum|tila|lokaal)"
+                               r"\s*(?:named|called)?\s*$")
+# one room asked for, not a sum: "the room 'X'", "the living room", "the kitchen" (English, singular)
+PLURAL_SCOPE = re.compile(r"\b(all|every|each|total|sum|together|combined|alle|tous|tutti|kaikki)\b")
+
+
 def detect_lang(f: str) -> str:
     for lang, cue in [("fi", r"kuinka|pohjapiirustu"), ("de", r"wie |grundriss|geschoss|wohnung"),
                       ("fr", r"combien|quelle|piece|etage"), ("it", r"quant|qual |pianta|locale"),
@@ -122,9 +138,13 @@ class RuleParser(QueryParser):
         elif re.search(r"\b(what|which|could you)\b", f):
             q.measure = "text"
 
-        for name, pat in OBJECTS:
-            if re.search(pat, f):
-                q.obj = name
+        f_obj = fold(strip_quoted(question))
+        for text in (f_obj, f):      # the quoted names only when nothing outside them names an object
+            for name, pat in OBJECTS:
+                if re.search(pat, text):
+                    q.obj = name
+                    break
+            if q.obj:
                 break
 
         # Swiss-style room number "room 2.10 ('Zimmer')" in all languages
@@ -150,6 +170,17 @@ class RuleParser(QueryParser):
                 q.label = qs[0]
         if q.measure == "area" and q.obj == "room" and q.room_no and qs:
             q.label = qs[0]
+        # "the net floor area of the room 'living room' in the model": the quote right after "room"
+        # names one room. Without this the question was read as the total of all rooms.
+        room_quote = None
+        for mq in QUOTE_RE.finditer(question):
+            if ROOM_BEFORE_QUOTE.search(fold(question[:mq.start()])):
+                room_quote = next(g for g in mq.groups() if g is not None)
+                break
+        if room_quote and q.measure == "area" and q.obj == "room" and not q.room_no:
+            q.label = q.label or room_quote
+            if not PLURAL_SCOPE.search(fold(strip_quoted(question))) and not re.search(r"\brooms\b", f_obj):
+                q.extra["single_room"] = True
         if q.obj == "room" and q.measure == "area" and not q.room_no and not q.label:
             q.variant = "total"
         if re.search(r"numbered indoor|nummerierten innen|interieures numerotees|interni numerati", f):
@@ -176,7 +207,9 @@ class RuleParser(QueryParser):
                                 r"north|south|east|west|house)\b", f):
             q.extra["unresolved_scope"] = True
         if q.scope == "model" and qs:
-            q.extra["model_name"] = qs[0]
+            names = [x for x in qs if x != room_quote]
+            if names:
+                q.extra["model_name"] = names[0]
         # Quantity takeoff ("how many m2 of tiling for the bathrooms", "kuinka monta neliota laattaa
         # kylpyhuoneisiin"): a room-type area sum. Only when nothing more specific was read (a quoted
         # label, a room number, an apartment, the numbered-indoor total).
@@ -190,8 +223,25 @@ class RuleParser(QueryParser):
                 q.extra.pop("compound", None)
                 if tk.get("scope_named"):
                     q.extra["unresolved_scope"] = True
+                if single_type_asked(f, tk):
+                    q.extra["single_room"] = True
                 q.extra["takeoff"] = tk
         return q
+
+
+def single_type_asked(f: str, tk: dict) -> bool:
+    """English 'the area of the living room' / 'tiles for the kitchen' names one room; 'the bathrooms',
+    'all bedrooms' a sum. Other languages: not decided here (no flag, the sum stands)."""
+    if len(tk["types"]) != 1 or tk.get("group") or PLURAL_SCOPE.search(f):
+        return False
+    from .takeoff import Q_TYPE_RE
+    rx = Q_TYPE_RE.get(tk["types"][0])
+    if not rx:
+        return False
+    hits = [m.group(0).strip() for m in re.finditer(rx, f)]
+    if not hits or any(h.endswith("s") for h in hits):
+        return False
+    return bool(re.search(r"\b(the|this|that|my|our)\s+(\w+\s+)?" + re.escape(hits[0]), f))
 
 
 class LLMParser(QueryParser):
