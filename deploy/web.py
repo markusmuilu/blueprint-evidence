@@ -12,6 +12,7 @@ Run locally: `python -m deploy.web` (port 8000), with STOA_DATA unset it uses de
 """
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import os
@@ -230,6 +231,13 @@ def _index() -> HTMLResponse:
     page = (server.STATIC / "index.html").read_text(encoding="utf-8")
     tag = '<script src="/deploy/credits.js"></script>'
     page = page.replace("<head>", "<head>\n" + tag, 1) if "<head>" in page else tag + page
+    # The static files carry no cache headers, so a browser can keep an old app.css next to a new page
+    # (14 Nov: the new panel grips then took grid cells). A content hash per file forces a fresh copy on each deploy.
+    for name in ("app.css", "app.js", "ordersheet.js", "viewer3d.js"):
+        f = server.STATIC / name
+        if f.exists():
+            v = hashlib.sha1(f.read_bytes()).hexdigest()[:10]
+            page = page.replace(f'"{name}"', f'"{name}?v={v}"')
     return HTMLResponse(page, headers={"Cache-Control": "no-cache"})
 
 
