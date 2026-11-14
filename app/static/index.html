@@ -97,7 +97,7 @@
         <label for="search" class="label">Search the dataset</label>
         <div class="input-icon">
           <svg class="ico"><use href="#i-search"/></svg>
-          <input id="search" type="search" placeholder="site1000, colorful-11960, esplanades" autocomplete="off" spellcheck="false">
+          <input id="search" type="search" placeholder="esplanades, molio, site1000" autocomplete="off" spellcheck="false">
         </div>
       </div>
 
@@ -107,7 +107,8 @@
     <main class="work">
       <header class="workbar">
         <div class="drawing-head">
-          <h1 class="h-title mono" id="drawTitle">No drawing selected</h1>
+          <h1 class="h-title" id="drawTitle">No drawing selected</h1>
+          <p class="meta mono draw-file" id="drawFile" hidden></p>
           <p class="meta" id="drawMeta">Pick one from the library or upload your own.</p>
           <p class="meta read-status" id="readStatus" role="status" aria-live="polite"></p>
         </div>
@@ -211,6 +212,7 @@
           <dt>Where</dt><dd>the sheet, layer or model it was read from</dd>
           <dt>Why</dt><dd>numbered steps; the same numbers are drawn on the drawing</dd>
         </dl>
+        <p class="meta cache-line">A question asked again on the same drawing is served from the answer cache and marked Cached; new questions and new drawings are always computed live. Run again recomputes.</p>
       </div>
       <div class="detail-empty" id="detailBusy" hidden role="status">
         <h2 class="h-panel">Answer</h2>

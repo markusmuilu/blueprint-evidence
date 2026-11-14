@@ -281,8 +281,13 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .draw-item[aria-selected="true"] { background: var(--raised); }
 .draw-item[aria-selected="true"] .nm { color: var(--accent); }
 .draw-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
-.draw-item .nm { font-family: var(--mono); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.draw-item .sub { font-size: var(--fs-xs); color: var(--muted); display: flex; gap: var(--s3); }
+.draw-item .nm { font-size: var(--fs-sm); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draw-item .nm-file { font-family: var(--mono); font-weight: 400; }
+.draw-item .fn { font-size: var(--fs-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.split-tag { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
+.draw-file { margin: 0; font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.draw-item .sub { font-size: var(--fs-xs); color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 var(--s3); }
+.draw-item .sub > span { white-space: nowrap; }
 .list-note { padding: var(--s3); color: var(--muted); font-size: var(--fs-sm); }
 .skel { height: 40px; list-style: none; background: var(--raised); opacity: 0.5; }
 .picker > .draw-list { margin-left: 0; margin-right: 0; }
@@ -694,7 +699,7 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .v3d { position: absolute; inset: 0; background: var(--well); }
 .v3d canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
 .v3d-panel {
-  position: absolute; left: var(--s3); top: var(--s3); width: 232px; max-height: calc(100% - 64px); overflow-y: auto;
+  position: absolute; left: var(--s3); top: var(--s3); width: 252px; max-height: calc(100% - 64px); overflow-y: auto;
   padding: var(--s2) var(--s3); display: grid; gap: var(--s2); align-content: start;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); font-size: var(--fs-sm);
 }
@@ -710,10 +715,13 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .v3d-legend .sw.room { background: oklch(0.760 0.105 235 / 0.5); border: 1px solid var(--accent); }
 .v3d-legend .sw.ded { background: var(--warn); }
 .v3d-floors { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
-.v3d-floors li { display: grid; grid-template-columns: 1fr auto 32px; gap: var(--s2); align-items: center; min-height: 26px; }
+.v3d-floors li { display: grid; grid-template-columns: 1fr auto 32px; gap: var(--s2); align-items: center; min-height: 26px; padding: 2px 0; }
 .v3d-floors li .meta { text-align: right; font-size: var(--fs-xs); }
 .v3d-floors .check { min-width: 0; }
-.v3d-floors .check span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3d-floors .check { align-items: flex-start; }
+.v3d-floors .check input { margin-top: 2px; }
+.v3d-floors .v3d-sn { display: grid; min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
+.v3d-floors .v3d-sn small { font-size: var(--fs-xs); color: var(--muted); font-weight: 400; }
 .v3d-floors .check.hot span { color: var(--accent); font-weight: 500; }
 .v3d-only { border: 0; background: transparent; color: var(--muted); font-size: var(--fs-xs); padding: 0 2px; min-height: 24px; cursor: pointer; }
 .v3d-only:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
@@ -852,8 +860,9 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .tbl .dim { color: var(--muted); }
 
 /* ------------------------------------------------------------ first-visit tour (v2.6) */
-.tour-shield { position: fixed; inset: 0; z-index: 900; }
-.tour-spot { position: fixed; z-index: 901; pointer-events: none; border-radius: 3px; outline: 2px solid var(--accent); outline-offset: 0; box-shadow: 0 0 0 100vmax oklch(0.10 0.01 245 / 0.62); }
+/* the shield dims the page and has a hole over each outlined element (clip-path), so a step can outline several */
+.tour-shield { position: fixed; inset: 0; z-index: 900; background: oklch(0.10 0.01 245 / 0.62); }
+.tour-spot { position: fixed; z-index: 901; pointer-events: none; border-radius: 3px; outline: 2px solid var(--accent); outline-offset: 0; }
 .tour-bubble, .tour-offer {
   position: fixed; z-index: 902; width: 300px; max-width: calc(100vw - 16px); padding: var(--s3) var(--s4);
   background: var(--overlay); border: 1px solid var(--border-strong); border-radius: var(--r);
@@ -879,6 +888,11 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 /* answer panel busy state and tour wait line */
 .detail-q { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
 .tour-wait { margin: 0; }
+/* a cached answer says so next to its status, and in a note under the facts (judges asked how repeats are this fast) */
+.cache-tag { display: inline-block; margin-left: var(--s2); padding: 0 6px; border: 1px solid var(--accent); border-radius: 3px; color: var(--accent);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 18px; vertical-align: 1px; cursor: help; }
+.cache-note .cache-tag { margin: 0 var(--s2) 0 0; cursor: default; }
+.cache-line { margin-top: var(--s3); }
 
 /* BEGIN used-line */
 .used-line { display: flex; flex-wrap: wrap; gap: 2px var(--s4); margin: var(--s2) 0; font-size: var(--fs-xs); color: var(--fg-2); line-height: 1.5; }
@@ -944,8 +958,9 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 /* the checkbox glyph on a library row: only while the toggle is on */
 .draw-item .box { display: none; }
 .picker.multi .draw-item { grid-template-columns: 16px minmax(0, 1fr); column-gap: var(--s2); user-select: none; }
+.picker.multi .draw-item .fn { grid-column: 2; }
 .picker.multi .draw-item .sub { grid-column: 2; flex-wrap: wrap; gap: 0 var(--s3); }
-.picker.multi .draw-item .box { display: block; grid-row: 1 / span 2; align-self: center; width: 14px; height: 14px; border: 1px solid var(--border-strong); border-radius: 2px; box-sizing: border-box; }
+.picker.multi .draw-item .box { display: block; grid-row: 1 / span 3; align-self: center; width: 14px; height: 14px; border: 1px solid var(--border-strong); border-radius: 2px; box-sizing: border-box; }
 .picker.multi .draw-item.picked { background: var(--raised); }
 .picker.multi .draw-item.picked .box { position: relative; background: var(--accent); border-color: var(--accent); }
 .picker.multi .draw-item.picked .box::after { content: ""; position: absolute; left: 4px; top: 1px; width: 3px; height: 7px; border: solid var(--accent-fg); border-width: 0 2px 2px 0; transform: rotate(45deg); }

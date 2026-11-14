@@ -327,14 +327,31 @@ async function loadDrawings() {
   }
 }
 
+/* dataset split tag: plain words and a tooltip, so "test" does not read as a test drawing */
+const SPLIT_TIP = {
+  test: "Dataset split: test questions were never used for tuning. They were run once, at the end.",
+  dev: "Dataset split: dev questions were used while building and tuning the app.",
+};
+function splitTag(split) {
+  return split ? `<span class="split-tag" title="${esc(SPLIT_TIP[split] || "Dataset split")}">${esc(split)} split</span>` : "";
+}
+/* readable name first, the file name under it (and in the tooltip); uploads have no title and keep their own name */
+function nameHtml(d) {
+  const title = d.title && d.title !== d.name ? d.title : "";
+  const tip = esc(d.path === d.name ? d.name : d.name + "\n" + d.path);
+  return title
+    ? `<span class="nm" title="${tip}">${esc(title)}</span><span class="fn mono" title="${tip}">${esc(d.name)}</span>`
+    : `<span class="nm nm-file mono" title="${tip}">${esc(d.name)}</span>`;
+}
+
 function drawItem(d) {
   const li = document.createElement("li");
   const b = document.createElement("button");
   b.className = "draw-item";
   b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
   b.dataset.path = d.path; b.dataset.name = d.name; b.dataset.ext = d.ext;
-  b.innerHTML = `<span class="box" aria-hidden="true"></span><span class="nm" title="${esc(d.path)}">${esc(d.name)}</span>
-    <span class="sub"><span>${esc(SOURCE_NAMES[d.source] || d.source)}</span><span>${esc(d.ext.toUpperCase())}</span><span>${d.n_questions} questions</span><span>${esc(d.split)}</span></span>`;
+  b.innerHTML = `<span class="box" aria-hidden="true"></span>${nameHtml(d)}
+    <span class="sub"><span>${esc(SOURCE_NAMES[d.source] || d.source)}</span><span>${esc(d.ext.toUpperCase())}</span><span>${d.n_questions} questions</span>${splitTag(d.split)}</span>`;
   b.addEventListener("click", (e) => pickOrOpen(b, e));       // ask-several block: select, or open
   b.addEventListener("dblclick", () => { if (batch.on) selectDrawing(d.path); });
   paintPick(b);
@@ -379,8 +396,9 @@ function renderUploads() {
     const li = document.createElement("li");
     const b = document.createElement("button");
     b.className = "draw-item";
+    b.dataset.path = d.path;
     b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
-    b.innerHTML = `<span class="nm" title="${esc(d.path)}">${esc(d.name)}</span>
+    b.innerHTML = `<span class="nm nm-file mono" title="${esc(d.name)}">${esc(d.name)}</span>
       <span class="sub"><span>${esc(d.ext.toUpperCase())}</span><span>Deleted 24 hours after upload</span></span>`;
     b.addEventListener("click", () => selectDrawing(d.path));
     li.appendChild(b);
@@ -461,13 +479,18 @@ async function selectDrawing(path, keepAnswer = false) {
     if (state.drawing?.path !== d.path) viewer.resetOrient(true);     // a new drawing opens in its own orientation
     state.drawing = d;
     document.querySelectorAll(".draw-item").forEach((b) =>
-      b.setAttribute("aria-selected", String(b.querySelector(".nm").title === d.path)));
-    $("#drawTitle").textContent = d.name;
-    const bits = [SOURCE_NAMES[d.source] || d.source, d.ext.toUpperCase()];
-    if (d.twins?.length) bits.push("twins: " + d.twins.join(", "));
-    if (d.note) bits.push(d.note);
-    if (d.split) bits.push(d.split + " split");
-    $("#drawMeta").textContent = bits.join("  ·  ");
+      b.setAttribute("aria-selected", String(b.dataset.path === d.path)));
+    const titled = d.title && d.title !== d.name;
+    $("#drawTitle").textContent = titled ? d.title : d.name;
+    $("#drawTitle").classList.toggle("mono", !titled);          // a file name reads as one, in the mono face
+    $("#drawTitle").title = titled ? d.name : "";
+    $("#drawFile").textContent = titled ? d.name : "";
+    $("#drawFile").hidden = !titled;
+    const bits = [SOURCE_NAMES[d.source] || d.source, d.ext.toUpperCase()].map(esc);
+    if (d.twins?.length) bits.push(esc("twins: " + d.twins.join(", ")));
+    if (d.note) bits.push(esc(d.note));
+    if (d.split) bits.push(splitTag(d.split));
+    $("#drawMeta").innerHTML = bits.join("  ·  ");
     $("#pdfOnly").closest(".check").hidden = !(d.ext === "pdf" && d.twins?.length);
     /* between 761 and 1080 px the library floats over the question bar: once a drawing is open it steps aside (the
        rail's Drawings button brings it back). Not while picking several, where the library is the point */
@@ -1635,16 +1658,16 @@ function renderAnswer(a) {
       ${hasVal && a.approx ? `<div class="approx-note"><p class="approx-text"><span class="approx-tag">${icon("estimate")}Approximation</span><span id="approxText">${esc(m2(a.approx.text || a.approx.sentence || ""))}</span></p>${scaleCtlHtml(a)}</div>` : ""}
       <p class="note corr-note" id="corrNote" hidden></p>
       <dl class="kv facts">
-        <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span></dd>
+        <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span>${a.cached ? `<span class="cache-tag" title="Served from the answer cache: this question was asked before on this drawing. Time and cost are from the first run; Run again recomputes them.">Cached</span>` : ""}</dd>
         ${a.status === "cannot" ? `<dd class="wide cannot-reason">${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</dd>` : ""}
         ${gold}
         <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
         <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>
         <dt>Model calls</dt><dd>${modelCallsText(a)}</dd>
       </dl>
+      ${a.cached ? `<p class="note cache-note"><span class="cache-tag">Cached</span>Served from the answer cache: this question was asked before on this drawing. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
       ${usedLine(a)}
       ${costMeter(a)}
-      ${a.cached ? `<p class="note">Served from the answer cache. Time and cost are from the first run; Run again recomputes them.</p>` : ""}
     </div>
 
     <section class="sec" id="orderSec" aria-labelledby="hOrder" hidden></section>
@@ -2759,138 +2782,193 @@ async function compareOpen(x) {
 }
 /* ---- compare tab (block end) ---- */
 
-/* ================================================================ first-visit tour (onboarding block, v2.6)
-   Replaces the static "How it works" card. On a first visit a small offer asks whether to take a tour; Start walks
-   five steps, each an outline around the real element plus a bubble. "How it works" in the app bar replays it.
+/* ================================================================ first-visit tour (onboarding block, v3)
+   On a first visit a small offer asks whether to take a tour; "How it works" in the app bar replays it.
+   v3 (14 Nov, his call): no Next button. Each step outlines the real element and says what to press, and the tour
+   moves on when the person does it: open a group, open a drawing, ask (the step waits, "answering", until the answer
+   shows), press an item in the answer, press a numbered item in the strip, open Compare. Only "Skip tour" and Escape
+   end it early. The current step is worked out from the page itself on every event and on a short poll, so a step
+   done early jumps forward, and going off-script (another drawing, an upload, the answer cleared) moves the tour back
+   to the step that now applies instead of breaking it. A step that cannot be done here (an answer with no items, no
+   strip) is passed over.
    The choice is kept in localStorage under bpe-tour (try/catch: without storage the offer shows on every load).
    Only at 1081px and wider: below that the panels float or stack, and CSS hides the offer and the button.
-   Step 4 runs the example the old card ran (a Swiss plan, bathroom area) through selectDrawing and ask.
    Nothing above depends on this block except the first-visit default of folded library groups (TOUR_KEY). */
 (() => {
   const wide = window.matchMedia("(min-width: 1081px)");
   const remember = (v) => { try { localStorage.setItem(TOUR_KEY, v); } catch (_) { /* not stored: offered again next visit */ } };
   const mk = (cls) => { const e = document.createElement("div"); e.className = cls; return e; };
+  const shown = (el) => !!(el && el.offsetParent && el.getBoundingClientRect().width > 0);
 
-  const exampleTarget = () => {
-    const t = $("#detailEmpty .try-list");
-    return t && t.offsetParent ? t.closest(".try") : $("#exampleChips");
-  };
+  /* what the person has done since the tour started (clicks seen in the capture phase, before the page acts) */
+  let did = {};
+  const anyGroupOpen = () => !!document.querySelector('#drawList .dgroup-toggle[aria-expanded="true"]');
+  const answerItems = () => document.querySelectorAll("#itemList button.item");
+  const stripItems = () => document.querySelectorAll("#stripList .thumb[data-i]");
+  const tryBox = () => { const t = $("#detailEmpty .try-list"); return shown(t) ? t.closest(".try") : null; };
+
+  /* each step: the elements it outlines (the first places the bubble), what to press, when it is done, and whether it
+     can be done at all right now. `done` reads the page, so a later step done first also completes the earlier ones */
   const STEPS = [
-    { el: () => $("#drawList"), side: ["right", "left"], text: "Drawings are grouped by type. Open a group to see its drawings. Building models also open in a 3D view." },
-    { el: () => $("#drop"), side: ["right", "left"], text: "Add your own drawing here. Uploads are deleted after 24 hours." },
-    { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language. Scanned plans are the hardest. Try those too." },
-    { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
-    { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
-    { el: () => $('.rail-btn[data-view="compare"]'), side: ["right", "bottom"], text: "Compare shows prepared questions answered by a large vision model alone and by this app, with totals." },   // compare-tab
-    /* tour step (verify strip) */
-    { el: () => { const st = $("#strip"); return st && !st.hidden && st.offsetParent ? st : $("#viewer") || $("#viewerWrap"); }, side: ["top", "left"], text: "Every counted item is numbered on the drawing. Click one to see step by step how it was read." },
+    { id: "group", el: () => [$("#drawList")], side: ["right", "left"],
+      text: () => "Drawings are grouped by type. Press a group heading, for example Building models (IFC), to open it.",
+      done: () => did.group || anyGroupOpen() || !!state.drawing },
+    { id: "pick", el: () => [$("#drawList"), $("#drop"), $("#search")], side: ["right", "left"],
+      text: () => "Press a drawing to open it, or search by name. Building models also open in a 3D view. Your own drawing goes in Upload a drawing above; uploads are deleted after 24 hours.",
+      done: () => !!state.drawing },
+    { id: "ask", el: () => [$("#askForm"), $(".chips-block"), tryBox()], anchor: 2, side: ["bottom", "left"],
+      text: () => state.askingQ
+        ? "Reading the drawing for your question. The answer appears on the right."
+        : "Ask about this drawing in your own words, in any language: type a question and press Ask. Or press one of the Examples, or one of the Try these questions on the right.",
+      wait: () => !!state.askingQ,
+      done: () => !!state.answer && !state.askingQ },
+    { id: "item", el: () => [$("#detail")], side: ["left", "right"], scrollTo: () => $("#itemList"),
+      text: () => "This is the answer: the number, its status and the steps behind it. A question asked again comes from the answer cache and is marked Cached. Press any item in its list to see it on the drawing.",
+      can: () => answerItems().length > 0,
+      done: () => did.item || did.strip },
+    { id: "strip", el: () => [$("#strip")], side: ["top", "left"],
+      text: () => "Every counted item is numbered on the drawing and in this strip. Press one to see step by step how it was read.",
+      can: () => shown($("#strip")) && stripItems().length > 0,
+      done: () => did.strip },
+    { id: "compare", el: () => [$('.rail-btn[data-view="compare"]')], side: ["right", "bottom"],
+      text: () => (state.answer && !answerItems().length ? "Your answer is on the right, with its status and the steps behind it. " : "")
+        + "Last step: press Compare. It shows prepared questions answered by a large vision model alone and by this app, with totals.",
+      done: () => did.compare },
   ];
 
-  let shield, spot, bubble, idx = -1, returnFocus = null, busy = false, watchRO = null;
-  /* the spotlight follows its element when it changes size (a library group opened under it) */
+  let shield, bubble, spots = [], idx = -1, returnFocus = null, pollT = null, watchRO = null, painted = "";
   const watch = (el) => {
     if (!watchRO) watchRO = new ResizeObserver(() => layout());
     watchRO.disconnect();
     if (el) watchRO.observe(el);
   };
 
-  async function runExample() {
-    const t = { path: "data/swiss_dwellings/site3387_bldg5238_floor23498.pdf", q: "What is the floor area of the bathrooms?" };
-    try {
-      await selectDrawing(t.path);
-      if (!state.drawing) return;
-      $("#question").value = t.q;
-      await ask();
-    } catch (_) { /* the toast from ask already says what failed */ }
+  /* the step that applies now: the first one not done, passing over steps that cannot be done here */
+  function current() {
+    for (let k = 0; k < STEPS.length; k++) {
+      const s = STEPS[k];
+      if (s.done()) continue;
+      if (s.can && !s.can()) continue;      // every step before it is done or passed over, or the loop stopped there
+      return k;
+    }
+    return STEPS.length;
+  }
+
+  function targets() {
+    if (idx < 0 || idx >= STEPS.length) return [];
+    return STEPS[idx].el().filter(shown);
+  }
+
+  /* bring the step's element on screen: the library back if it was folded away, the Ask view if another is open */
+  function reveal() {
+    const id = STEPS[idx].id;
+    if (id !== "compare" && $("#view-ask").hidden) showView("ask");
+    if ((id === "group" || id === "pick") && $("#view-ask").classList.contains("no-picker")) $("#pickerToggle").click();
+    const [first] = targets(), inner = STEPS[idx].scrollTo?.();
+    if (first) first.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (shown(inner)) inner.scrollIntoView({ block: "center", inline: "nearest" });   // the part to press, inside its panel
+  }
+
+  function sync() {
+    if (idx < 0) return;
+    const k = current();
+    if (k >= STEPS.length) { finish(); return; }
+    const key = k + "|" + STEPS[k].text() + "|" + (STEPS[k].wait?.() ? 1 : 0);
+    if (k !== idx) { idx = k; reveal(); }
+    if (key !== painted) { painted = key; render(); }
+    layout();
+  }
+
+  function finish() {
+    end(true);
+    toast("Tour done. How it works, top right, plays it again.");
   }
 
   function end(markDone) {
     if (idx < 0) return;
-    idx = -1;
-    shield.remove(); spot.remove(); bubble.remove();
+    idx = -1; painted = "";
+    clearInterval(pollT);
+    shield.remove(); bubble.remove(); spots.forEach((s) => s.remove()); spots = [];
     watch(null);
     document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("click", onClick, true);
     window.removeEventListener("resize", layout);
     window.removeEventListener("scroll", layout, true);
+    window.removeEventListener("bpe-ask", sync);
     if (markDone) remember("done");
-    if (returnFocus && returnFocus.focus) returnFocus.focus();
+    if (returnFocus && returnFocus.focus && document.contains(returnFocus)) returnFocus.focus();
   }
 
   function layout() {
-    if (idx < 0) return;
-    const step = STEPS[idx], el = step.el();
-    if (!el || !el.offsetParent) { spot.hidden = true; shield.style.clipPath = ""; bubble.style.left = "50%"; bubble.style.top = "40%"; return; }
-    spot.hidden = false;
-    const r = el.getBoundingClientRect(), pad = 4;
-    Object.assign(spot.style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + 2 * pad + "px", height: r.height + 2 * pad + "px" });
-    /* the shield has a hole over the highlighted element, so it can be used (open a group, type a question) while
-       everything else stays blocked (QA 14 Nov: the tour said "open a group" and the overlay took the click) */
-    const [x0, y0, x1, y1] = [r.left - pad, r.top - pad, r.right + pad, r.bottom + pad].map((v) => Math.round(v) + "px");
-    shield.style.clipPath = `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${x0} ${y0}, ${x1} ${y0}, ${x1} ${y1}, ${x0} ${y1}, ${x0} ${y0})`;
+    if (idx < 0 || idx >= STEPS.length) return;
+    const step = STEPS[idx], els = targets(), pad = 4;
+    while (spots.length < els.length) { const s = mk("tour-spot"); document.body.append(s); spots.push(s); }
+    spots.forEach((s, i) => { s.hidden = i >= els.length; });
+    if (!els.length) {                 // nothing to outline: the bubble sits in the middle and Skip still works
+      shield.style.clipPath = ""; bubble.style.left = "50%"; bubble.style.top = "40%"; return;
+    }
+    /* the shield has a hole over each outlined element, so it can be used while everything else stays blocked */
+    const rects = els.map((el) => el.getBoundingClientRect());
+    let path = "0 0, 100% 0, 100% 100%, 0 100%, 0 0";
+    rects.forEach((r, i) => {
+      Object.assign(spots[i].style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + 2 * pad + "px", height: r.height + 2 * pad + "px" });
+      const [x0, y0, x1, y1] = [r.left - pad, r.top - pad, r.right + pad, r.bottom + pad].map((v) => Math.round(v) + "px");
+      path += `, ${x0} ${y0}, ${x1} ${y0}, ${x1} ${y1}, ${x0} ${y1}, ${x0} ${y0}, 0 0`;
+    });
+    shield.style.clipPath = `polygon(evenodd, ${path})`;
+    /* the bubble sits beside the first outlined element, or beside the first `anchor` of them taken together */
+    const lead = rects.slice(0, Math.min(step.anchor || 1, rects.length));
+    const r = { left: Math.min(...lead.map((x) => x.left)), top: Math.min(...lead.map((x) => x.top)),
+      right: Math.max(...lead.map((x) => x.right)), bottom: Math.max(...lead.map((x) => x.bottom)) };
     const W = window.innerWidth, H = window.innerHeight, bw = bubble.offsetWidth, bh = bubble.offsetHeight, m = 14;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
-    const spots = {
+    const at = {
       right: () => [r.right + pad + m, clamp(r.top, 48, H - bh - 8), r.right + pad + m + bw <= W - 8],
       left: () => [r.left - pad - m - bw, clamp(r.top, 48, H - bh - 8), r.left - pad - m - bw >= 8],
       bottom: () => [clamp(r.left, 8, W - bw - 8), r.bottom + pad + m, r.bottom + pad + m + bh <= H - 8],
       top: () => [clamp(r.left, 8, W - bw - 8), r.top - pad - m - bh, r.top - pad - m - bh >= 8],
     };
     let pos = null;
-    for (const s of step.side) { const p = spots[s](); if (p[2]) { pos = p; break; } }
-    if (!pos) { const p = spots[step.side[0]](); pos = [clamp(p[0], 8, W - bw - 8), clamp(p[1], 8, H - bh - 8)]; }
+    for (const s of step.side) { const p = at[s](); if (p[2]) { pos = p; break; } }
+    if (!pos) { const p = at[step.side[0]](); pos = [clamp(p[0], 8, W - bw - 8), clamp(p[1], 8, H - bh - 8)]; }
     bubble.style.left = pos[0] + "px"; bubble.style.top = pos[1] + "px";
   }
 
   function render() {
-    const step = STEPS[idx], last = idx === STEPS.length - 1;
-    bubble.innerHTML = `<p>${esc(step.text)}</p>
-      <div class="tour-act"><span class="tour-step">${idx + 1} of ${STEPS.length}</span>
-        ${idx > 0 ? '<button type="button" class="btn" data-a="back">Back</button>' : ""}
-        <button type="button" class="btn btn-primary" data-a="next">${esc(last ? "Done" : step.next || "Next")}</button></div>
-      ${last ? "" : '<div class="tour-act"><button type="button" class="btn btn-quiet" data-a="skip">Skip all tips</button></div>'}`;
+    const step = STEPS[idx], waiting = !!step.wait?.();
+    const hadFocus = bubble.contains(document.activeElement) || document.activeElement === document.body;
+    bubble.innerHTML = `<p>${esc(step.text())}</p>
+      ${waiting ? '<p class="meta tour-wait">Answering... the first question on a drawing takes about 15 s.</p>' : ""}
+      <div class="tour-act"><span class="tour-step">Step ${idx + 1} of ${STEPS.length}</span>
+        <button type="button" class="btn btn-quiet" data-a="skip">Skip tour</button></div>`;
     bubble.setAttribute("aria-label", `Tour, step ${idx + 1} of ${STEPS.length}`);
-    bubble.removeAttribute("aria-busy");
-    const el = STEPS[idx].el();
-    if (el && el.offsetParent) el.scrollIntoView({ block: "nearest" });
-    watch(el && el.offsetParent ? el : null);
+    if (waiting) bubble.setAttribute("aria-busy", "true"); else bubble.removeAttribute("aria-busy");
+    const [first] = targets();
+    watch(first || null);
     layout();
-    bubble.focus();
+    if (hadFocus) bubble.focus();        // never pull focus out of the question box while the person types
   }
 
-  function go(to) {
-    if (busy || to < 0) return;
-    if (to >= STEPS.length) { end(true); return; }
-    idx = to;
-    render();
-  }
-
-  async function next() {
-    if (busy) return;
-    const step = STEPS[idx];
-    if (step.run) {
-      busy = true;
-      const b = bubble.querySelector('[data-a="next"]'); b.disabled = true; b.textContent = "Working";
-      bubble.setAttribute("aria-busy", "true");
-      /* tour waiting line */
-      const w = document.createElement("p"); w.className = "meta tour-wait"; w.textContent = "Answering, about 15 s...";
-      bubble.querySelector("p").after(w);
-      await step.run();
-      busy = false;
-      if (idx < 0) return;                       // skipped while it ran
-    }
-    go(idx + 1);
+  /* clicks are only noted here; the page handles them as usual, and the next sync reads the result */
+  function onClick(e) {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    if (t.closest("#drawList .dgroup-toggle")) did.group = true;
+    if (t.closest("#itemList .item")) did.item = true;
+    if (t.closest("#stripList .thumb[data-i]")) did.strip = true;
+    if (t.closest('.rail-btn[data-view="compare"]')) did.compare = true;
+    setTimeout(sync, 0);
   }
 
   function onKey(e) {
     if (idx < 0) return;
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); end(true); return; }
-    if (e.key === "Tab") {                       // keep focus inside the bubble
+    if (e.key === "Tab") {             // focus stays within the bubble and the outlined elements
+      const inHole = targets().some((el) => el.contains(document.activeElement));
+      if (inHole) return;
       const f = [...bubble.querySelectorAll("button:not([disabled])")];
       if (!f.length) { e.preventDefault(); return; }
-      const first = f[0], lastB = f[f.length - 1], cur = document.activeElement;
-      if (e.shiftKey && (cur === first || cur === bubble)) { e.preventDefault(); lastB.focus(); }
-      else if (!e.shiftKey && cur === lastB) { e.preventDefault(); first.focus(); }
-      else if (!bubble.contains(cur) && !STEPS[idx].el()?.contains(cur)) { e.preventDefault(); first.focus(); }
+      if (!bubble.contains(document.activeElement)) { e.preventDefault(); f[0].focus(); }
     }
   }
 
@@ -2899,17 +2977,20 @@ async function compareOpen(x) {
     const offer = $("#tourOffer"); if (offer) offer.remove(); document.querySelectorAll(".tour-offer-dim").forEach((d) => d.remove());
     returnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : $("#guideOpen");
     showView("ask");
-    shield = mk("tour-shield"); spot = mk("tour-spot"); bubble = mk("tour-bubble");
+    did = {};
+    shield = mk("tour-shield"); bubble = mk("tour-bubble");
     bubble.setAttribute("role", "dialog"); bubble.tabIndex = -1;
-    bubble.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-a]"), a = b && b.dataset.a;
-      if (a === "next") next(); else if (a === "back") go(idx - 1); else if (a === "skip") end(true);
-    });
-    document.body.append(shield, spot, bubble);
+    bubble.addEventListener("click", (e) => { if (e.target.closest('[data-a="skip"]')) end(true); });
+    document.body.append(shield, bubble);
     document.addEventListener("keydown", onKey, true);
+    document.addEventListener("click", onClick, true);
     window.addEventListener("resize", layout);
     window.addEventListener("scroll", layout, true);       // the highlighted list scrolled inside its panel
-    idx = 0; render();
+    window.addEventListener("bpe-ask", sync);
+    idx = STEPS.length + 1; painted = "";                   // no step yet, so the first sync reveals the one that applies
+    sync();
+    bubble.focus();
+    pollT = setInterval(sync, 300);      // answers arrive, drawings change, panels open: read the page, cheaply
   }
 
   function offer() {
