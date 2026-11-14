@@ -4,6 +4,8 @@ Three signals, each drawn on the evidence image:
 
   printed  the plan's own area labels ("12,1 m2", comma or point decimals) read by the local OCR,
            each attached to the room label printed just above or beside it ("MH1" over "15,3 m2").
+           On a plan drawn rotated or mirrored this is done in the OCR pass the text reads in
+           (plan_tokens), with the boxes mapped back to the original pixels.
   region   the white region enclosed by walls around a label: text is erased, dark linework is the
            barrier (thickened by a few pixels so hairline gaps in walls close), the region is flood
            filled from the label and grown back by the same few pixels; furniture inside a room is
@@ -57,6 +59,122 @@ class Room:
     contour: object = None
     measured: float | None = None
     extra: dict = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------- text orientation
+#
+# Some scans are drawn rotated or mirrored, so their labels read sideways, upside down or mirrored
+# ("MH 1" over "11,0 m2" upside down and mirrored). The OCR cache (ocr.py) holds one pass per rotation
+# (0/90/180/270) of the image and of its left-right mirror, with token quads already mapped back to the
+# original pixels. The plan's text orientation is the pass whose reads pair the most room labels with
+# printed areas; its tokens are moved into that pass's reading frame (text upright, left to right), the
+# areas are attached to labels there exactly as on an upright plan, and the boxes go back to the original
+# pixels for the regions and the evidence image. An upright plan stays on the r0 pass unless another pass
+# pairs clearly more rooms.
+
+UPRIGHT = (False, 0)       # (mirror, rot) of the plain upright pass
+ORIENT_MIN_GAIN = 2        # another pass must pair at least this many more rooms than the upright one
+
+
+def frame_fns(mirror: bool, rot: int, w: float, h: float):
+    """(to_frame, to_image) point maps between original pixels and the reading frame of one OCR pass:
+    the image left-right mirrored when `mirror`, then rotated clockwise by `rot` degrees (as in ocr._run)."""
+    def fwd(x, y):
+        if mirror:
+            x = w - x
+        if rot == 90:
+            x, y = h - y, x
+        elif rot == 180:
+            x, y = w - x, h - y
+        elif rot == 270:
+            x, y = y, w - x
+        return x, y
+
+    def inv(x, y):
+        if rot == 90:
+            x, y = y, h - x
+        elif rot == 180:
+            x, y = w - x, h - y
+        elif rot == 270:
+            x, y = w - y, x
+        if mirror:
+            x = w - x
+        return x, y
+    return fwd, inv
+
+
+def _map_box(b, fn):
+    pts = [fn(b[0], b[1]), fn(b[2], b[1]), fn(b[2], b[3]), fn(b[0], b[3])]
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def read_rooms_oriented(toks: list[dict], mirror: bool, rot: int, w: float, h: float, min_conf: float = 0.5):
+    """read_rooms on one pass's tokens in that pass's reading frame; boxes and seeds in original pixels."""
+    fwd, inv = frame_fns(mirror, rot, w, h)
+    ft = [{**t, "quad": [list(fwd(*p)) for p in t["quad"]], "mirror": False} for t in toks]
+    rooms, free = read_rooms(ft, min_conf)
+    for r in rooms:
+        r.label_box = _map_box(r.label_box, inv) if r.label_box is not None else None
+        r.area_box = _map_box(r.area_box, inv) if r.area_box is not None else None
+        r.seed = inv(*r.seed)
+    free = [{**l, "box": _map_box(l["box"], inv)} for l in free]
+    return rooms, free
+
+
+def orient_name(mirror: bool, rot: int) -> str:
+    if (mirror, rot) == UPRIGHT:
+        return "upright"
+    return (f"rotated {rot} degrees" if rot else "") + (" and " if rot and mirror else "") + ("mirrored" if mirror else "")
+
+
+def plan_tokens(f: Path, allow_run: bool = True, min_conf: float = 0.5):
+    """((mirror, rot), tokens, extra rooms) for the plan's text: the pass the text reads in, that pass's tokens in
+    original pixels, and the rooms whose label and printed area read together only in another rotation of the
+    same (mirrored or not) image, such as a room labelled along a vertical wall. An extra room is kept only where
+    the main pass read no area or room word over its label or area (a sideways re-read of upright text).
+    Without the full OCR cache (allow_run False and some pass missing): the upright pass only."""
+    from .labels import _overlap
+    from .ocr import PASSES, cached, ocr_image
+    if not allow_run and not cached(f):
+        t = tokens_r0(f, allow_run=False)
+        return (UPRIGHT, [x for x in t if x["conf"] >= min_conf] if t is not None else None, [])
+    if allow_run:
+        tokens_r0(f, allow_run=True)          # r0 first, in the format the tools read
+    allt = ocr_image(f, allow_run=allow_run)
+    img = cv2.imread(str(f))
+    if allt is None or img is None:
+        return UPRIGHT, None, []
+    h, w = img.shape[:2]
+    by = {p: [] for p in PASSES}
+    for t in allt:
+        if t["conf"] >= min_conf:
+            by[(bool(t.get("mirror")), t["rot"])].append(t)
+    read = {p: read_rooms_oriented(by[p], *p, w, h, min_conf)[0] for p in PASSES}
+
+    def score(p):
+        rs = read[p]
+        return (sum(r.label is not None and r.printed is not None for r in rs), sum(r.printed is not None for r in rs))
+    s0 = score(UPRIGHT)
+    best, bs = UPRIGHT, s0
+    for p in PASSES:
+        if p != UPRIGHT and score(p)[0] >= s0[0] + ORIENT_MIN_GAIN and score(p) > bs:
+            best, bs = p, score(p)
+    taken = [quad_box(t["quad"]) for t in by[best] if parse_area(t["text"]) is not None or room_word(t["text"])]
+    extra = []
+    for p in PASSES:
+        if p[0] != best[0] or p == best:
+            continue
+        for r in read[p]:
+            if r.label is None or r.printed is None:
+                continue
+            bx = [b for b in (r.label_box, r.area_box) if b is not None]
+            if any(_overlap(b, c, 0.3) for b in bx for c in taken):
+                continue
+            r.extra["orient"] = p
+            extra.append(r)
+            taken += bx
+    return best, by[best], extra
 
 
 def tokens_r0(f: Path, allow_run: bool = True) -> list[dict] | None:
@@ -331,8 +449,12 @@ PPM_GRID = (24, 28, 32, 37, 43, 50, 58, 67, 77, 90)   # pixels per metre hypothe
 PPM_AGREE = 0.2
 
 
-def plan_rooms(toks):
-    rooms, free = read_rooms(toks)
+def plan_rooms(toks, orient=UPRIGHT, wh=None, extra=()):
+    """Rooms (printed areas attached to labels, then the free labels) and the centres of every label and
+    area. `orient` (mirror, rot) and `wh` (image width, height): the pass the tokens come from; `extra`:
+    rooms read in another rotation (plan_tokens)."""
+    rooms, free = read_rooms(toks) if orient == UPRIGHT else read_rooms_oriented(toks, *orient, *wh)
+    rooms = rooms + list(extra)
     rooms_all = rooms + [Room(l["text"], l["box"], None, None, _center(l["box"])) for l in free]
     others = []
     for r in rooms_all:
@@ -386,17 +508,20 @@ class PlanAreas:
     free_labels: list
     scale: Scale
     regions: str
+    orient: tuple = UPRIGHT      # (mirror, rot) of the OCR pass the labels and areas were read in
 
 
 @lru_cache(maxsize=4)
 def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
     f = Path(path)
-    toks = tokens_r0(f, allow_run=allow_run)
+    orient, toks, extra = plan_tokens(f, allow_run=allow_run)
     img = cv2.imread(str(f))
     if toks is None or img is None:
         return None
-    toks = [t for t in toks if t["conf"] >= 0.5]
-    proto, free, others = plan_rooms(toks)
+    proto, free, others = plan_rooms(toks, orient, (img.shape[1], img.shape[0]), extra)
+    for r in extra:                      # their text is erased from the linework like the main pass's
+        for b in (r.label_box, r.area_box):
+            toks = toks + [{"quad": [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], "text": "", "conf": 1.0}]
     hyps = hypotheses(img, toks, proto, others, mode="walls")   # walls beat lines and auto on dev (CHANGELOG)
     name, rooms, sc = choose(hyps)
     if rooms is None:
@@ -405,7 +530,7 @@ def analyse(path: str, allow_run: bool = True) -> PlanAreas | None:
         for r in rooms:
             if r.region_ok:
                 r.measured = round(r.pixels * sc.m2_per_px, 2)
-    return PlanAreas(rooms, free, sc, name or "none")
+    return PlanAreas(rooms, free, sc, name or "none", orient)
 
 
 # ---------------------------------------------------------------- takeoff answer
@@ -495,10 +620,11 @@ def takeoff_answer(ctx, q, img):
     if not typed:
         read = sorted({r.label for r in pa.rooms if r.label})
         why = (tk.get("toilet_rooms") or {}).get("why")
-        return abstain(ROUTE, (f"{why} (labels read upright: {', '.join(read[:15]) or 'none'})" if why else
-                               f"no room label of type {', '.join(tk['types'])} read upright on the plan "
+        on = orient_name(*pa.orient)
+        return abstain(ROUTE, (f"{why} (labels read {on}: {', '.join(read[:15]) or 'none'})" if why else
+                               f"no room label of type {', '.join(tk['types'])} read {on} on the plan "
                                f"(labels read: {', '.join(read[:15]) or 'none'})"))
-    # labels read in other orientations (full OCR cache) that the upright pass missed would be
+    # labels read in other orientations (full OCR cache) that the plan's text pass missed would be
     # rooms left out of the sum: abstain rather than under-order
     for t in want & set(lab_types):
         n_full = len(find_rooms(full, lab_types[t])) if full else 0
@@ -552,6 +678,8 @@ def takeoff_answer(ctx, q, img):
     if meas_rows:
         basis.append("MEASURED (pixel region x scale, not printed): " + ", ".join(f"{r['label']} {r['area']:.2f}" for r in meas_rows[:12]))
     basis_txt = "Floor areas " + "; ".join(basis) + "."
+    if pa.orient != UPRIGHT:
+        basis_txt += f" The plan's text reads {orient_name(*pa.orient)}; labels and areas were read in that orientation."
     bt = band_text([r["area"] for r in meas_rows]) if meas_rows else ""
     band_note = (f" Measured areas are estimates: {bt}. (Leave-one-out on {BANDS['n']} printed rooms of {BANDS['plans']} plans, "
                  f"dev and test, each measured with a scale from the other printed rooms.)") if meas_rows else ""

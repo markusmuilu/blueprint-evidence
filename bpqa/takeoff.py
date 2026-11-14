@@ -121,7 +121,9 @@ ABBR_RE = re.compile(r"(?<![A-Za-z0-9])(" + "|".join(sorted(ABBR, key=len, rever
 # (fold() applies NFKD, so "m²" arrives here as "m2")
 AREA_UNIT = re.compile(r"\bm2\b|\bm\^2|square ?met|\bsq\.? ?m\b|\bsqm\b|sq\.? ?ft|square f(ee|oo)t|nelio|"
                        r"quadratmeter|metres? carres|metri quadr")
-AREA_WORD = re.compile(r"pinta-ala|\barea\b|flache|surface|superficie|\bala\b|lattiapinta|lattiaala|floor ?space|"
+# plural "areas" only with a sum word ("how large areas do the bedrooms have combined"): "restrooms along with
+# their areas" lists rooms, it is not a takeoff
+AREA_WORD = re.compile(r"pinta-ala|\barea\b|\bareas\b(?=.*\b(?:combined|together|altogether|in total|summed)\b)|flache|surface|superficie|\bala\b|lattiapinta|lattiaala|floor ?space|"
                        r"how much|kuinka paljon|paljonko|wie viel")
 COUNT_Q = re.compile(r"\b(how many|kuinka monta|montako|wie viele|combien|quant[ie])\b")
 NAMED = re.compile(r"\b(named|labell?ed|called|schedule|nimetty|bezeichnung)\b")
