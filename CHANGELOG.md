@@ -3,6 +3,70 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: generality on drawings Stoa did not ship, branch `generality`
+
+Problem: the unseen-drawing test (12 public drawings, `UNSEEN.md` in the unseen worktree) found the
+DXF route returning 0 doors, 0 windows and 0 rooms at confidence 0.95 ("proven") on a DXF whose layers
+are called A-DOOR and A-WINDOW, the parser reading the model name "10 Appartementen Schependomlaan" as
+the object "apartment", "the area of the room 'living room'" without a level answered as the total of
+all rooms, and pdf-vector answering nothing on vector PDFs from other offices. Stoa: do not hard-code.
+
+- `bpqa/routes/dxf_swiss.py`: the Swiss rules run only when the file is in the Swiss layer convention
+  (`swiss_scheme`: entities on ROOM_OUTLINE and ROOM_TEXT, DOOR / WINDOW / FIXTURE in the layer table;
+  true for all 1,040 Swiss DXFs of the full set). Every other DXF goes to the generic route.
+- `bpqa/routes/dxf_generic.py` (new, route `dxf-generic`): layer and block names are classified from
+  their tokens: AIA/NCS (A-DOOR, A-GLAZ, A-WALL, A-AREA, P-FIXT; modifiers such as -IDEN make door tags
+  annotation), ISO 13567 / CI/SfB element codes (21/22 walls, 31 windows, 32 doors, 74 sanitary) and
+  plain words in EN, DE, FR, IT, FI, SV, NL, ES. If no layer, block or entity of the asked class
+  exists the route abstains and lists the layers it saw; it never returns a count of 0. Doors: door
+  block inserts, else swing arcs of 30-180 degrees on door layers, two swings hinged at both ends of
+  one opening = one double door. Windows: window block inserts, else window-layer pieces grouped when
+  parallel, overlapping along the wall and within a wall thickness. Fixtures from block names, columns
+  from closed shapes on column layers, rooms from closed polylines on room/area layers with the label
+  inside, else one room per distinct text label (confidence 0.75, below the "proven" line). Units from
+  $INSUNITS unless the door-swing radius contradicts it (template default "metres" on a cm drawing).
+- `bpqa/query.py`: object words are read outside quoted names first (falls back to the full text
+  only when nothing outside names an object). A quote right after "room / space / Raum ..." is that
+  room's label, not a model name. Such a question, and an English singular takeoff ("the area of the
+  living room", "tiles for the kitchen"), sets `single_room`. Full-set parse diff (127,097 questions):
+  1,484 parses change, all ifc_models: 17 object fixes (model 'Duplex Apartment ...'), 14 Dutch
+  'doucheruimte (n)' room areas that were parsed as showers, the rest only gain the `single_room` flag.
+- `bpqa/routes/scope_guard.py` (new): with `single_room`, the DXF, generic DXF, PDF and IFC routes
+  abstain when more than one room matches and list them ("10 rooms match: badkamer (3.08) on 00 begane
+  grond, ...") instead of summing.
+- `bpqa/routes/pdf_generic.py` (new), used by pdf-vector only where it abstained before: door swings
+  (circular 60-120 degree arc with a straight leaf of its radius from the hinge; legend symbols next
+  to the word for door or under a legend heading dropped; double doors merged), room-label counts and
+  room-type counts (bedroom, kitchen, bathroom, WC, sauna, balcony) from text spans. Confidence 0.7,
+  never a 0. As a check on a convention it was not built on: the swing count equals the DXF
+  door-leaf count on 60 of the 65 preview Swiss PDFs and on 916 of the 1,040 full-set Swiss PDFs
+  (3 abstain; the misses are mostly under-counts, sliding doors have no swing). It is not used on
+  Swiss PDFs; the Swiss rule answers there.
+- Tests: `tests/test_dxf_generic.py` writes AIA (blocks, A-AREA rooms, door tags), German (bulge
+  swings, wrong $INSUNITS, double door, framed windows), ISO 13567 and bare files and checks counts,
+  areas, the single-room abstention and that nothing returns 0; `tests/test_query_names.py`.
+
+Unseen set (50 distinct questions, `tools/unseen_run.py`, this venv has no torch, so the raster
+detector is off in both runs; with it the toilet question is answered, as in UNSEEN.md):
+
+| class | n | before: correct / wrong / abstain / abstain-ok | after |
+|---|---|---|---|
+| ifc | 23 | 18 / 2 / 3 / 0 | 23 / 0 / 0 / 0 |
+| dxf | 3 | 0 / 3 / 0 / 0 | 3 / 0 / 0 / 0 |
+| pdf, no twin | 12 | 0 / 0 / 10 / 2 | 6 / 0 / 4 / 2 |
+| image | 12 | 2 / 1 / 9 / 0 | 2 / 1 / 9 / 0 |
+| all | 50 | 20 / 6 / 22 / 2 | 34 / 1 / 13 / 2 |
+
+The PDF rendered from the DXF (twin present) went from 3 wrong zeros to 3 correct; with `--pdf-only`
+the door count is now 12 (correct), windows and 'OPEN OFFICE' still abstain (text drawn as outlines,
+no generic window rule). The one remaining wrong answer is raster-ocr-labels (balconies 0 at 0.7 on
+an English-labelled scan), outside this branch.
+
+Regression, preview dev, `eval.py --split dev --sources swiss_dwellings,ifc_models,opening_design`:
+Swiss 1694/1704, IFC 395/419, opening_design 20/44 before and after (every row identical); with
+`--pdf-only` Swiss 1692/1704, IFC 26/78, opening_design 20/44 before and after. Full-set dev,
+ifc_models only: 1655 -> 1682 correct of 2224, precision 99.6% -> 99.6%.
+
 ## 2026-11-14: quantity takeoff (room-type areas), branch `area-route`
 
 Problem: Stoa said areas matter most to them ("How many square meters of tiling should I order for the

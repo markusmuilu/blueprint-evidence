@@ -24,7 +24,9 @@ the fallback, not the default.
 question --> rule parser (EN DE FR IT FI DA ET) --> typed query {measure, object, label, room, apartment, level}
                        |                                   (LLM parser hook for questions the rules miss)
 drawing  --> router: cheapest route that can prove the answer
-               1. dxf-geometry  DXF layers of the same drawing (Swiss Dwellings)
+               1. dxf-geometry  DXF layers of the same drawing (Swiss Dwellings layer convention)
+                  dxf-generic   any other DXF: AIA / ISO 13567 / plain-word layer and block names;
+                                abstains when the asked class is absent, never a proven 0
                2. ifc           IFC entities, storey containment, quantity sets, space geometry
                3. pdf-text      text layer and schedules (door schedule rows)
                3b. pdf-vector   the PDF's own linework, when no DXF/IFC twin exists (or --pdf-only):
