@@ -80,6 +80,8 @@ def main(argv=None):
     ap.add_argument("--no-tiers", action="store_true",
                     help="pre-tier behaviour: estimates are withdrawn (abstentions), checks abstain as before")
     ap.add_argument("--no-checks", action="store_true", help="turn the checking layer off (for before/after numbers)")
+    ap.add_argument("--no-calibration", action="store_true",
+                    help="keep each scan route's own proven tier (bpqa/calibration.py off), to measure it or for before/after numbers")
     ap.add_argument("--pdf-only", action="store_true",
                     help="ignore DXF/IFC twins of PDFs: answer from the PDF itself (pdf-text, pdf-vector, raster)")
     ap.add_argument("--nemo", action="store_true", help="turn the Nemotron fallbacks on (parse fallback and last-resort route); off by default so routine evals stay fast and free")
@@ -92,6 +94,9 @@ def main(argv=None):
     if args.no_tiers:
         from bpqa import checks as checking
         checking.TIERS = False
+    if args.no_calibration:
+        from bpqa import calibration
+        calibration.ENABLED = False
     qs = [q for q in qs if args.split == "all" or split_of(q.path) == args.split]
     if args.pdf_only:
         qs = [q for q in qs if q.ext == "pdf"]
@@ -109,7 +114,7 @@ def main(argv=None):
 
     out = Path(args.out)
     ev_dir = out / "evidence"
-    tag = args.split + ("-prior" if args.prior else "") + ("-notiers" if args.no_tiers else "") + ("-nochecks" if args.no_checks else "") + ("-pdfonly" if args.pdf_only else "") + ("-nemo" if args.nemo else "")
+    tag = args.split + ("-prior" if args.prior else "") + ("-notiers" if args.no_tiers else "") + ("-nochecks" if args.no_checks else "") + ("-nocalib" if args.no_calibration else "") + ("-pdfonly" if args.pdf_only else "") + ("-nemo" if args.nemo else "")
     if args.data:
         tag += "-" + Path(args.data).name
     if args.objects:

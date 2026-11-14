@@ -25,6 +25,9 @@ class Answer:
     # answer (e.g. bedrooms on a plan whose rooms are all labelled generically): the router stops here
     # instead of handing the question to a model that would have to guess
     final: bool = False
+    # the condition a scan route met, used to look up its measured precision (bpqa/calibration.py), e.g.
+    # "clear" for a detector count whose views all agree with no box near the threshold; "" for none
+    tier_cell: str = ""
 
     @property
     def answered(self) -> bool:

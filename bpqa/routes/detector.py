@@ -8,7 +8,9 @@ tuned on held-out Stoa train-split images by tools/tune_detector.py.
 
 Every question the detector has a class for gets its best count, in one of two tiers:
   proven    no more than the tuned number of boxes scored inside the band, the count is inside the
-            tuned range, and the object is one the detector is right on more often than wrong
+            tuned range, the object is one the detector is right on more often than wrong, and dev measured
+            such counts at least 98% exact (bpqa/calibration.py): in practice only a "clear" count (every
+            view agrees, no box within 0.20 of the threshold) of a value dev measured, such as one WC seat
   estimate  otherwise; the reason is given and the boxes inside the band are listed (`uncertain`)
             and drawn amber on the evidence image, so a person can check exactly those
 The route abstains only when there is no model or no tuning for the object.
@@ -35,6 +37,7 @@ import numpy as np
 from PIL import Image
 
 from ..answer import Answer, abstain, estimate
+from .. import calibration
 from ..evidence import AMBER, BLUE, GREY, ImageCanvas, evidence_path, finish
 from .. import tiling
 
@@ -231,6 +234,20 @@ def policy(hits, unsure, c, spread: int = 0, n: int | None = None) -> list[str]:
     return why
 
 
+CLEAR_MARGIN = 0.20      # "clear": every view gives the same count and no box of the object scores this close to t
+
+
+def clear(views, fused, obj, c, spread: int) -> bool:
+    """True when the count is unambiguous: the rotated and mirrored views all give the same count, and no box of
+    the asked classes scores within CLEAR_MARGIN of the threshold, above or below it. Dev measured proven counts
+    under this condition separately (bpqa/calibration.py)."""
+    if len(views) > 1 and spread != 0:
+        return False
+    cl = set(OBJECTS[obj])
+    t = c["conf"]
+    return all(abs(d["conf"] - t) >= CLEAR_MARGIN for d in fused if d["cls"] in cl)
+
+
 def answer(ctx, q, img=None) -> Answer:
     if q.obj not in OBJECTS:
         return abstain(ROUTE, f"detector has no class for {q.obj}")
@@ -244,10 +261,15 @@ def answer(ctx, q, img=None) -> Answer:
     t, band = c["conf"], c.get("band", 0.0)
     n, hits, unsure, spread = count_views(views, dets, q.obj, c)
     why = policy(hits, unsure, c, spread, n)
+    cell = "clear" if clear(views, dets, q.obj, c, spread) else ""
+    cal = None if why else calibration.reason(ROUTE, q.obj, n, cell=cell)   # proven only where dev supports it
+    if cal:
+        why.append(cal)
     mode = " ".join(m for m in ("on tiles" if c["tile"] else "", f"at {len(tile_modes(c))} scales" if len(tile_modes(c)) > 1 else "", "over rotations and mirrors" if c["tta"] else "",
                                 f"fused over {len(model_files(c))} models" if len(model_files(c)) > 1 else "") if m)
-    ans = Answer(value=n, unit="count", route=ROUTE, tier="proven",
-                 confidence=round(c.get("precision_estimate" if why else "precision", c.get("precision", 0.5)), 2),
+    ans = Answer(value=n, unit="count", route=ROUTE, tier="proven", tier_cell=cell,
+                 confidence=round(calibration.precision(ROUTE, q.obj) or c.get("precision", 0.5) if cal else
+                                  c.get("precision_estimate" if why else "precision", c.get("precision", 0.5)), 2),
                  items=[{"n": i + 1, "class": d["cls"], "score": d["conf"], "xyxy": d["xyxy"]} for i, d in enumerate(hits)],
                  uncertain=[{"class": d["cls"], "score": d["conf"], "xyxy": d["xyxy"], "counted": d["conf"] >= t}
                             for d in unsure],
@@ -267,16 +289,17 @@ def answer(ctx, q, img=None) -> Answer:
             if d["cls"] in OBJECTS[q.obj] and 0.1 <= d["conf"] < t and id(d) not in amber:
                 cv.box(d["xyxy"], color=GREY, width=1)
         for i, d in enumerate(hits):
-            cv.box(d["xyxy"], n=i + 1, color=AMBER if id(d) in amber else BLUE,
+            cv.box(d["xyxy"], n=i + 1, color=AMBER if id(d) in amber or why else BLUE,   # blue only when proven
                    width=3)
         for d in unsure:
             if d["conf"] < t:
                 cv.box(d["xyxy"], color=AMBER, width=2)
-        head = f"Answer: {n}" + ("   ESTIMATE: check the amber boxes" if why else "   proven")
+        head = f"Answer: {n}" + ("   ESTIMATE: check the numbered boxes" if cal and not unsure else
+                                 "   ESTIMATE: check the amber boxes" if why else "   proven")
         ans.evidence = finish(cv.img, evidence_path(ctx.out_dir, ctx.q.path, ctx.q.question), ctx.q.question,
                               f"{head}   ({ROUTE}, local model, $0)",
-                              note=f"blue numbered boxes: each counted {NAMES[q.obj]} with its detector score >= {t:.2f}; "
-                                   f"amber: scored close to the threshold, numbered ones counted, plain ones not; "
+                              note=f"{'amber' if why else 'blue'} numbered boxes: each counted {NAMES[q.obj]} with its detector score >= {t:.2f}; "
+                                   f"amber plain boxes: scored close to the threshold, not counted; "
                                    f"grey: lower-scored boxes, not counted"
                                    + (f". Estimate because: {ans.tier_reason}" if why else ""))
     return ans

@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from . import calibration
 from . import checks as checking
 from .answer import Answer, abstain
 from .data import Question
@@ -125,6 +126,19 @@ def _try_text(ctx: Context, query: Query, why: str) -> Answer:
     return abstain("parser", "; ".join(reasons))
 
 
+def calibrate(a: Answer, query: Query) -> Answer:
+    """Lower a proven scan answer to an estimate unless dev supports it (bpqa/calibration.py); the routes
+    already do this for their own answers, this catches any scan route that does not."""
+    why = calibration.reason(a.route or "", query.obj, a.value, query.measure, a.tier_cell)
+    if why:
+        from .answer import estimate
+        estimate(a, why)
+        if a.evidence:
+            from .evidence import mark_estimate
+            a.evidence = mark_estimate(a.evidence, a.value, why, a.checks)
+    return a
+
+
 def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     query = query or parse(ctx.q.question)
     use_nemo = ctx.nemotron and nemo_client.enabled()
@@ -152,15 +166,20 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         except Exception as ex:  # a broken route must never take the run down
             a = abstain(getattr(fn, "__module__", "route").rsplit(".", 1)[-1], f"error: {type(ex).__name__}: {ex}")
         if ctx.checks and a.answered:
+            before = a.tier
             try:
                 a = checking.apply(ctx, query, a)
             except Exception as ex:   # a broken check must not hide a route's answer
                 a.checks = [{"name": "checking-layer", "status": "error", "detail": f"{type(ex).__name__}: {ex}"}]
+            if a.tier == "proven" and before != "proven":
+                a.tier = before         # a consistency check can lower a tier, never raise one
         ctx.tried.append(a.route)
         if a.answered and tk is not None and a.route not in WALL_ROUTES and needs_walls(tk):
             a = abstain(a.route, wall_reason(tk))   # a floor-only takeoff must not answer a wall question
         if a.answered and a.tier is None:
             a.tier = "proven"           # structured routes: the answer is derived from the file's own data
+        if a.answered and a.tier == "proven" and (a.route or "").startswith("raster"):
+            a = calibrate(a, query)     # scan answers: proven only where dev measured it reliable
         if a.answered or a.checks:      # a check-abstained answer keeps its checks and evidence
             return query, second_opinion.maybe(ctx, query, a)   # opt-in (NEMO_SECOND=1), estimate answers only
         if a.final:                     # the drawing was read and does not carry the answer: no guessing
