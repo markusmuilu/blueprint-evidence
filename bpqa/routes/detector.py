@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -40,7 +41,7 @@ from .. import tiling
 ROUTE = "raster-detector"
 REPO = Path(__file__).resolve().parents[2]
 MODEL = REPO / "models" / "detector.pt"
-THRESHOLDS = REPO / "models" / "detector_thresholds.json"
+THRESHOLDS = Path(os.environ.get("STOA_DET_THRESHOLDS") or REPO / "models" / "detector_thresholds.json")  # override: eval
 CLASSES = ["toilet", "sink", "shower", "bathtub", "door", "window"]
 OBJECTS = {"toilet": ["toilet"], "sink": ["sink"], "shower_or_bath": ["shower", "bathtub"],
            "door": ["door"], "window": ["window"]}
