@@ -303,7 +303,10 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 
 /* ------------------------------------------------------------ verification strip */
 .strip { border-top: 1px solid var(--border); background: var(--bg); padding: var(--s2) var(--s4) var(--s3); display: grid; gap: var(--s2); min-width: 0; }
-.strip-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); min-height: 32px; }
+.strip-head { display: flex; align-items: center; flex-wrap: nowrap; gap: var(--s2) var(--s3); min-height: 32px; white-space: nowrap; }
+.strip-head > * { flex: none; }
+.strip-head .scale-src { flex: 1 1 0; min-width: 0; max-width: none; }
+.strip-head .scale-src + .strip-gap { display: none; }
 .strip-head .btn { min-height: 28px; }
 .strip-head .btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-lo); border-color: var(--accent); }
 .strip-gap { flex: 1; }
@@ -510,6 +513,7 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
 
 /* ------------------------------------------------------------ responsive */
 @media (max-width: 1280px) {
+  .strip-head { flex-wrap: wrap; }
   :root { --picker-w: 260px; --detail-w: 340px; }
 }
 @media (max-width: 1080px) {
@@ -531,6 +535,7 @@ button.item:hover, button.item.on { background: var(--accent-lo); color: var(--f
   .view-ask .picker { position: static; width: auto; max-height: 60vh; border-right: 0; border-bottom: 1px solid var(--border); }
   .viewer { height: 60vh; }
   .strip { padding: var(--s2) var(--s3); }
+  .strip-head { flex-wrap: wrap; }
   .scale-src { max-width: 100%; }
   .meter-row { grid-template-columns: 112px 1fr 64px; }
   .detail { border-left: 0; border-top: 1px solid var(--border); }

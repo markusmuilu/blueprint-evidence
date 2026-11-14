@@ -434,7 +434,10 @@ function checkItems(a) {
   const its = answerItems(a);
   let rows = its.map((it, i) => {
     const m = markFor(it, a, i);
-    const [label, extra] = itemLabel(it, a.query && a.query.obj, a.route);
+    let [label, extra] = itemLabel(it, a.query && a.query.obj, a.route);
+    if (a.unit && a.unit !== "count" && it && typeof it === "object") {
+      label = [it.number, it.name || it.label || it.room].filter(Boolean).join(" ") || `room ${i + 1}`;
+    }
     const area = typeof it === "object" && it ? (it.area_m2 ?? it.area ?? (a.unit === "m2" && typeof it.value === "number" ? it.value : null)) : null;
     return { i, n: (it && typeof it === "object" && it.n) || i + 1, it, rect: itemRect(it, a, i), mark: m, label, extra, area,
              tone: m ? m.tone : a.status === "estimate" ? "amber" : "blue" };
@@ -547,7 +550,7 @@ function renderStrip() {
         ? `<button type="button" class="tx" data-add="${r.add}" aria-label="Remove added item ${esc(r.n)}">Undo</button>`
         : `<button type="button" class="tx" data-n="${esc(r.n)}" aria-pressed="${removed}" aria-label="${removed ? "Keep" : "Not this one:"} item ${esc(r.n)}">${removed ? "Keep" : "Not this one"}</button>`) : ""}`;
     list.appendChild(li);
-    drawThumb(li.querySelector("canvas"), img, r.rect, removed);
+    drawThumb(li.querySelector("canvas"), img, r.rect, removed, r.mark && r.mark.kind === "poly" ? { pts: r.mark.pts, off, tone: r.tone } : null);
     const t = li.querySelector(".thumb");
     t.addEventListener("click", () => focusRect(r.rect, r.i, true));
     t.addEventListener("mouseenter", () => focusRect(r.rect, r.i, false));
@@ -565,16 +568,29 @@ function renderStrip() {
   $("#saveCorr")?.addEventListener("click", saveCorrection);
   $("#backToAnswer")?.addEventListener("click", () => showEvidence(state.answer, false));
 }
-function drawThumb(cv, img, r, dim) {
+function drawThumb(cv, img, r, dim, poly) {
   const ctx = cv.getContext("2d");
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, cv.width, cv.height);
   if (!img.naturalWidth || !r) return;
   const cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
-  const w = Math.max(r[2] * 2.4, r[3] * 2.4 * (TW / TH), 90);
+  const f = poly ? 1.35 : 2.4;
+  const w = Math.max(r[2] * f, r[3] * f * (TW / TH), 90);
   const h = w * (TH / TW);
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h, 0, 0, cv.width, cv.height);
+  if (poly && poly.pts?.length > 2) {         // the measured room outlined, so it stands out from its neighbours
+    const sx = cv.width / w, sy = cv.height / h;
+    ctx.beginPath();
+    poly.pts.forEach(([px, py], j) => {
+      const X = (px - (cx - w / 2)) * sx, Y = (py + poly.off - (cy - h / 2)) * sy;
+      if (j) ctx.lineTo(X, Y); else ctx.moveTo(X, Y);
+    });
+    ctx.closePath();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = poly.tone === "amber" ? "rgb(231,140,8)" : "rgb(0,106,165)";
+    ctx.stroke();
+  }
   if (dim) { ctx.fillStyle = "rgba(20,26,34,0.62)"; ctx.fillRect(0, 0, cv.width, cv.height); }
 }
 function corrLine(a) {
