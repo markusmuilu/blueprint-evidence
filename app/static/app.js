@@ -185,11 +185,11 @@ async function loadStatus() {
     btn.dataset.tip = missing.length ? "Status: " + missing.join(", ") + " unavailable" : "Status: all routes available";
     const row = (k, v) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`;
     $("#statusPop").innerHTML = `<h2 class="h-panel">System</h2><dl>
-      ${row("Dataset", s.data_root || "not found; set STOA_DATA")}
+      ${row("Dataset", s.data_root ? "loaded" : "not found")}
       ${row("Drawings", num(s.drawings))}
       ${row("Detector", s.detector_model && s.detector_runtime ? "available (CPU)" : s.detector_model ? "model found, runtime missing: scan symbol counts abstain unless cached" : "no model: scan symbol counts abstain")}
       ${row("OCR", s.ocr_runtime ? "available" : "missing: room labels abstain")}
-      ${row("Uploads", s.uploads)}
+      ${row("Uploads", "kept for 15 minutes, then deleted")}
     </dl><p class="meta">Every route runs locally. No question leaves this machine.</p>`;
   } catch (e) { /* status is optional */ }
 }
@@ -1597,7 +1597,7 @@ async function loadWitnessSummary() {
   try { w = await api("/api/witness_summary"); } catch (e) { return; }
   const el = $("#witTable");
   if (!el) return;
-  if (w.missing) { el.innerHTML = `<tbody><tr><td class="dim">${esc(w.missing)}</td></tr></tbody>`; return; }
+  if (w.missing) { const panel = el.closest(".panel"); if (panel) panel.hidden = true; return; }   // no run yet: hide, no dev paths
   const head = `<thead><tr><th>Witnesses</th><th class="num">Questions</th><th class="num">Share</th><th class="num">Router answer correct</th><th class="num">Agreed value correct</th></tr></thead>`;
   const body = w.rows.map((r) => `<tr class="${r.level === "total" ? "total" : ""}"><td>${esc(r.label)}</td><td class="num">${num(r.n)}</td><td class="num">${pct(r.share)}</td>
     <td class="num">${r.router_correct == null ? "-" : `${pct(r.router_correct)} <span class="dim">(${r.router_correct_n})</span>`}</td>
@@ -1654,7 +1654,7 @@ async function loadRuns() {
       $("#runHeadline").textContent = "No eval outputs found. Run eval.py; its out/<run>/summary.json files appear here.";
       return;
     }
-    sel.innerHTML = runs.map((r) => `<option value="${esc(r.id)}">${esc(r.label || r.id)}  [${esc(r.where || "out")}/${esc(r.id)}]</option>`).join("");
+    sel.innerHTML = runs.map((r) => `<option value="${esc(r.id)}">${esc(r.label || r.id)}</option>`).join("");
     sel.onchange = () => loadRun(sel.value);
     runsLoaded = true;
     loadRun(runs[0].id);
@@ -1672,7 +1672,8 @@ async function loadRun(id) {
     runData = await api("/api/results/" + encodeURIComponent(id));
   } catch (e) { toast("Could not load run: " + e.message, true); return; }
   const d = runData;
-  $("#runHeader").textContent = `${d.label || d.id}. Source: ${d.where || "out"}/${d.id}/summary.json. ${d.header || ""}`;
+  $("#runHeader").textContent = `${d.label || d.id}. ${d.header || ""}`;
+  $("#runHeader").title = `${d.where || "out"}/${d.id}/summary.json`;
   const all = d.rows.find((r) => r.source === "ALL" && r.type === "ALL");
   const where = d.split ? `the <strong>${esc(d.dataset_name)}</strong>, <strong>${esc(d.split)}</strong> split` : `<strong>${esc(d.dataset_name)}</strong>`;
   const flags = d.flags && d.flags.length ? ` (${esc(d.flags.join("; "))})` : "";
