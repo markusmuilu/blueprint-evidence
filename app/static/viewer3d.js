@@ -159,6 +159,11 @@ function buildFloor(entry, kind, buf) {
   const mesh = new THREE.Mesh(g, mat);
   mesh.matrixAutoUpdate = true;
   mesh.visible = kind === "solid" || V.roomsOn;
+  /* rooms after every storey's solids: three sorts see-through meshes by their bounding-sphere centre, so a storey's
+     rooms were often drawn before its own slab and walls, which then painted over them. Only rooms whose centre
+     happened to sit nearer the camera showed (Esplanades: the 1st floor, whose stair space reaches the roof).
+     Drawn last, they are depth-tested against all solids and show on every visible storey (14 Nov) */
+  if (kind === "space") mesh.renderOrder = 1;
   mesh.userData = { kind, floor: entry.i };
   return mesh;
 }
@@ -509,11 +514,11 @@ function renderPanel() {
       <input type="range" id="v3dExplode" min="0" max="1" step="0.05" value="${V.explode}" aria-describedby="v3dExplodeV"><output class="mono meta" id="v3dExplodeV">${Math.round(V.explode * 100)}%</output></div>
     <label class="check"><input type="checkbox" id="v3dRooms" ${V.roomsOn ? "checked" : ""}> <span>Show all rooms</span></label>
     ${legend}
-    <p class="meta v3d-note">In brackets: the storey name in the model file.</p>
+    <p class="meta v3d-note">Small print under a storey: its name in the model file.</p>
     <ul class="v3d-floors" aria-label="Storeys">${V.floors.slice().reverse().map((fl) => {
       const n = (fl.entry.solid?.elements.length || 0);
       const hot = V.hiFloors?.has(fl);
-      return `<li><label class="check${hot ? " hot" : ""}"><input type="checkbox" data-f="${fl.i}" ${fl.visible ? "checked" : ""}> <span>${esc(storeyLabel(fl.name))}</span></label>
+      return `<li><label class="check${hot ? " hot" : ""}"><input type="checkbox" data-f="${fl.i}" ${fl.visible ? "checked" : ""}> ${storeyHtml(fl.name)}</label>
         <button class="v3d-only" type="button" data-only="${fl.i}" title="Show only this storey">only</button><span class="mono meta">${n}</span></li>`;
     }).join("")}</ul>
     <button class="btn btn-quiet" type="button" id="v3dHome">Reset view</button>`;
@@ -572,6 +577,12 @@ window.dispatchEvent(new Event("v3d-ready"));
 
 /* Storey names in English with the model's own name kept: "5th floor (5.korrus)", "Basement (Kælder)" (his request, 14 Nov) */
 function ordinal(n) { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+/* the storey list: the English name on the first line, the model's own name under it, so neither is cut off */
+function storeyHtml(name) {
+  const raw = String(name || "").trim(), lab = storeyLabel(name);
+  if (lab === raw) return `<span class="v3d-sn" title="${esc(raw)}">${esc(raw)}</span>`;
+  return `<span class="v3d-sn" title="${esc(lab)}">${esc(lab.slice(0, lab.length - raw.length - 3))}<small>${esc(raw)}</small></span>`;
+}
 function storeyLabel(name) {
   const raw = String(name || "").trim();
   const low = raw.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
