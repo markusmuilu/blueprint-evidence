@@ -84,9 +84,36 @@ question themselves, and they missed:
   question reading by the language model is a call whenever it was made and paid for, also when the rule reading was
   kept and the answer is a cannot (the fast-cannot retry copies its cost onto the rule reading, so the row said "yes"
   and the line "none"). The line then says "rules (the language model was also asked; the rule reading was kept)".
+- **"The area of the apartment" on a floor of several flats** is a final cannot that gives each flat's area (Swiss
+  site3387: A 107.40 m2, B 80.20 m2; Esplanades 1.korrus: 10 flats in the space numbering), not the floor total proven
+  (212.4 and 870.29 with the first version of the whole-flat reading). "Total floor area" still answers the floor.
+- **Plain reasons** (`answer.py`): the `public_reason` patterns had literal backspace characters where `\b` was meant,
+  so env flags and exception text ("AssertionError: Invalid device id") reached the app; fixed.
+- **QA judge journey, round 3** (`compose.py`, `query.py`, `routes/raster.py`):
+  - Esplanades 2.korrus "What is the total area of the apartments on this floor?": the room areas grouped by flat, the
+    flat read from the space numbering <flat>-<room> (`rows_of`), an estimate that says so: 18 flats (11: 36.17 m2 ...),
+    the stair and corridors listed outside any apartment. Was "no IFC rule for apartment area".
+  - "How many bathrooms per apartment?": a count per apartment over every flat the route knows ("0 in each of the 18
+    apartments", the storey's room names listed: the flats have a TUALETTRUUM, no bathroom), not an area.
+  - Molio 1. Sal "How many meeting rooms are on this floor and how big are they?": the list of the three Møde rooms
+    with areas (68.62 m2 in total); "and how big are they" no longer dropped.
+  - site695 "How many square meters of parquet for all bedrooms and the living room?": one flooring takeoff (67.68 m2,
+    estimate: Wohnen/Essen counted whole, 3 generic Zimmer not typed), not split into "How many bedrooms?". A material
+    or an area unit stops the split into counts.
+  - "How big is the apartment?" (and "hur stor är lägenhet A?", "how big is apartment A?") is an area question; one flat
+    without a letter reads as the whole-flat total. On colorful-11960 it is now a plain cannot (no summary printed, no
+    room area readable on the 240 px scan) instead of "not understood".
+  - Total floor area on a scan with no printed flat area: the labelled rooms of every type added up, one type at a time,
+    as an estimate that names the types not measured (10372: 129.10 m2, sauna not measured).
 - Not reproduced: Tyneside "how many bathrooms" is 1 (estimate, adopted from the shower check), on AY's own branch too
   with today's caches; AY reported 2. The detector's two bathroom boxes now hold Bedroom labels (scores 0.77, 0.32), so
   the label filter drops both.
+- Shower check on CubiCasa dev (`eval.py --split dev --sources cubicasa5k --objects shower_or_bath`, main before this
+  branch against this branch): the first 469 questions in path order are identical (423 correct both times). The full
+  run was too slow on the shared machine to finish in the session.
+- Integration case list (70 questions from the branch reports over IFC, Swiss, scans, unseen plans and Stoa's sample)
+  and the 57 unseen questions: every reported value holds except those named above; the unseen set is 46 of 57 correct,
+  as on main.
 - Dataset parses (6,821 distinct questions, rules only): 2 changed, "Can you give me the list of all room types?" and
   "... list of each room available in house A?" now read as text questions (not understood before). Dev eval on
   swiss_dwellings and ifc_models (28,400 questions): every answer, tier and route identical before and after.

@@ -59,8 +59,8 @@ def abstain(route: str, reason: str) -> Answer:
 # Reasons are written for the log and for tests: they name env flags, exception classes and model files. The app
 # shows `public_reason(...)`, the same sentence with those parts removed or put in plain words.
 _INTERNAL = re.compile(
-    r"NEMO_\w+|STOA_\w+|NVIDIA_\w+|[A-Z][A-Z0-9]*_[A-Z0-9_]{2,}=\S*|Traceback|[A-Z]\w*(?:Error|Exception)|"
-    r"Invalid device|CUDA|\.pt|tools/\w+\.py")
+    r"\bNEMO_\w+|\bSTOA_\w+|\bNVIDIA_\w+|\b[A-Z][A-Z0-9]*_[A-Z0-9_]{2,}=\S*|Traceback|\b[A-Z]\w*(?:Error|Exception)\b|"
+    r"\bInvalid device\b|\bCUDA\b|\.pt\b|\btools/\w+\.py")
 _PLAIN = [
     (re.compile(r"image estimate switched off|NEMO_IMAGE_ESTIMATE", re.I), ""),
     (re.compile(r"model call failed|invalid model output", re.I), "the image model could not give a usable reading"),

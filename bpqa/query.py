@@ -134,6 +134,11 @@ FLAT_AREA_NOT = re.compile(r"\b(gross|brutto|bgf|net usable|building'?s?|rakennu
                            r"clinic|ward|percent\w*|share|%)\b")
 
 
+# "apartment A", "Wohnung B", "lägenhet A", "huoneisto C": one apartment by its letter
+APT_LETTER = (r"(?:apartment|wohnung|appartement|appartamento|dell'appartamento|lagenhet|lägenhet|huoneisto|asunto)"
+              r"\s+([A-Z])\b")
+FLAT_SIZE_Q = re.compile(r"\bhow (big|large)\b|\bkuinka (iso|suuri)\b|\bmiten (iso|suuri)\b|\bwie gross\b|\bhur stor\b|"
+                         r"\bwhat size\b|\bkokoinen\b")
 # "list the rooms", "list all rooms", "luettele huoneet", "liste die Räume": the rooms by name (a text question)
 LIST_ROOMS = re.compile(r"\b(list|lists|listing|enumerate|itemi[sz]e|luettele\w*|listaa|listaus\w*|liste|auflist\w*|"
                         r"lista|listan)\b")
@@ -330,8 +335,12 @@ class RuleParser(QueryParser):
                 q.apartment = m.group(1).upper()
         # "what is the total area of the apartment?" (one apartment, no letter): the floor area of the flat the drawing
         # shows, read as the total of its rooms like "total floor area?". "apartment A" is set back below
-        if q.measure == "area" and apt_scope and not qs and not FLAT_AREA_NOT.search(f_obj):
+        if q.measure is None and q.obj == "apartment" and FLAT_SIZE_Q.search(f_obj) and not qs:
+            q.measure = "area"                    # "how big is the apartment?", "hur stor är lägenhet A?"
+        if q.measure == "area" and apt_scope and not qs and not FLAT_AREA_NOT.search(f_obj) \
+                and not re.search(APT_LETTER, question, re.I):
             q.obj = "room"
+            q.extra["one_apartment"] = True   # a floor of several flats does not answer it (routes/dxf_swiss.py)
         # ("what is the largest room" asks which room: it stays a text question)
         if not qs and q.obj in (None, "room") and q.measure in (None, "area") and LARGEST_ROOM.search(f_obj):
             q.measure, q.obj, q.variant = "area", "room", "max"    # "biggest room?", "suurin huone"
@@ -357,7 +366,7 @@ class RuleParser(QueryParser):
         if m:
             q.room_no = m.group(1).upper()
             q.obj = "room"
-        m = re.search(r"(?:apartment|wohnung|appartement|appartamento|dell'appartamento)\s+([A-Z])\b", question, re.I)
+        m = re.search(APT_LETTER, question, re.I)
         if m and q.measure == "area":
             q.apartment = m.group(1).upper()
             q.obj = "apartment"

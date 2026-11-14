@@ -507,6 +507,14 @@ def answer(ctx, q) -> Answer:
             note = f"indoor rooms inside apartment {q.apartment} outline"
         elif q.variant in ("net_indoor_total", "total"):
             rooms_used = [r for r in fl.rooms if fl.counts_as_indoor(r) and not fl.is_shaft(r)]
+            units = sorted({r["unit"] for r in rooms_used if r.get("unit")})
+            if q.extra.get("one_apartment") and len(units) >= 2:
+                # "the area of the apartment" on a floor of several flats: name one (as for the room count)
+                per = ", ".join(f"{u}: {sum(fl.room_area(r) for r in rooms_used if r.get('unit') == u):.2f} m2" for u in units)
+                a = abstain(ROUTE, f"this floor has {len(units)} apartments ({', '.join(units)}); name one. Indoor room "
+                                   f"area per apartment: {per}")
+                a.final = True
+                return a
             note = "numbered indoor rooms (named, or unnamed with a fixture inside or wider than 1 m; outdoor, shafts and voids excluded)"
         elif q.variant == "max":
             indoor = [r for r in fl.rooms if fl.counts_as_indoor(r) and not fl.is_shaft(r)]
