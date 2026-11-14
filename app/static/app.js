@@ -78,6 +78,100 @@ $("#pickerToggle").addEventListener("click", (e) => {
   requestAnimationFrame(() => viewer.fit());
 });
 
+/* ================================================================ resizable side panels */
+/* The library (left) and the answer panel (right) are resized by dragging their inner edge, or with the arrow
+   keys on the focused handle. The width is a CSS variable on the Ask view, so the grid and the handles follow it.
+   Remembered in localStorage; a double-click on a handle goes back to the default. Desktop only (above 1080px). */
+const panels = (() => {
+  const root = $("#view-ask");
+  const WORK_MIN = 480;                     // the viewer keeps at least this much
+  const cfg = {
+    picker: { grip: $("#gripPicker"), panel: $("#picker"), v: "--picker-w", key: "bpe-picker-w", min: 240, max: 480, side: 1, other: "detail" },
+    detail: { grip: $("#gripDetail"), panel: $("#detail"), v: "--detail-w", key: "bpe-detail-w", min: 300, max: 640, side: -1, other: "picker" },
+  };
+  const wide = window.matchMedia("(min-width: 1081px)");
+  const store = {
+    get(k) { try { const n = parseFloat(localStorage.getItem(k)); return Number.isFinite(n) ? n : null; } catch { return null; } },
+    set(k, n) { try { localStorage.setItem(k, String(Math.round(n))); } catch { /* private mode */ } },
+    del(k) { try { localStorage.removeItem(k); } catch { /* private mode */ } },
+  };
+  const saved = { picker: store.get(cfg.picker.key), detail: store.get(cfg.detail.key) };
+  const dflt = (c) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(c.v)) || c.min;
+  const current = (c) => c.panel.offsetParent === null ? 0 : c.panel.getBoundingClientRect().width;
+  function limit(name) {                    // the allowed range right now: the panel's own bounds and room for the viewer
+    const c = cfg[name], o = cfg[c.other];
+    const rail = $(".rail").getBoundingClientRect().width;
+    const room = window.innerWidth - rail - current(o) - WORK_MIN;
+    return [c.min, Math.max(c.min, Math.min(c.max, room))];
+  }
+  function show(name, w) {                  // set the width and describe it to assistive tech
+    const c = cfg[name], [lo, hi] = limit(name);
+    w = Math.round(Math.min(Math.max(w, lo), hi));
+    root.style.setProperty(c.v, w + "px");
+    c.grip.setAttribute("aria-valuemin", lo);
+    c.grip.setAttribute("aria-valuemax", hi);
+    c.grip.setAttribute("aria-valuenow", w);
+    c.grip.setAttribute("aria-valuetext", w + " pixels");
+    return w;
+  }
+  function applyAll() {
+    for (const name of Object.keys(cfg)) {
+      const c = cfg[name];
+      if (!wide.matches) { root.style.removeProperty(c.v); continue; }
+      show(name, saved[name] ?? dflt(c));
+    }
+  }
+  function reset(name) {
+    const c = cfg[name];
+    saved[name] = null;
+    store.del(c.key);
+    show(name, dflt(c));
+  }
+  for (const name of Object.keys(cfg)) {
+    const c = cfg[name], g = c.grip;
+    g.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      g.setPointerCapture(e.pointerId);
+      g.classList.add("drag");
+      document.body.classList.add("resizing");      // also stops text selection while dragging
+    });
+    g.addEventListener("pointermove", (e) => {
+      if (!g.classList.contains("drag")) return;
+      const r = root.getBoundingClientRect();
+      saved[name] = show(name, c.side > 0 ? e.clientX - r.left : r.right - e.clientX);
+    });
+    const done = () => {
+      if (!g.classList.contains("drag")) return;
+      g.classList.remove("drag");
+      document.body.classList.remove("resizing");
+      if (saved[name] != null) store.set(c.key, saved[name]);
+    };
+    g.addEventListener("pointerup", done);
+    g.addEventListener("pointercancel", done);
+    g.addEventListener("dblclick", () => reset(name));
+    g.addEventListener("keydown", (e) => {
+      const [lo, hi] = limit(name);
+      const now = current(c);
+      const step = e.shiftKey ? 48 : 16;
+      let w = null;
+      if (e.key === "ArrowRight") w = now + c.side * step;
+      else if (e.key === "ArrowLeft") w = now - c.side * step;
+      else if (e.key === "Home") w = lo;
+      else if (e.key === "End") w = hi;
+      else if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); reset(name); return; }
+      if (w == null) return;
+      e.preventDefault();
+      saved[name] = show(name, w);
+      store.set(c.key, saved[name]);
+    });
+  }
+  wide.addEventListener("change", applyAll);
+  window.addEventListener("resize", applyAll);
+  $("#pickerToggle").addEventListener("click", () => requestAnimationFrame(applyAll));
+  applyAll();
+  return { applyAll };
+})();
+
 /* ================================================================ status */
 async function loadStatus() {
   try {
@@ -229,6 +323,7 @@ async function upload(files) {
 async function selectDrawing(path, keepAnswer = false) {
   try {
     const d = await api("/api/drawing?path=" + encodeURIComponent(path));
+    if (state.drawing?.path !== d.path) viewer.resetOrient(true);     // a new drawing opens in its own orientation
     state.drawing = d;
     document.querySelectorAll(".draw-item").forEach((b) =>
       b.setAttribute("aria-selected", String(b.querySelector(".nm").title === d.path)));
@@ -315,24 +410,59 @@ function setHash() {
 
 /* ================================================================ viewer */
 const viewer = (() => {
-  const vp = $("#viewer"), stage = $("#stage"), img = $("#viewImg");
-  let k = 1, x = 0, y = 0, fitted = false, drag = null;
+  const vp = $("#viewer"), stage = $("#stage"), orient = $("#orient"), img = $("#viewImg");
+  let k = 1, x = 0, y = 0, fitted = false, atFit = false, drag = null;
+  let rot = 0, flip = false;               // view transform only: quarter turns clockwise, then a left-right mirror
+  const orientListeners = [];
 
+  /* image pixels -> view pixels (before zoom and pan): view = Flip(Rot(image)), shifted so the box starts at 0,0 */
+  function mat() {
+    const W = img.naturalWidth || 0, H = img.naturalHeight || 0;
+    const co = [1, 0, -1, 0][rot], si = [0, 1, 0, -1][rot];
+    let a = co, b = si, c = -si, d = co;
+    if (flip) { a = -a; c = -c; }
+    const X = [0, W].flatMap((px) => [0, H].map((py) => a * px + c * py));
+    const Y = [0, W].flatMap((px) => [0, H].map((py) => b * px + d * py));
+    const e = -Math.min(...X), f = -Math.min(...Y);
+    return { a, b, c, d, e, f, w: Math.max(...X) + e, h: Math.max(...Y) + f, rot, flip };
+  }
+  const toView = (m, px, py) => [m.a * px + m.c * py + m.e, m.b * px + m.d * py + m.f];
+  const toImage = (m, vx, vy) => { const X = vx - m.e, Y = vy - m.f; return [m.a * X + m.b * Y, m.c * X + m.d * Y]; };   // the linear part is orthogonal
+  function rectToView(r) {
+    const m = mat();
+    const p = [toView(m, r[0], r[1]), toView(m, r[0] + r[2], r[1] + r[3])];
+    return [Math.min(p[0][0], p[1][0]), Math.min(p[0][1], p[1][1]), Math.abs(p[1][0] - p[0][0]), Math.abs(p[1][1] - p[0][1])];
+  }
+  const pointToView = (px, py) => toView(mat(), px, py);
+
+  function syncButtons() {
+    const has = !!img.naturalWidth && !!img.getAttribute("src");
+    $("#rotL").disabled = $("#rotR").disabled = $("#mirror").disabled = !has;
+    $("#orientReset").disabled = !has || (rot === 0 && !flip);
+    $("#mirror").setAttribute("aria-pressed", String(flip));
+  }
   function apply() {
+    const m = mat();
+    orient.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, ${m.e}, ${m.f})`;
+    stage.style.width = m.w + "px";
+    stage.style.height = m.h + "px";
     stage.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
     stage.classList.toggle("pixel", k > 2.5);
     stage.style.setProperty("--inv", String(1 / k));
     $("#zoomLvl").textContent = Math.round(k * 100) + "%";
+    syncButtons();
   }
   function fit() {
     if (!img.naturalWidth) return;
+    const m = mat();
     const r = vp.getBoundingClientRect();
     const pad = 24;
-    k = Math.min((r.width - pad * 2) / img.naturalWidth, (r.height - pad * 2 - 40) / img.naturalHeight);
+    k = Math.min((r.width - pad * 2) / m.w, (r.height - pad * 2 - 40) / m.h);
     k = Math.max(Math.min(k, 4), 0.02);
-    x = (r.width - img.naturalWidth * k) / 2;
-    y = Math.max(pad + 40, (r.height - img.naturalHeight * k) / 2);
+    x = (r.width - m.w * k) / 2;
+    y = Math.max(pad + 40, (r.height - m.h * k) / 2);
     fitted = true;
+    atFit = true;
     apply();
   }
   function zoomAt(f, cx, cy) {
@@ -340,17 +470,41 @@ const viewer = (() => {
     x = cx - (cx - x) * (nk / k);
     y = cy - (cy - y) * (nk / k);
     k = nk;
+    atFit = false;
     apply();
   }
   function center() { const r = vp.getBoundingClientRect(); return [r.width / 2, r.height / 2]; }
   function focusRect(rx, ry, rw, rh) {
     const r = vp.getBoundingClientRect();
+    [rx, ry, rw, rh] = rectToView([rx, ry, rw, rh]);
     const want = Math.min(r.width / (rw * 6), r.height / (rh * 6), 4);
     if (want > k) k = want;
     x = r.width / 2 - (rx + rw / 2) * k;
     y = r.height / 2 - (ry + rh / 2) * k;
+    atFit = false;
     apply();
   }
+
+  /* rotate and mirror about the middle of the viewport: the point under the middle stays there, zoom is kept */
+  function setOrient(nr, nf, silent = false) {
+    nr = ((nr % 4) + 4) % 4;
+    if (!img.naturalWidth || silent) { rot = nr; flip = nf; syncButtons(); return; }
+    const [cx, cy] = center();
+    const [ix, iy] = toImage(mat(), (cx - x) / k, (cy - y) / k);
+    const wasFit = atFit;
+    rot = nr; flip = nf;
+    if (wasFit) fit();
+    else {
+      const [vx, vy] = toView(mat(), ix, iy);
+      x = cx - vx * k; y = cy - vy * k;
+      apply();
+    }
+    orientListeners.forEach((fn) => fn());
+  }
+  /* "right" is what the person sees: after a mirror a quarter turn right is one step back in the stored angle */
+  const turn = (dir) => setOrient(rot + (flip ? -dir : dir), flip);
+  const mirror = () => setOrient(rot, !flip);
+  const resetOrient = (silent = false) => setOrient(0, false, silent);
 
   vp.addEventListener("wheel", (e) => {
     if (!img.naturalWidth) return;
@@ -366,7 +520,7 @@ const viewer = (() => {
   });
   vp.addEventListener("pointermove", (e) => {
     if (!drag) return;
-    if (Math.abs(e.clientX - drag.px) + Math.abs(e.clientY - drag.py) > 4) drag.moved = true;
+    if (Math.abs(e.clientX - drag.px) + Math.abs(e.clientY - drag.py) > 4) { drag.moved = true; atFit = false; }
     x = drag.x + e.clientX - drag.px;
     y = drag.y + e.clientY - drag.py;
     apply();
@@ -375,7 +529,8 @@ const viewer = (() => {
   vp.addEventListener("pointerup", (e) => {
     if (drag && !drag.moved && state.addMode) {
       const r = vp.getBoundingClientRect();
-      addItemAt((e.clientX - r.left - x) / k, (e.clientY - r.top - y) / k);
+      const [ix, iy] = toImage(mat(), (e.clientX - r.left - x) / k, (e.clientY - r.top - y) / k);
+      addItemAt(ix, iy);
     }
     end();
   });
@@ -389,15 +544,38 @@ const viewer = (() => {
     const step = 60;
     const map = {
       "+": () => zoomAt(1.25, ...center()), "=": () => zoomAt(1.25, ...center()), "-": () => zoomAt(0.8, ...center()),
-      "0": fit, ArrowLeft: () => { x += step; apply(); }, ArrowRight: () => { x -= step; apply(); },
-      ArrowUp: () => { y += step; apply(); }, ArrowDown: () => { y -= step; apply(); },
+      "0": fit, ArrowLeft: () => { x += step; atFit = false; apply(); }, ArrowRight: () => { x -= step; atFit = false; apply(); },
+      ArrowUp: () => { y += step; atFit = false; apply(); }, ArrowDown: () => { y -= step; atFit = false; apply(); },
     };
     if (map[e.key]) { e.preventDefault(); map[e.key](); }
+  });
+  /* orientation shortcuts work anywhere on the Ask view except while typing: R, Shift+R, M, O */
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+    if (e.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+    if ($("#view-ask").hidden || vp.classList.contains("mode-3d") || !img.naturalWidth) return;
+    const key = e.key.toLowerCase();
+    if (key === "r") turn(e.shiftKey ? -1 : 1);
+    else if (key === "m" && !e.shiftKey) mirror();
+    else if (key === "o" && !e.shiftKey) resetOrient();
+    else return;
+    e.preventDefault();
   });
   $("#zoomIn").addEventListener("click", () => zoomAt(1.25, ...center()));
   $("#zoomOut").addEventListener("click", () => zoomAt(0.8, ...center()));
   $("#zoomFit").addEventListener("click", fit);
-  window.addEventListener("resize", () => { if (fitted) fit(); });
+  $("#rotL").addEventListener("click", () => turn(-1));
+  $("#rotR").addEventListener("click", () => turn(1));
+  $("#mirror").addEventListener("click", mirror);
+  $("#orientReset").addEventListener("click", () => resetOrient());
+  /* the viewer takes the remaining space: any change of its size (window, panel handles) re-fits a view the person has not moved */
+  let lastW = 0, lastH = 0;
+  new ResizeObserver(() => {
+    const r = vp.getBoundingClientRect();
+    if (Math.abs(r.width - lastW) < 1 && Math.abs(r.height - lastH) < 1) return;
+    lastW = r.width; lastH = r.height;
+    if (fitted && atFit) fit();
+  }).observe(vp);
 
   function load(src, refit = true) {
     return new Promise((resolve) => {
@@ -410,11 +588,24 @@ const viewer = (() => {
   function clear(msgTitle, msg) {
     img.removeAttribute("src");
     fitted = false;
+    syncButtons();
     $("#viewerEmpty").hidden = false;
     $("#viewerEmpty").innerHTML = `<p class="empty-title">${esc(msgTitle)}</p><p class="meta">${esc(msg)}</p>`;
   }
-  return { load, clear, fit, focusRect, fitIfNeeded: () => { if (img.naturalWidth && !fitted) fit(); }, img };
+  return {
+    load, clear, fit, focusRect, rectToView, pointToView, resetOrient, matrix: mat,
+    onOrient: (fn) => orientListeners.push(fn),
+    fitIfNeeded: () => { if (img.naturalWidth && !fitted) fit(); }, img,
+  };
 })();
+
+/* after a rotation or mirror: pins, reticle and the strip crops are redrawn in the new orientation */
+viewer.onOrient(() => {
+  if (state.layer !== "evidence" || !state.shown) return;
+  drawPins(state.shown);
+  renderStrip();
+  if (lastFocus) focusRect(lastFocus.r, lastFocus.i, false);
+});
 
 function setLayer(layer) {
   state.layer = layer;
@@ -530,21 +721,26 @@ function drawPins(a) {
   const html = checkItems(a).map((r) => {
     if (!r.rect) return "";
     const off = own && state.corr.removed.has(r.n) ? " off" : "";
-    return `<div class="pin ${pinTone(r.tone)}${off}" data-i="${r.i}" style="left:${r.rect[0]}px;top:${r.rect[1]}px;width:${r.rect[2]}px;height:${r.rect[3]}px"><span>${esc(r.n)}</span></div>`;
+    const v = viewer.rectToView(r.rect);
+    return `<div class="pin ${pinTone(r.tone)}${off}" data-i="${r.i}" style="left:${v[0]}px;top:${v[1]}px;width:${v[2]}px;height:${v[3]}px"><span>${esc(r.n)}</span></div>`;
   }).join("");
   const off = headerOff(a);
-  const added = own ? state.corr.added.map((p, j) =>
-    `<div class="pin add" style="left:${p.x - 9}px;top:${p.y + off - 9}px;width:18px;height:18px"><span>+${j + 1}</span></div>`).join("") : "";
+  const added = own ? state.corr.added.map((p, j) => {
+    const [vx, vy] = viewer.pointToView(p.x, p.y + off);
+    return `<div class="pin add" style="left:${vx - 9}px;top:${vy - 9}px;width:18px;height:18px"><span>+${j + 1}</span></div>`;
+  }).join("") : "";
   /* witness views: circle the places where another format disagrees about an individual item */
   const mk = a.marks;
   const dis = !own && mk && a.disputed ? a.disputed.map((d) => {
     const R = Math.max(mk.w * 0.018, 14);
     const tip = d.kind === "only" ? `Counted here as #${d.n}, not by ${d.other}` : `Counted by ${d.other}, missed here`;
-    return `<div class="dis ${d.kind}" title="${esc(tip)}" style="left:${d.x * mk.w - R}px;top:${d.y * mk.h + off - R}px;width:${2 * R}px;height:${2 * R}px"></div>`;
+    const [vx, vy] = viewer.pointToView(d.x * mk.w, d.y * mk.h + off);
+    return `<div class="dis ${d.kind}" title="${esc(tip)}" style="left:${vx - R}px;top:${vy - R}px;width:${2 * R}px;height:${2 * R}px"></div>`;
   }).join("") : "";
   $("#marks").innerHTML = html + added + dis + '<div class="reticle" hidden></div>';
 }
-function clearMarks() { $("#marks").innerHTML = ""; clearFocus(); }
+let lastFocus = null;            // the selected item's rect and index, so a rotation can redraw its reticle
+function clearMarks() { $("#marks").innerHTML = ""; clearFocus(); lastFocus = null; }
 function clearFocus() {
   document.querySelectorAll(".item.on, .pin.on, .thumb.on").forEach((b) => b.classList.remove("on"));
   const ret = $("#marks .reticle");
@@ -559,10 +755,11 @@ function focusRect(r, i, focus) {
   if (!r || state.layer !== "evidence") return;
   clearFocus();
   if (i != null) document.querySelectorAll(`#itemList .item[data-i="${i}"], #stripList .thumb[data-i="${i}"], #marks .pin[data-i="${i}"]`).forEach((el) => el.classList.add("on"));
+  lastFocus = { r, i };
   const ret = $("#marks .reticle");
   if (ret) {
-    const pad = 4;
-    Object.assign(ret.style, { left: r[0] - pad + "px", top: r[1] - pad + "px", width: r[2] + pad * 2 + "px", height: r[3] + pad * 2 + "px" });
+    const pad = 4, v = viewer.rectToView(r);
+    Object.assign(ret.style, { left: v[0] - pad + "px", top: v[1] - pad + "px", width: v[2] + pad * 2 + "px", height: v[3] + pad * 2 + "px" });
     ret.hidden = false;
   }
   if (focus) viewer.focusRect(...r);
@@ -700,24 +897,33 @@ function drawThumb(cv, img, r, dim, poly) {
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, cv.width, cv.height);
   if (!img.naturalWidth || !r) return;
+  /* the crop follows the viewer's rotation and mirror, so it looks like the item does on the drawing */
+  const o = viewer.matrix();
   const cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
   const f = poly ? 1.35 : 2.4;
-  const w = Math.max(r[2] * f, r[3] * f * (TW / TH), 90);
+  const rv = viewer.rectToView(r);
+  const w = Math.max(rv[2] * f, rv[3] * f * (TW / TH), 90);      // window size in view pixels
   const h = w * (TH / TW);
+  const sw = o.rot % 2 ? h : w, sh = o.rot % 2 ? w : h;         // the same window in image pixels
+  const s = cv.width / w;
+  ctx.save();
+  ctx.translate(cv.width / 2, cv.height / 2);
+  ctx.scale(s, s);
+  ctx.transform(o.a, o.b, o.c, o.d, 0, 0);
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h, 0, 0, cv.width, cv.height);
+  ctx.drawImage(img, cx - sw / 2, cy - sh / 2, sw, sh, -sw / 2, -sh / 2, sw, sh);
   if (poly && poly.pts?.length > 2) {         // the measured room outlined, so it stands out from its neighbours
-    const sx = cv.width / w, sy = cv.height / h;
     ctx.beginPath();
     poly.pts.forEach(([px, py], j) => {
-      const X = (px - (cx - w / 2)) * sx, Y = (py + poly.off - (cy - h / 2)) * sy;
+      const X = px - cx, Y = py + poly.off - cy;
       if (j) ctx.lineTo(X, Y); else ctx.moveTo(X, Y);
     });
     ctx.closePath();
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 4 / s;
     ctx.strokeStyle = poly.tone === "amber" ? "rgb(231,140,8)" : "rgb(0,106,165)";
     ctx.stroke();
   }
+  ctx.restore();
   if (dim) { ctx.fillStyle = "rgba(20,26,34,0.62)"; ctx.fillRect(0, 0, cv.width, cv.height); }
 }
 function corrLine(a) {

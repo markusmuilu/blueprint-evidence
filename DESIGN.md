@@ -5,6 +5,8 @@ if the CSS and this file disagree, this file wins. Version 2 (2026-11-14) replac
 pills, chips and tinted boxes with ruled tables and plain coloured text; the audit that drove it is
 at the end. Version 2.1 (2026-11-14) is a type pass: no display numeral, no small mono labels, a
 library grouped by what the system can do, and a "Try these" list in the empty answer panel.
+Version 2.2 (2026-11-14) adds view rotation and mirroring to the viewer toolbar and drag-resizable
+side panels.
 
 ## Context
 
@@ -112,7 +114,18 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
 
 - Ask view: rail 52px | drawing library 300px | work area (question bar over the viewer, verification
   strip under it) | answer panel 384px. The library collapses from the rail; under 1080px it floats
-  over the work area; under 760px everything stacks and the rail becomes a top bar.
+  over the work area; under 760px everything stacks and the rail becomes a top bar. The widths are
+  defaults: above 1080px both side panels can be resized (see Resizable panels).
+- Resizable panels (v2.2): the inner edge of the library (min 240, max 480) and of the answer panel
+  (min 300, max 640) is a drag handle. The viewer always keeps at least 480px (the toolbar needs about 410px), so the
+  effective maximum shrinks on narrow windows. The handle is a 9px hit area with a short 3px bar at mid height in the
+  border colour; hover, drag and keyboard focus turn the bar accent and draw a 1px accent hairline over
+  the full edge. It is a `role="separator"` with `aria-valuenow/min/max`: Left and Right arrows move the
+  edge by 16px (Shift 48px), Home and End jump to the limits, Enter, Escape or a double-click restore the
+  default. Widths are kept in localStorage (`bpe-picker-w`, `bpe-detail-w`, read and written inside
+  try/catch, so a blocked store only forgets the width). Below 1080px the handles are hidden and the
+  stored widths are ignored. The viewer re-fits on any size change while the view is still at its fit;
+  a view the person has zoomed or panned keeps its place.
 - Results view: unboxed sections, each a 16px heading over a full-width ruled table; one headline
   sentence instead of hero metrics; source table beside a single-series bar chart. Max width 1320px.
 - The viewer is a plain recessed well (no grid texture). Empty and busy states sit at its top left like
@@ -151,6 +164,19 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
   corners, 2px border in accent for proven and amber (with the estimate icon) for items to check,
   numbered like the overlay. "Not this one" is a text command under the crop (amber once pressed);
   a removed crop is dashed and dimmed. Live count in mono, Save correction (secondary), Export (quiet).
+- Viewer toolbar (v2.2): layer tag, zoom out, level, zoom in, fit | rotate left, rotate right, mirror
+  horizontally, original orientation | header strip, open image. Plain 30px icon buttons, no labels;
+  each has a text tooltip below it (overlay surface, 13px, with the shortcut) on hover and keyboard
+  focus. Mirror is a toggle (accent when on); original orientation is disabled while the view is
+  unchanged. Keys: R rotates right, Shift+R left, M mirrors, O restores the original (all while not
+  typing in a field). The 3D view hides these buttons.
+- View orientation (v2.2): rotation in quarter turns and a left-right mirror are a view transform on
+  the image only; the file and the evidence are untouched. Rotation turns the view about its middle and
+  keeps the zoom; at fit it re-fits. Pins, the reticle, disagreement circles and added items are placed
+  in view space (their rectangles are transformed, circles stay circles), so numbers stay upright and
+  never mirror. Verification strip crops are drawn in the same orientation as the viewer. A click for
+  "Add missed item" is converted back to image pixels. Opening a different drawing resets the
+  orientation; the evidence for the same drawing keeps it.
 - Pins: proven items use the overlay's paper blue oklch(0.50 0.13 240), items to check the paper amber,
   so pins hold on the white drawing; a selected pin takes the accent. Number tags are square.
 - Witnesses: one ruled row per format (format code in accent mono, route name, value in mono, tier
@@ -189,7 +215,8 @@ fg-2 9.6 / 10.4, muted 6.4 / 7.0, accent 8.8 / 9.5, warn 10.4 / 11.3, err 7.0 / 
 ## Accessibility
 
 - All controls are buttons or links with names; icon-only buttons carry aria-label.
-- Viewer is focusable: arrows pan, plus and minus zoom, 0 fits.
+- Viewer is focusable: arrows pan, plus and minus zoom, 0 fits. R, Shift+R, M and O rotate, mirror and
+  restore the orientation (aria-keyshortcuts on the buttons). Panel handles are focusable separators.
 - Status is never colour alone (icon and words); check results say Pass or Fail.
 - Targets at least 24px (text filters 26px, text commands 24px); most controls 30 to 44px.
 - aria-live on the answer panel and the busy state.

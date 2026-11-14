@@ -123,11 +123,32 @@ a { color: var(--accent); text-underline-offset: 3px; }
 
 .view { min-width: 0; min-height: 0; }
 .view-ask {
+  position: relative;
   display: grid; grid-template-columns: var(--picker-w) minmax(0, 1fr) var(--detail-w);
   height: 100vh;
 }
 .view-ask.no-picker { grid-template-columns: minmax(0, 1fr) var(--detail-w); }   /* the hidden picker takes no grid cell */
 .view-ask.no-picker .picker { display: none; }
+
+/* drag handles on the inner edges of the library and the answer panel (desktop only) */
+.grip {
+  position: absolute; top: 0; bottom: 0; width: 9px; z-index: 12; cursor: col-resize; touch-action: none; outline: none;
+}
+.grip-picker { left: calc(var(--picker-w) - 4px); }
+.grip-detail { right: calc(var(--detail-w) - 4px); }
+.view-ask.no-picker .grip-picker { display: none; }
+.grip::before {                      /* a short bar at mid height: visible, quiet */
+  content: ""; position: absolute; left: 3px; top: 50%; width: 3px; height: 32px; margin-top: -16px;
+  background: var(--border); transition: background-color var(--dur-fast) var(--ease-out);
+}
+.grip::after {                       /* the full-height hairline appears on hover, drag and focus */
+  content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 1px; background: var(--accent); opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.grip:hover::before, .grip:focus-visible::before, .grip.drag::before { background: var(--accent); }
+.grip:hover::after, .grip:focus-visible::after, .grip.drag::after { opacity: 1; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing .viewer, body.resizing .picker, body.resizing .detail { pointer-events: none; }
 
 /* ------------------------------------------------------------ controls */
 .btn {
@@ -280,6 +301,8 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
 .viewer.dragging { cursor: grabbing; }
 .viewer:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+/* the drawing carries the view rotation and mirror; the marks layer stays in view space, so numbers stay upright */
+.orient { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .stage img { display: block; user-select: none; background: white; image-rendering: auto; }
 .stage.pixel img { image-rendering: pixelated; }
 .marks { position: absolute; inset: 0; pointer-events: none; }
@@ -329,6 +352,15 @@ select { padding-right: var(--s6); appearance: none; cursor: pointer;
   color: var(--fg-2); cursor: pointer; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 .tool:hover { background: var(--raised); color: var(--fg); }
+.tool { position: relative; }
+.tool[data-tip]::after {
+  content: attr(data-tip); position: absolute; right: 0; top: calc(100% + 8px);
+  padding: 2px var(--s2); background: var(--overlay); border: 1px solid var(--border); border-radius: var(--r);
+  font-size: var(--fs-xs); color: var(--fg); white-space: nowrap; pointer-events: none; opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out); z-index: 20;
+}
+.tool[data-tip]:hover::after, .tool[data-tip]:focus-visible::after { opacity: 1; }
+.tool-sep { width: 1px; height: 18px; background: var(--rule); margin: 0 var(--s1); }
 .tool:disabled { opacity: 0.35; cursor: not-allowed; background: transparent; }
 .tool[aria-pressed="true"] { color: var(--accent); background: var(--accent-lo); }
 .zoom { min-width: 46px; text-align: center; font-size: var(--fs-xs); color: var(--fg-2); }
@@ -558,7 +590,8 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .mode-seg button { min-width: 40px; }
 .viewer.mode-3d { cursor: default; }
 .viewer.mode-3d .stage, .viewer.mode-3d .viewer-empty:not(#v3dFail), .viewer.mode-3d #zoomOut, .viewer.mode-3d #zoomIn,
-.viewer.mode-3d #zoomLvl, .viewer.mode-3d #zoomFit, .viewer.mode-3d #headerToggle, .viewer.mode-3d #openImg,
+.viewer.mode-3d #zoomLvl, .viewer.mode-3d #zoomFit, .viewer.mode-3d #rotL, .viewer.mode-3d #rotR, .viewer.mode-3d #mirror,
+.viewer.mode-3d #orientReset, .viewer.mode-3d .tool-sep, .viewer.mode-3d #headerToggle, .viewer.mode-3d #openImg,
 .viewer.mode-3d .layer-tag { display: none; }
 .v3d { position: absolute; inset: 0; background: var(--well); }
 .v3d canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
@@ -679,6 +712,7 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
   :root { --picker-w: 260px; --detail-w: 344px; }
 }
 @media (max-width: 1080px) {
+  .grip { display: none; }
   .view-ask, .view-ask.no-picker { grid-template-columns: minmax(0, 1fr) var(--detail-w); }
   .view-ask .picker { position: fixed; left: var(--rail-w); top: 0; bottom: 0; width: 300px; z-index: 15; border-right: 1px solid var(--border); }
   .view-ask.no-picker .picker { display: none; }
@@ -700,7 +734,9 @@ button.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
   .dq { grid-column: 1; }
   .view-ask .picker { position: static; width: auto; max-height: 60vh; border-right: 0; border-bottom: 1px solid var(--rule); }
   .viewer { height: 60vh; }
-  .viewer-tools { left: var(--s3); right: var(--s3); max-width: none; overflow-x: auto; justify-content: flex-end; }
+  .viewer-tools { left: var(--s3); right: var(--s3); max-width: none; overflow-x: auto; }
+  .viewer-tools > :first-child { margin-left: auto; }   /* right-aligned, and scrollable from its first button when it overflows */
+  .tool[data-tip]::after { display: none; }
   .strip { padding: var(--s2) var(--s4); }
   .scale-src { max-width: 100%; }
   .meter-row { grid-template-columns: 112px 1fr 64px; }
