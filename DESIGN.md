@@ -116,6 +116,18 @@ placeholder 4.6 / 5.1, text on the accent button 8.9.
 - Witnesses (answer panel): one row per format, value in mono; a value that disagrees is circled with a
   1.5px estimate-amber pill. Items where two page-aligned formats disagree are circled on the drawing
   (solid: counted only here; dashed: counted by the other format, missed here).
+- 3D view (IFC): Plan / 3D segmented switch in the viewer toolbar. The model sits in the viewer well
+  with neutral slate tones per class (slabs lightest, so storeys read as layers). With an answer: used
+  elements in the accent, rooms as accent volumes at 50% opacity, deducted openings in estimate amber,
+  the answer's storey as a 22% shell, other storeys at 3.5%, storeys above cut away; the selected
+  element in fg. Storey panel (surface, top left): separate-storeys slider, rooms toggle, legend with
+  counts, one checkbox and an "only" button per storey. Element card (overlay, bottom right): class in
+  accent mono, GlobalId, storey, role in the answer, property sets as disclosures.
+- Order section and order sheet: the order quantity in mono with its parts; the sheet is a dialog on
+  surface with an inputs band (well-coloured fields, mono), the per-room table (numbers right, mono,
+  deducted m2 in amber), totals with the order quantity at lg size, and the order check beside it. Order
+  check verdict: icon + words + colour (proven green within 2%, amber over, red short). The printable
+  page is light, A4 landscape, Plex Sans and Plex Mono.
 - Cost meter (answer panel): two log-scale bars, this answer in accent and the model baseline in muted,
   with the assumed prices written under them.
 
