@@ -132,6 +132,7 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     if query.extra.get("compound") or query.extra.get("unresolved_scope"):
         return query, _try_text(ctx, query, "compound question or unresolved scope")
     tk = query.extra.get("takeoff")
+    from .takeoff import WALL_ROUTES, needs_walls, wall_reason
     if tk is not None:
         from .takeoff import precheck
         why = precheck(tk)
@@ -153,6 +154,8 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
             except Exception as ex:   # a broken check must not hide a route's answer
                 a.checks = [{"name": "checking-layer", "status": "error", "detail": f"{type(ex).__name__}: {ex}"}]
         ctx.tried.append(a.route)
+        if a.answered and tk is not None and a.route not in WALL_ROUTES and needs_walls(tk):
+            a = abstain(a.route, wall_reason(tk))   # a floor-only takeoff must not answer a wall question
         if a.answered and a.tier is None:
             a.tier = "proven"           # structured routes: the answer is derived from the file's own data
         if a.answered or a.checks:      # a check-abstained answer keeps its checks and evidence
