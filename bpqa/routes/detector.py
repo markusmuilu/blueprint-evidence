@@ -16,7 +16,8 @@ The route abstains only when there is no model or no tuning for the object.
 Detection modes, per object in the thresholds file (so each object uses whichever model and mode won
 on the tune images): the whole image at `imgsz`, or tiles at a fixed scale (bpqa/tiling.py) merged
 at the seams; either one optionally with test-time augmentation (`tta`: the eight rotations and
-mirrors of the square, boxes fused across views, bpqa/tiling.fuse_views).
+mirrors of the square; on tiles each tile is turned and mirrored; boxes fused across views or the median
+per-view count, bpqa/tiling.fuse_views). Tiles go through the model in batches.
 
 Files (not committed): models/detector*.pt, models/detector_thresholds.json. Detections are cached
 per model and mode under out/det/.
@@ -68,34 +69,53 @@ def _predict(model: str, img: np.ndarray, imgsz: int, device) -> list[dict]:
             for b, s, c in zip(res.boxes.xyxy.tolist(), res.boxes.conf.tolist(), res.boxes.cls.tolist())]
 
 
-def _predict_tiled(model: str, img: np.ndarray, tile: dict, device) -> list[dict]:
-    """Resize by the training scale rule, run every tile (padded white to full size), merge the seams."""
+def _predict_batch(model: str, imgs: list[np.ndarray], imgsz: int, device, chunk: int = 8) -> list[list[dict]]:
+    out = []
+    for i in range(0, len(imgs), chunk):
+        res = _model(model).predict(imgs[i:i + chunk], imgsz=imgsz, conf=MIN_CONF, iou=0.5, max_det=600, verbose=False,
+                                    device=device)
+        for r in res:
+            out.append([{"cls": CLASSES[int(c)], "conf": round(float(s), 4), "xyxy": [float(v) for v in b]}
+                        for b, s, c in zip(r.boxes.xyxy.tolist(), r.boxes.conf.tolist(), r.boxes.cls.tolist())])
+    return out
+
+
+def _views_tiled(model: str, img: np.ndarray, tile: dict, tta: bool, device) -> list[list[dict]]:
+    """Resize by the training scale rule, cut tiles (padded white to full size), run every tile (and, with
+    TTA, each of its eight rotations and mirrors) in batches, map boxes back, merge the seams per view."""
     h0, w0 = img.shape[:2]
     f = tiling.scale_for(w0, h0, tile["scale"], tile["max_side"])
     w, h = round(w0 * f), round(h0 * f)
     im = cv2.resize(img, (w, h), interpolation=cv2.INTER_CUBIC) if (w, h) != (w0, h0) else img
     T, ov = tile["tile"], tile["overlap"]
-    out = []
+    tiles = []
     for x0, y0 in tiling.tile_origins(w, h, T, ov):
         crop = im[y0:y0 + T, x0:x0 + T]
         pad = np.full((T, T, 3), 255, np.uint8)
         pad[: crop.shape[0], : crop.shape[1]] = crop
-        for d in _predict(model, pad, T, device):
-            b = d["xyxy"]
-            if b[0] >= crop.shape[1] or b[1] >= crop.shape[0]:
+        tiles.append((x0, y0, crop.shape[1], crop.shape[0], pad))
+    trans = tiling.DIHEDRAL if tta else [(0, False)]
+    jobs = [(vi, ti) for vi in range(len(trans)) for ti in range(len(tiles))]
+    preds = _predict_batch(model, [tiling.transform(tiles[ti][4], *trans[vi]) for vi, ti in jobs], T, device)
+    views = [[] for _ in trans]
+    for (vi, ti), ds in zip(jobs, preds):
+        x0, y0, cw, ch, _ = tiles[ti]
+        for d in ds:
+            b = tiling.untransform_box(d["xyxy"], *trans[vi], T, T)
+            if b[0] >= cw or b[1] >= ch:
                 continue                              # in the white padding
-            out.append({**d, "xyxy": [round((b[0] + x0) / f, 1), round((b[1] + y0) / f, 1),
-                                      round(min(b[2], crop.shape[1]) / f + x0 / f, 1),
-                                      round(min(b[3], crop.shape[0]) / f + y0 / f, 1)]})
-    return tiling.merge_seams(out)
+            views[vi].append({**d, "xyxy": [round((b[0] + x0) / f, 1), round((b[1] + y0) / f, 1),
+                                            round((min(b[2], cw) + x0) / f, 1), round((min(b[3], ch) + y0) / f, 1)]})
+    return [tiling.merge_seams(v) for v in views]
 
 
 def _views(model: str, img: np.ndarray, imgsz: int, tile: dict | None, tta: bool, device) -> list[list[dict]]:
+    if tile:
+        return _views_tiled(model, img, tile, tta, device)
     h, w = img.shape[:2]
     views = []
     for k, m in (tiling.DIHEDRAL if tta else [(0, False)]):
-        im = tiling.transform(img, k, m)
-        ds = _predict_tiled(model, im, tile, device) if tile else _predict(model, im, imgsz, device)
+        ds = _predict(model, tiling.transform(img, k, m), imgsz, device)
         views.append([{**d, "xyxy": [round(v, 1) for v in tiling.untransform_box(d["xyxy"], k, m, w, h)]} for d in ds])
     return views
 
