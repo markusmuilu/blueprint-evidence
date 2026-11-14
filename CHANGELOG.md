@@ -3,6 +3,43 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: question understanding round 3, branch `phrasing-3`
+
+Final evaluation uses unseen drawings and harder questions. Four changes, kept out of the rule parser files
+(`bpqa/understand.py`, `bpqa/compose.py`, small hooks in `phrasing.read` and `router.solve`).
+
+- **The reader is asked more often.** A confident rule reading still goes to the language model when it leaves
+  out a room type the question names, a reader synonym ("sleeping rooms") or a compound room word the vocabulary
+  lacks ("pukuhuoneiden", "Schlafraeume"; without a model these block the all-rooms reading instead of answering
+  it), and when every route says cannot in under 1 s with a rule reading the model was not asked about (one call,
+  4 s limit, cached; the first answer stands if the second reading does not answer either). Quoted questions (the
+  dataset templates) keep their rule reading. Swedish area words ("sovrummens yta", "koksytan") are rewritten for
+  the rules. Baseboard questions read by the model become the baseboard takeoff.
+- **Storeys in words.** "top floor", "ground floor", "basement", "attic", "upstairs", "lowest floor" and the
+  fi / de / sv forms ("ylimmassa kerroksessa", "Erdgeschoss", "kallare") are resolved to an IFC model's storeys
+  (the storeys with rooms, else with doors or windows; roof levels left out) and the answer says which storey it
+  used; on a drawing with no model the answer is a final cannot. "Which floor is this plan?" answers the sheet's
+  storey (Esplanades plan-01: 1.korrus, proven) and an IFC file header is no longer an answer to a non-header
+  question. A count inside one room ("Montako ikkunaa olohuoneessa on?") abstains unless a property lookup
+  answers it, instead of counting the whole plan. Areas asked in square feet are converted.
+- **Composite questions** (`compose.py`): lists of rooms with their areas, smallest / largest (and which),
+  rooms over / under an area, the share of the floor a room type takes, a room type per apartment (Swiss DXF
+  outlines, IFC numbering), and several parts in one question ("how many doors and windows", "kitchen and
+  bathroom area", "Wie gross ist die Kueche, und wie viele Fenster gibt es?"), each part with its own route,
+  status and evidence. Built from ordinary route answers, one row per room or part; an IFC property lookup that
+  already answers a list keeps its answer.
+- **Benchmark.** `tools/complex_bench.py`, 60 tune and 32 held-out questions (held-out written by a separate model
+  run with no access to the parser, expected shapes fixed before the first run). Understood, rules only: main
+  0% / 0%, this branch 100% tune, 90.6% held-out (68.8% on the first held-out run, before fixes it prompted).
+  With the reader on, two of the three held-out misses are understood (96.9%). End to end on the drawings:
+  answered 91.3% (main 60.9%, but most of main's answers were to another question: m2 for a share or for sq ft,
+  one part of two, all 315 windows for "top floor").
+- **Safety.** Dataset question parses: 13 of 6789 changed, each only gaining `storey_ref` next to an existing
+  unresolved scope. `eval.py --split dev` (Swiss, IFC models, ifc_bench, CubiCasa): 1 of 5245 answers changed
+  (hitos "toilets on the ground floor": wrong before and after; after the last fix it reads storey u.etg and
+  counts 11 WC spaces, gold 12, the RWC room is not typed as a WC). Paraphrase benchmark unchanged (tune 98.2%,
+  held-out 98.4%), with fewer model calls.
+
 ## 2026-11-14: rooms on generic drawings, preview, plain reasons, branch `generic-rooms`
 
 QA tried the unseen plan (architecture-floor-plan.dxf, 18 labelled rooms in a 6 x 3 grid): "How many rooms?" was
