@@ -182,12 +182,13 @@ ROUTES = {
     "raster-detector": ("Scan, symbol detector", "Symbols on the scan counted by a local object detector above a tuned score threshold."),
     "raster-cv": ("Scan, panel analysis", "Separate drawing panels found on the scan by image analysis."),
     "raster-cv-fixtures": ("Scan, outlines", "Closed outlines on the scan classified as fixtures."),
+    "ifc-props": ("IFC properties", "Looked up in the IFC model's attributes and property sets; the answer lists the IDs of the elements it read."),
     "raster-area": ("Scan, printed areas", "Room areas printed on the scan, read by a local OCR model and attached to their room labels."),
     "raster-prior": ("Baseline prior", "Most common answer for this question type. A baseline, not visual proof."),
     "parser": ("Question parser", "The question was not turned into a typed query."),
     "router": ("Router", "No route reads this file type."),
 }
-PROVEN_ROUTES = {"dxf-geometry", "dxf-generic", "ifc", "pdf-text", "pdf-vector"}
+PROVEN_ROUTES = {"dxf-geometry", "dxf-generic", "ifc", "ifc-props", "pdf-text", "pdf-vector"}
 ESTIMATE_ROUTES = {"pdf-generic", "nemotron-estimate", "nemotron"}     # never proven, whatever the confidence
 
 
