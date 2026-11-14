@@ -12,3 +12,4 @@ shapely==2.2.0
 rapidocr-onnxruntime==1.4.4
 ultralytics==8.4.212
 # torch with CUDA (RTX 50xx needs cu128): pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+requests
