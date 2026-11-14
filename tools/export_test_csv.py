@@ -1,10 +1,12 @@
 """Trim an eval run's answers.jsonl to one small CSV per source, plus results/README.md's table numbers.
 
-Columns: drawing, question, gold, our answer, unit, status (proven / estimate / cannot), correct.
-No absolute paths: the drawing is the file name under data/<source>/. Long free-text values are cut to 300
-characters. A source over about 25 MB would be split by object (none is: CubiCasa is about 4 MB).
+Columns: drawing, question_id, question_type, our_answer, unit, status (proven / estimate / cannot), correct.
+No question text and no dataset answers: those belong to the Stoa challenge dataset. question_id is the dataset's
+qid (the line number in questions.jsonl, counted from 0), so anyone with the dataset can join the two and re-score
+with tools/score_results.py. our_answer is written at full precision so that re-scoring gives the same result.
+The drawing is the file name only, under data/<source>/.
 
-  python tools/export_test_csv.py <answers.jsonl> <out_dir>      # e.g. results/, then copy into deploy/demo_results/results/
+  python tools/export_test_csv.py <answers.jsonl> <out_dir>      # e.g. results/
 """
 import csv
 import json
@@ -12,22 +14,33 @@ import sys
 from collections import defaultdict
 from pathlib import Path, PurePosixPath
 
-CUT = 300
-COLS = ["drawing", "question", "gold", "our answer", "unit", "status", "correct"]
+COLS = ["drawing", "question_id", "question_type", "our_answer", "unit", "status", "correct"]
+MEASURE = {"count": "count", "area": "area", "length": "length", "volume": "volume"}
 
 
-def cell(v):
+def answer_cell(v):
     if v is None:
         return ""
-    if isinstance(v, float):
-        return f"{v:.4g}" if abs(v) < 1e6 else f"{v:.0f}"
+    if isinstance(v, bool):
+        return str(v)
+    if isinstance(v, (int, float)):
+        return repr(v)
     s = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
-    s = " ".join(s.split())
-    return s if len(s) <= CUT else s[:CUT - 3] + "..."
+    return " ".join(s.split())
+
+
+def question_type(q, dataset_type=""):
+    """A short readable kind from the parsed query: 'door count', 'room area', 'text lookup (wall)'."""
+    measure, obj = q.get("measure"), (q.get("obj") or "").replace("_", " ")
+    if measure == "text":
+        return f"text lookup ({obj})" if obj else "text lookup"
+    if measure in MEASURE:
+        return f"{obj} {MEASURE[measure]}" if obj else MEASURE[measure]
+    return f"not parsed ({dataset_type} question)" if dataset_type else "not parsed"
 
 
 def status(r):
-    if r.get("abstain") or r.get("value") is None:
+    if r.get("abstain") is not None or r.get("value") is None:
         return "cannot"
     return "proven" if r.get("tier") == "proven" else "estimate"
 
@@ -43,8 +56,8 @@ def main(src, out_dir):
             source = parts[1] if len(parts) > 2 and parts[0] == "data" else "other"
             st = status(r)
             ok = bool(r.get("correct"))
-            rows[source].append([p.name, cell(r.get("question")), cell(r.get("gold")),
-                                 "" if st == "cannot" else cell(r.get("value")), cell(r.get("unit")), st,
+            rows[source].append([p.name, r["qid"], question_type(r.get("query") or {}, r.get("type", "")),
+                                 "" if st == "cannot" else answer_cell(r.get("value")), r.get("unit") or "", st,
                                  "yes" if ok else "no"])
             s = stats[source]
             s["n"] += 1
@@ -54,6 +67,7 @@ def main(src, out_dir):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     for source, rs in sorted(rows.items()):
+        rs.sort(key=lambda row: row[1])
         dst = out / f"{source}.csv"
         with open(dst, "w", encoding="utf-8", newline="") as f:
             w = csv.writer(f, lineterminator="\n")
@@ -63,7 +77,9 @@ def main(src, out_dir):
         print(f"{source}: {s['n']} rows, right {s['correct'] / s['n']:.1%}, proven {s['proven']} "
               f"right {s['proven_ok'] / s['proven']:.1%}" if s["proven"] else f"{source}: {s['n']} rows",
               f"({dst.stat().st_size / 1e6:.1f} MB)")
-    print("total", sum(s["n"] for s in stats.values()))
+    t = {k: sum(s[k] for s in stats.values()) for k in ("n", "correct", "proven", "proven_ok")}
+    print(f"total {t['n']} rows, right {t['correct'] / t['n']:.1%}, proven {t['proven']} "
+          f"right {t['proven_ok'] / t['proven']:.1%}")
 
 
 if __name__ == "__main__":
