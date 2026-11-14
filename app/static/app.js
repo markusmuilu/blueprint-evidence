@@ -213,7 +213,7 @@ async function selectDrawing(path, keepAnswer = false) {
 function renderExamples() {
   const el = $("#exampleChips");
   el.innerHTML = EXAMPLES.map((x, i) =>
-    `<button class="chip" type="button" data-i="${i}" title="${esc(x.q)}"><span class="lang">${x.lang}</span>${esc(x.label)}</button>`).join("");
+    `<button class="chip" type="button" data-i="${i}" title="${esc(x.q)}">${esc(x.label)}${x.lang !== "en" ? `<span class="lang" title="Finnish">${x.lang}</span>` : ""}</button>`).join("");
   el.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => {
     $("#question").value = EXAMPLES[+c.dataset.i].q;
     $("#question").focus();
@@ -788,9 +788,9 @@ function renderAnswer(a) {
     let tag = "";
     if (hasVal && typeof g === "number" && typeof a.value === "number") {
       const ok = a.unit === "count" || a.gold.unit === "count" ? a.value === g : Math.abs(a.value - g) <= Math.abs(g) * 0.02;
-      tag = ok ? `<span class="tag ok">matches</span>` : `<span class="tag bad">differs</span>`;
+      tag = ok ? `<span class="verdict ok">${icon("proven")}matches</span>` : `<span class="verdict bad">${icon("estimate")}differs</span>`;
     }
-    gold = `<p class="gold">Dataset answer <span class="mono">${esc(gv)} ${esc(fmtUnit(a.gold.unit))}</span> ${tag} <span class="meta">${esc(a.gold.split || "")} split</span></p>`;
+    gold = `<dt>Dataset</dt><dd><span class="mono">${esc(gv)} ${esc(fmtUnit(a.gold.unit))}</span>${tag} <span class="meta">${esc(a.gold.split || "")} split</span></dd>`;
   }
 
   body.innerHTML = `
@@ -801,13 +801,11 @@ function renderAnswer(a) {
                  : `<span class="v none">No answer</span>`}
       </div>
       <p class="note corr-note" id="corrNote" hidden></p>
-      <span class="badge ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span>
-      ${a.status === "cannot" ? `<p class="cannot-reason">${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</p>` : ""}
-      ${gold}
-      <dl class="facts">
-        <dt>Confidence</dt><dd>${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
-        <dt>Response</dt><dd>${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}</dd>
-        <dt>CPU</dt><dd>${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</dd>
+      <dl class="kv facts">
+        <dt>Status</dt><dd><span class="status ${esc(a.status)}">${icon(st.icon)}${esc(st.label)}</span>${a.status === "cannot" ? `<span class="cannot-reason">${esc(shortReason(a))}${would ? ` The route would have said ${esc(would.would_answer)}.` : ""}</span>` : ""}</dd>
+        ${gold}
+        <dt>Confidence</dt><dd class="num">${a.confidence != null && a.status !== "cannot" ? Number(a.confidence).toFixed(2) : "-"}</dd>
+        <dt>Response</dt><dd class="num">${a.time_ms < 1000 ? Math.round(a.time_ms) + " ms" : (a.time_ms / 1000).toFixed(1) + " s"}<span class="meta">, CPU ${a.compute ? fmtSec(a.compute.cpu_s) : "-"}</span></dd>
         <dt>Model calls</dt><dd>${a.cost_usd ? "yes" : "none"}</dd>
       </dl>
       ${costMeter(a)}
@@ -823,9 +821,9 @@ function renderAnswer(a) {
 
     <section class="sec" aria-labelledby="hWhere">
       <h3 class="h-panel" id="hWhere">Where</h3>
-      <dl class="where">
+      <dl class="kv where">
         ${(a.where || []).map((w) => `<dt>${esc(w.k)}</dt><dd>${esc(w.v)}${w.code ? `<span class="code">${esc(w.code)}</span>` : ""}</dd>`).join("")}
-        ${a.tried && a.tried.length > 1 ? `<dt>Tried</dt><dd class="mono" style="font-size:12px">${esc(a.tried.join(" > "))}</dd>` : ""}
+        ${a.tried && a.tried.length > 1 ? `<dt>Tried</dt><dd class="mono" style="font-size:var(--fs-xs)">${esc(a.tried.join(" > "))}</dd>` : ""}
       </dl>
     </section>
 
@@ -840,7 +838,7 @@ function renderAnswer(a) {
     </section>
 
     ${items.length ? `<section class="sec" aria-labelledby="hItems">
-      <div class="sec-head"><h3 class="h-panel" id="hItems">Items <span class="cite" style="margin-left:6px">${itemsCite}</span></h3><span class="meta mono">${items.length}${a.items.length >= 200 ? "+" : ""}</span></div>
+      <div class="sec-head"><h3 class="h-panel" id="hItems">Items <span class="cite" style="margin-left:6px" aria-label="step ${itemsCite}">${itemsCite}</span></h3><span class="meta mono">${items.length}${a.items.length >= 200 ? "+" : ""}</span></div>
       <ul class="items" id="itemList">
         ${items.map((it, i) => {
           const [l, x] = itemLabel(it, a.query && a.query.obj, a.route);
@@ -885,7 +883,7 @@ function whyText(w) {
   const kind = `<span class="kind">${esc(KIND[w.kind] || w.kind)}</span>`;
   if (w.kind === "check") {
     const pass = w.status === "pass";
-    return `<span class="st ${pass ? "pass" : "fail"}">${icon(pass ? "proven" : "cannot")}${pass ? "PASS" : "FAIL"}</span>${esc(w.text)}`;
+    return `<span class="st ${pass ? "pass" : "fail"}">${icon(pass ? "proven" : "cannot")}${pass ? "Pass" : "Fail"}</span>${esc(w.text)}`;
   }
   return kind + esc(w.text);
 }
@@ -977,7 +975,7 @@ function renderWitnesses(a, w) {
     <p class="wit-verdict ${vd.tone}">${icon(vd.icon)}<span>${esc(vd.text)}</span></p>
     <ul class="wit-list">${rows}</ul>
     ${disLine}
-    <p class="note">${rel ? esc(rel) + " " : ""}Each format is read on its own, twins hidden, no model calls. Select one to see its evidence; circled values disagree with the others.</p>`;
+    <p class="note">${rel ? esc(rel) + " " : ""}Each format is read on its own, twins hidden, no model calls. Select one to see its evidence; a value boxed in amber disagrees with the others.</p>`;
   $("#witBody").querySelectorAll(".wit-row:not([disabled])").forEach((b) => b.addEventListener("click", () => {
     const r = w.witnesses.find((x) => x.format === b.dataset.f);
     if (state.shown && state.shown.format === r.format && state.shown !== state.answer) { showEvidence(state.answer, true); return; }

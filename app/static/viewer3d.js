@@ -468,7 +468,7 @@ async function showCard(guid, hit) {
   const role = V.highlight.deducted.has(guid) ? "Deducted opening" : V.highlight.cited.has(guid) ? "Used by the answer"
     : V.highlight.rooms.has(guid) ? "Room used by the answer" : "Not used by the answer";
   card.innerHTML = `<div class="v3d-card-head"><span class="mono v3d-cls">${esc(cls)}</span>
-      <button class="tool" type="button" id="v3dCardClose" aria-label="Close the element details"><svg class="ico"><use href="#i-cannot"/></svg></button></div>
+      <button class="tool" type="button" id="v3dCardClose" aria-label="Close the element details"><svg class="ico"><use href="#i-close"/></svg></button></div>
     <p class="v3d-name">${esc(hit.row[2] || "(no name)")}</p>
     <dl class="v3d-dl"><dt>GlobalId</dt><dd class="mono">${esc(guid)}</dd><dt>Storey</dt><dd>${esc(hit.floor.name)}</dd><dt>Role</dt><dd>${esc(role)}</dd></dl>
     <div id="v3dProps" class="meta">Reading properties</div>`;

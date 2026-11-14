@@ -31,13 +31,14 @@
     <symbol id="i-estimate" viewBox="0 0 16 16"><path d="M8 2.5l5.75 10.25H2.25z"/><path d="M8 6.75v2.5M8 11.1v.15"/></symbol>
     <symbol id="i-cannot" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5"/></symbol>
     <symbol id="i-sheet" viewBox="0 0 16 16"><path d="M3 2.75h10v10.5H3z"/><path d="M3 6h10M3 9.25h10M7 6v7.25"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
     <symbol id="i-status" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75"/><path d="M8 7.25v4M8 4.9v.15"/></symbol>
   </defs>
 </svg>
 
 <div class="shell">
   <nav class="rail" aria-label="Main">
-    <div class="mark" aria-hidden="true"><svg class="ico" width="20" height="20"><use href="#i-ask"/></svg></div>
+    <div class="mark" title="Blueprint Evidence" aria-hidden="true"><svg class="ico" width="18" height="18"><use href="#i-sheet"/></svg></div>
     <button class="rail-btn" data-view="ask" aria-current="page" aria-label="Ask a drawing" data-tip="Ask"><svg class="ico"><use href="#i-ask"/></svg></button>
     <button class="rail-btn" data-view="results" aria-label="Results" data-tip="Results"><svg class="ico"><use href="#i-results"/></svg></button>
     <button class="rail-btn" id="pickerToggle" aria-label="Show or hide the drawing library" aria-expanded="true" aria-controls="picker" data-tip="Drawings"><svg class="ico"><use href="#i-library"/></svg></button>
@@ -56,7 +57,7 @@
       <label class="drop" id="drop">
         <input type="file" id="fileInput" multiple accept=".pdf,.dxf,.ifc,.png,.jpg,.jpeg,.tif,.tiff">
         <svg class="ico"><use href="#i-upload"/></svg>
-        <span><strong>Upload a drawing</strong><br><span class="meta">PDF, DXF, IFC or PNG. Add a PDF with its DXF twin to use both.</span></span>
+        <span><strong>Upload a drawing</strong><br><span class="meta">PDF, DXF, IFC or PNG. Drop a PDF with its DXF twin to use both.</span></span>
       </label>
 
       <div class="field">
@@ -108,8 +109,8 @@
         </div>
 
         <div class="viewer-empty" id="viewerEmpty">
-          <p class="empty-title">Choose a drawing to begin</p>
-          <p class="meta">The answer will be drawn on it: counted items boxed and numbered, measured rooms filled with their area.</p>
+          <p class="empty-title">No drawing open</p>
+          <p class="meta">Pick one under Drawings or upload your own. When you ask a question, counted items are boxed and numbered here and measured rooms are filled with their area.</p>
         </div>
 
         <div class="viewer-busy" id="viewerBusy" hidden role="status" aria-live="polite">
@@ -153,7 +154,14 @@
     <aside class="detail" id="detail" aria-label="Answer" aria-live="polite">
       <div class="detail-empty" id="detailEmpty">
         <h2 class="h-panel">Answer</h2>
-        <p class="meta">Ask a question to see the number, the part of the drawing it comes from, and each step that supports it. Every step is numbered so you can check it against the drawing.</p>
+        <p class="meta">No question asked yet. Each answer reads like this:</p>
+        <dl class="kv">
+          <dt>Value</dt><dd>the number and its unit</dd>
+          <dt>Status</dt><dd>Proven, Estimate (check the amber items) or Cannot prove, with the reason</dd>
+          <dt>Witnesses</dt><dd>the same question asked of the drawing's other formats</dd>
+          <dt>Where</dt><dd>the sheet, layer or model it was read from</dd>
+          <dt>Why</dt><dd>numbered steps; the same numbers are drawn on the drawing</dd>
+        </dl>
       </div>
       <div id="detailBody" hidden></div>
     </aside>

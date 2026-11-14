@@ -228,7 +228,7 @@ const OrderSheet = (() => {
             <p class="meta mono">${esc(a.drawing)}  ·  ${esc(date)}</p>
             <p class="sheet-q">${esc(a.question)}</p>
           </div>
-          <button class="tool" type="button" id="osClose" aria-label="Close the order sheet"><svg class="ico"><use href="#i-cannot"/></svg></button>
+          <button class="tool" type="button" id="osClose" aria-label="Close the order sheet"><svg class="ico"><use href="#i-close"/></svg></button>
         </header>
         <section class="sheet-inputs" aria-label="Assumptions">
           ${m.hasWalls ? `<div class="field"><label class="label" for="osSurf">Surfaces</label>
@@ -354,7 +354,7 @@ const OrderSheet = (() => {
   dd { margin: 0; text-align: right; font-family: "IBM Plex Mono", Consolas, monospace; }
   .big { font-size: 14pt; font-weight: 600; }
   ul { padding-left: 14pt; color: #5a6270; font-size: 8.5pt; }
-  .tag { display: inline-block; border: 1px solid #8a919c; border-radius: 99px; padding: 0 6pt; font-size: 8.5pt; }
+  .tag { font-weight: 600; }
 </style></head><body>
 <h1>Order sheet</h1>
 <p class="meta">${esc(a.drawing)} · ${new Date().toISOString().slice(0, 10)} · route ${esc(a.route)} · <span class="tag">${esc(a.status)}</span></p>
