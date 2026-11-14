@@ -184,14 +184,16 @@ def check_fixture_bounds(F, obj, v):
     has a basin or sink; every bathroom has a shower or bath; n rooms need at least n-1 doors;
     every bedroom and the living room have a window."""
     out = []
-    wc, kh, k, mh = _labels(F, "wc_room"), _labels(F, "bathroom"), min(_labels(F, "kitchen"), 1), _labels(F, "bedroom")
+    kn = _labels(F, "kitchen")
+    wc, kh, k, mh = _labels(F, "wc_room"), _labels(F, "bathroom"), min(kn, 1), _labels(F, "bedroom")
     if obj == "toilet" and wc:
         out.append(Check("toilets>=wc-rooms", "pass" if v >= wc else "fail",
                          f"{wc} WC room label(s) read, each holds a WC seat; answer {v}", "abstain", wc))
     if obj == "sink" and (kh or k):
         lo = kh + k
         out.append(Check("sinks>=bathrooms+kitchen", "pass" if v >= lo else "fail",
-                         f"{kh} bathroom and {k} kitchen label(s) read, each implies a sink; answer {v}", "lower", lo))
+                         f"{kh} bathroom and {kn} kitchen label(s) read ({kh} + {k} sinks implied: a kitchen counts once, "
+                         f"a repeated K can be a stray read); answer {v}", "lower", lo))
     if obj == "shower_or_bath" and kh:
         out.append(Check("showers>=bathrooms", "pass" if v >= kh else "fail",
                          f"{kh} bathroom label(s) read, each implies a shower or bath; answer {v}", "abstain", kh))

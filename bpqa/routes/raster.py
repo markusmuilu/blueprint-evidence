@@ -95,7 +95,7 @@ def answer(ctx, q) -> Answer:
 LABEL_ROUTE = "raster-ocr-labels"
 NAMES = {"bedroom": "bedroom (MH, BEDROOM, SCHLAFZIMMER)", "kitchen": "kitchen (K, KK, KEITTIO, AVOK, TUPAK, KITCHEN, KUCHE)",
          "sauna": "sauna (S, SAUNA, LH)", "wc_room": "WC room (WC, TOILET)",
-         "bathroom": "bathroom (KH, KPH, PH, PESUH, SH, BATHROOM, BADEZIMMER)", "balcony": "balcony (PARVEKE, BALCONY, BALKON)"}
+         "bathroom": "bathroom (KH, KPH, PH, PE, PESUH, SH, BATHROOM, BADEZIMMER)", "balcony": "balcony (PARVEKE, BALCONY, BALKON)"}
 MIN_WORDS_FOR_ZERO = 3      # a zero answer needs proof that the plan's labels were readable
 # Which label counts are answered, per room type (set on the dev split, see CHANGELOG.md). Elsewhere
 # the route abstains: kitchens and bathrooms are often unlabelled (an open kitchen inside "OH"), so a

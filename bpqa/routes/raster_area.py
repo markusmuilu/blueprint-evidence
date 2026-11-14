@@ -821,6 +821,26 @@ def _room_steps(row, r, want) -> list[dict]:
     return steps
 
 
+def shared_label_texts(full: list[dict], pa) -> list[str]:
+    """The room labels read on the plan, from the one reading every route shares (labels.read_labels: all four
+    rotations and the mirror, one reading per location), plus any label the area pass paired with an area."""
+    from .labels import read_labels
+    texts = {t["text"].strip() for t in read_labels(full)} if full else set()
+    texts |= {r.label for r in pa.rooms if r.label}
+    return sorted(texts)
+
+
+def labels_of_types(full: list[dict], want, lab_types: dict) -> dict:
+    """{room type: label texts} for the asked types, from the shared label reading (any orientation)."""
+    from .labels import find_rooms
+    out = {}
+    for t in sorted(want & set(lab_types)):
+        hits = find_rooms(full, lab_types[t]) if full else []
+        if hits:
+            out[t] = [h["text"] for h in hits]
+    return out
+
+
 def takeoff_answer(ctx, q, img):
     from .. import takeoff
     from .. import walls as wallmod
@@ -850,11 +870,16 @@ def takeoff_answer(ctx, q, img):
     want = set(tk["types"])
     typed = [w["room"] for w in used]
     if not typed:
-        read = sorted({r.label for r in pa.rooms if r.label})
         why = (tk.get("toilet_rooms") or {}).get("why")
         on = orient_name(*pa.orient)
-        return abstain(ROUTE, (f"{why} (labels read {on}: {', '.join(read[:15]) or 'none'})" if why else
-                               f"no room label of type {', '.join(tk['types'])} read {on} on the plan "
+        read = shared_label_texts(full, pa)
+        seen = labels_of_types(full, want, lab_types)
+        if seen:
+            return abstain(ROUTE, "label(s) read on the plan in any orientation, but none of them with a printed area: "
+                                  + "; ".join(f"{t}: {', '.join(v)}" for t, v in seen.items())
+                                  + f" (areas and labels paired in the text reading {on}; all labels read: {', '.join(read[:15]) or 'none'})")
+        return abstain(ROUTE, (f"{why} (labels read in any orientation: {', '.join(read[:15]) or 'none'})" if why else
+                               f"no room label of type {', '.join(tk['types'])} read in any orientation on the plan "
                                f"(labels read: {', '.join(read[:15]) or 'none'})"))
     # labels read in other orientations (full OCR cache) that the plan's text pass missed would be
     # rooms left out of the sum: abstain rather than under-order

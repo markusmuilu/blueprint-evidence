@@ -104,6 +104,35 @@ Evidence: on scan area answers the printed rooms that only set the scale are dra
 blue, and were read as part of the answer), and the marks sidecar holds them as `{"kind": "scale", "tone": "grey"}`
 (`evidence.record_context`); the app pins only `box` and `poly` marks. Tests: `tests/test_room_regions.py` (new);
 the existing tests pass.
+## 2026-11-14: scan label reading, branch `scan-labels`
+
+QA found plans whose printed labels were not read, or were read differently by different routes.
+
+- **PE is a bathroom** (`labels.py`, `takeoff.py`). CubiCasa5K train+val: all 45 spaces named PE are Bath spaces
+  (424 of 424 PESUH too). Count and area routes both know it now.
+- **Combined labels with the separator lost** ("KPH / WC" read as "KHWC"): split into bathroom + WC in `labels.parts`
+  and `takeoff.label_parts`, only for the pairs {KPH, KH, PH, SH, PESUH, PE} + WC.
+- **Singular size questions** ("How big is the kitchen?", "What size is the bathroom?", Finnish and German forms)
+  are area takeoffs; they used to fall through to Nemotron. Plural "how big are the ..." without a sum word is unchanged.
+- **Plain H / HUONE is NOT counted as a bedroom.** Checked against the CubiCasa5K train+val annotations (4,600 plans):
+  all 1,203 spaces named H are class Room, none Bedroom (MH: 7,348 Bedroom). The gold does not count them, so
+  counting them would cost correct answers. The "3h+k" check in `checks.py` still uses the apartment summary.
+- **Agreement by absence** (`raster_rooms.combine`): both readers giving 0 is no longer proven. Calibration
+  (`bpqa/calibration.py`) already lowered every raster-rooms answer, because the table has no raster-rooms cells; this
+  makes the route itself say so and keeps it right if cells are added.
+- **Full-word labels against the detector** (`raster_rooms.combine`, `labels.full_word`): when every label read is a
+  full English or German room word read exactly and the detector finds fewer rooms, the labels win (estimate). Tyneside
+  flat bedrooms 0 -> 5.
+- **One label reading for the area route** (`labels.read_labels`, `raster_area.shared_label_texts`,
+  `labels_of_types`): abstain messages list the labels of all rotations (the reading `find_rooms` and `checks.py` use),
+  and say when a label of the asked type was read but has no printed area, instead of "no label read" from the one
+  rotation the areas were paired in. The sink check reports the real kitchen label count (it still counts one sink
+  for kitchens).
+
+Dev (`eval.py --split dev --sources cubicasa5k`, Nemotron off, 2,908 questions), before and after: every answer
+identical, value and tier, on all 12 object types. Accuracy: bedroom 78.6%, kitchen 78.1%, bathroom 86.5%, wc_room
+93.3%, sauna 89.2%, balcony 87.2%, toilet 86.6% (176 proven at 95.5%). Dev has no CubiCasa area questions, so the
+size-question and PE-area fixes are checked on the QA plans only (10372 kitchen 13.8, bathroom 5.3; 11196 kitchen 7.5).
 
 ## 2026-11-14: object scale for scans without printed areas, branch `object-scale` (behind a flag, off)
 
