@@ -3,6 +3,48 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-14: qualifiers are never dropped, branch `qualified-objects`
+
+QA found a wrong answer marked proven: "How many fire doors are on this floor?" parsed as {count, door}, the word
+"fire" was dropped, and Esplanades plan-01 answered 46 (all IfcDoor) as proven. The same app answered "What is the
+fire rating of the doors?" correctly (27 of 46). The rule now: a qualifier that narrows the counted object is never
+silently dropped.
+
+- `bpqa/query.py`: `attach_qualifier()` (one function, called at the end of `RuleParser.parse`) records
+  `extra["qualifier"] = {"kind", "raw"}` (and `extra["qualifiers"]`, all of them) for fire (fire, fire-rated, EI30,
+  palo-, Brandschutz, coupe-feu, brand-), exterior / interior (also ulko-, sisa-, Aussen-, Innen-, extérieure), sliding,
+  double, glazed, accessible, emergency / exit, load-bearing, material (steel, wooden, concrete ...) and window
+  orientation, in EN, FI, SV, DE and FR where the word is cheap to match. Only element counts and quantities carry
+  one; schedule and sheet questions ("door type A1 (swing door)") and "interior and entrance doors together" do not.
+  Small vocabulary additions so these parse at all: Finnish palo-/liuku-/lasi-ovi compounds, Swedish dörr, fönster
+  and "hur många".
+- `bpqa/router.py`, `bpqa/qualifiers.py`: a route that cannot filter by a qualifier is skipped (CAD, vector, scan and
+  sheet-text routes), and when nothing can, the answer is a final abstention ("cannot prove: ..., which this scan does
+  not record"), so the router does not fall through to Nemotron or the typed lookups. Interior / exterior may still
+  fall back to ifc-props, which reads IsExternal and layer names.
+- IFC route filters: FireRating (the same properties ifc-props reads, a rating of "-" or "none" is not a rating),
+  IsExternal, OperationType / PartitioningType for sliding and double (door and type names only as an estimate when
+  no element records an operation type), LoadBearing. The evidence boxes only the matching elements and the
+  explanation states the filter. A model that carries no such property abstains, final, with the number of elements.
+
+| question | before | after |
+|---|---|---|
+| Esplanades plan-01 1.korrus, fire doors | 46, proven (wrong) | 27, proven, 27 boxes ("27 of 46 doors with a FireRating property (EI30 S200)") |
+| FZK Erdgeschoss, fire doors | 5, proven (wrong) | cannot prove: no door in this model carries a fire rating (5 doors) |
+| Molio 1. Sal, fire doors | 1, proven (wrong) | cannot prove: no door in this model carries a fire rating (119 doors) |
+| Swiss DXF floor, scan, fire doors | the unfiltered door count (36 on the Swiss floor) | final abstention: this drawing does not record fire ratings |
+
+Dataset parses: all 6,789 distinct questions of the full question set and the 1,770 of the preview set were parsed
+before and after. 11 (full) and 6 (preview) gain a qualifier, all in `ifc_bench` free-text questions (exterior / interior
+walls, "interior doors", "glazed windows") and none changes object,
+measure or any other field; 8 of them reached a route on dev and every one abstained before and after (only the reason
+text differs). The one Swiss question that mentions interior doors ("portes intérieures et portes d'entrée
+confondues") is the total of both and gets no qualifier.
+
+Dev, `eval.py --split dev --sources ifc_models,ifc_bench,swiss_dwellings` (28,839 questions), before and after:
+identical. Accuracy 96.5% (27,818), precision 98.5%, proven 27,939 at 99.2%, estimate 294 at 37.1%; ifc_models count
+84.4%, swiss_dwellings count 100.0%, ifc_bench 33.3%. Tests: `tests/test_qualifiers.py`.
+
 ## 2026-11-14: raster-rooms calibrated, branch `rooms-calibration`
 
 `raster-rooms` (room detector + OCR labels) had no cells in `bpqa/scan_calibration.json`, so every answer was an
