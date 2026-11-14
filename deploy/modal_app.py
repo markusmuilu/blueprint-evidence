@@ -23,6 +23,7 @@ REPO = HERE.parent
 REMOTE = "/root/stoa"
 
 APP_NAME = os.environ.get("BPE_APP_NAME", "blueprint-evidence")
+MAX_CONTAINERS = int(os.environ.get("BPE_MAX_CONTAINERS", "1"))
 WARM = os.environ.get("BPE_WARM", "0").lower() in ("1", "true", "yes", "on")
 
 IGNORE = ["**/__pycache__", "**/*.pyc", "**/.pytest_cache"]
@@ -41,6 +42,10 @@ image = (
     .pip_install_from_requirements(str(REPO / "app" / "requirements.txt"))
     .pip_install("requests")
     .env({
+        # more than one container: uploads and evidence are also published to a Modal Dict (app/shared.py).
+        # The container re-imports this file, so these reach it through the image env.
+        "BPE_MAX_CONTAINERS": str(MAX_CONTAINERS),
+        **({"BPE_SHARED_DICT": f"{APP_NAME}-shared"} if MAX_CONTAINERS > 1 else {}),
         "PYTHONPATH": REMOTE,
         "CUDA_VISIBLE_DEVICES": "",
         "YOLO_OFFLINE": "1", "YOLO_AUTOINSTALL": "false", "YOLO_VERBOSE": "false",
@@ -48,7 +53,8 @@ image = (
         "OMP_NUM_THREADS": "8", "MKL_NUM_THREADS": "8",
         "STOA_DATA": "/root/demo_data",
         "BPE_MAX_UPLOAD_MB": "30",
-        "BPE_UPLOAD_TTL": "900",
+        # 24 h only holds with the shared Dict: local disk dies when the container scales down (about 2 min idle)
+        "BPE_UPLOAD_TTL": "86400" if MAX_CONTAINERS > 1 else "900",
         # fill the demo-scan cache at start only when warm: on a cold start it would make the first
         # minute of questions queue behind it
         "BPE_PRECOMPUTE": "1" if WARM else "0",
@@ -87,7 +93,7 @@ app = modal.App(APP_NAME)
     cpu=8.0,                    # physical cores (16 vCPU): the tiled detector with TTA and big sheets are CPU-bound
     memory=12288,               # MiB request: torch + detectors + a 14000 px sheet + a large IFC
     min_containers=1 if WARM else 0,
-    max_containers=1,           # uploads live in the container's temp folder, so one container serves all
+    max_containers=MAX_CONTAINERS,   # 1: uploads live in the container's temp folder; more: published to the shared Dict
     scaledown_window=300 if WARM else 120,
     timeout=600,
     secrets=nvidia_secret(),

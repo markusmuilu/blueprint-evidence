@@ -48,7 +48,7 @@ function toast(msg, err = false) {
   toastT = setTimeout(() => (t.hidden = true), Math.max(err ? 6000 : 2600, Math.min(msg.length * 70, 14000)));
 }
 
-const UPLOAD_EXPIRED = "This upload has expired (uploads are deleted after 15 minutes). Please upload it again.";
+const UPLOAD_EXPIRED = "This upload has expired (uploads are deleted after 24 hours). Please upload it again.";
 async function api(url, opts) {
   const r = await fetch(url, opts);
   /* expired upload block: uploads are named "upload:<id>/..." (deploy/web.py); a 404 on one means it was deleted */
@@ -196,7 +196,7 @@ async function loadStatus() {
       ${row("Drawings", num(s.drawings))}
       ${row("Detector", s.detector_model && s.detector_runtime ? "available (CPU)" : s.detector_model ? "model found, runtime missing: scan symbol counts abstain unless cached" : "no model: scan symbol counts abstain")}
       ${row("OCR", s.ocr_runtime ? "available" : "missing: room labels abstain")}
-      ${row("Uploads", "kept for 15 minutes, then deleted")}
+      ${row("Uploads", "kept for 24 hours, then deleted")}
     </dl><p class="meta">Every route runs locally. No question leaves this machine.</p>`;
   } catch (e) { /* status is optional */ }
 }
@@ -357,16 +357,16 @@ $("#fileInput").addEventListener("change", (e) => { if (e.target.files.length) u
 /* Files that share a stem (plan.pdf + plan.dxf) are twins of one drawing and go in one request; every other
    file is its own drawing. One request per drawing keeps each under the 30 MB request limit. */
 const UPLOAD_TYPES = "PDF, DXF, IFC, PNG, JPEG, TIFF or SVG";
-const UPLOADS_KEY = "bpe-uploads", UPLOAD_KEEP_MS = 14 * 60 * 1000;   // the server deletes an upload after 15 minutes
+const UPLOADS_KEY = "bpe-uploads", UPLOAD_KEEP_MS = 24 * 60 * 60 * 1000 - 60 * 1000;   // the server deletes an upload after 24 hours
 const stemOf = (n) => { const i = n.lastIndexOf("."); return (i > 0 ? n.slice(0, i) : n).toLowerCase(); };
 const uploadStore = {
   read() {
     try {
-      const a = JSON.parse(sessionStorage.getItem(UPLOADS_KEY));
+      const a = JSON.parse(localStorage.getItem(UPLOADS_KEY));
       return Array.isArray(a) ? a.filter((u) => Date.now() - u.t < UPLOAD_KEEP_MS) : [];
     } catch (_) { return []; }
   },
-  write(a) { try { sessionStorage.setItem(UPLOADS_KEY, JSON.stringify(a)); } catch (_) { /* storage blocked */ } },
+  write(a) { try { localStorage.setItem(UPLOADS_KEY, JSON.stringify(a)); } catch (_) { /* storage blocked */ } },
 };
 function renderUploads() {
   const box = $("#uploadList");
@@ -381,7 +381,7 @@ function renderUploads() {
     b.className = "draw-item";
     b.setAttribute("aria-selected", String(state.drawing?.path === d.path));
     b.innerHTML = `<span class="nm" title="${esc(d.path)}">${esc(d.name)}</span>
-      <span class="sub"><span>${esc(d.ext.toUpperCase())}</span><span>Deleted 15 minutes after upload</span></span>`;
+      <span class="sub"><span>${esc(d.ext.toUpperCase())}</span><span>Deleted 24 hours after upload</span></span>`;
     b.addEventListener("click", () => selectDrawing(d.path));
     li.appendChild(b);
     ul.appendChild(li);
@@ -2386,7 +2386,7 @@ async function compareOpen(x) {
   };
   const STEPS = [
     { el: () => $("#drawList"), side: ["right", "left"], text: "Drawings are grouped by type. Open a group to see its drawings." },
-    { el: () => $("#drop"), side: ["right", "left"], text: "Add your own drawing here. Uploads are deleted after 15 minutes." },
+    { el: () => $("#drop"), side: ["right", "left"], text: "Add your own drawing here. Uploads are deleted after 24 hours." },
     { el: () => $("#askForm"), side: ["bottom", "top"], text: "Ask anything about the drawing, in your own words and any language." },
     { el: exampleTarget, side: ["left", "bottom"], text: "Not sure what to ask? Try one of these.", next: "Try one", run: runExample },
     { el: () => $("#detail"), side: ["left", "right"], text: "The answer appears here: the number, its status and the steps behind it. Click any item to see it on the drawing." },
