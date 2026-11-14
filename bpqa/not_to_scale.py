@@ -69,4 +69,4 @@ def find(tokens, min_conf: float = 0.5) -> list[dict]:
 
 def warning(notes: list[dict], what: str = "this approximation") -> str:
     quote = notes[0]["text"]
-    return f"The drawing says it is not to scale (\"{quote}\"): {what} may be off."
+    return f"The drawing carries a \"not to scale\" note (boxed on the drawing): {what} may be off."
