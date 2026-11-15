@@ -51,6 +51,12 @@ MAX_REGION_FRAC = 0.35
 AREA_RE = re.compile(r"(?<![\d+\-±])(\d{1,3})\s?[,.]\s?(\d{1,2})\s?\.?\s?(m|M)(?:\s?[2²?*'!azZ]|(?=\s|$))(?![\dxX])")
 # a printed area whose decimal comma the OCR dropped: "23m2" for "2,3 m2" (the unit's 2 may read as ?, � or ²)
 NODEC_RE = re.compile(r"([1-9])(\d)\s?(?:m|M)\s?[2²?*'!�]")
+# a room area printed without its unit, one decimal, under the room label ("MH" over "10,2") or after it ("K20.0",
+# "K 20.0"); read only on a plan that prints no area with a unit (scan hunt 15 Nov, high_quality_architectural-10044)
+UNITLESS_RE = re.compile(r"(\d{1,3})[,.](\d)")
+UNITLESS_INLINE_RE = re.compile(r"([A-Za-zÄÖäö]{1,6}(?:\d(?=\s))?)\s?(\d{1,3})[,.](\d)")
+UNITLESS_TOL = 0.25       # a unitless read further than this from its measured room is dropped
+MIN_UNITLESS = 2          # unitless reads must pair with a label at least this often on the plan
 TOTAL_RE = re.compile(r"KERROSALA|HUONEISTOALA|ASUINALA|ALA\s*YHT|YHTEENSA|HTM|KEM|TOTAL|PINTA-?ALA", re.I)
 
 
@@ -252,9 +258,14 @@ def parse_area(text: str):
     return v, rest
 
 
+# kitchen fixture marks printed in lower case beside the units on Finnish plans (jk fridge, pk freezer, kk drying
+# cabinet); "kk" also spells KK (keittokomero, a kitchenette) in capitals (scan hunt 15 Nov, high_quality_architectural-1475)
+FIXTURE_MARKS = {"kk"}
+
+
 def room_word(text: str) -> bool:
     """A room label token: a room abbreviation or a common plan word (MH1, KH, OH, ET, VAR ...)."""
-    if not text or len(text) > 24:
+    if not text or len(text) > 24 or text.strip() in FIXTURE_MARKS:
         return False
     return is_word(text)
 
@@ -285,11 +296,14 @@ def read_rooms(toks: list[dict], min_conf: float = 0.5) -> tuple[list[Room], lis
             areas.append({"v": v, "box": b, "rest": rest if room_word(rest) else None, "text": t["text"]})
         elif room_word(t["text"]):
             labels.append({"text": t["text"], "box": b})
+    if not areas:
+        areas, labels = _unitless_areas(toks, labels)
     used = set()
     rooms = []
     for a in areas:
         if a["rest"]:                       # "MH1 15.3m2" in one token
-            rooms.append(Room(a["rest"], a["box"], a["v"], a["box"], _center(a["box"]), extra={"area_text": a["text"]}))
+            rooms.append(Room(a["rest"], a["box"], a["v"], a["box"], _center(a["box"]),
+                              extra={"area_text": a["text"], **({"unitless": True} if a.get("unitless") else {})}))
             continue
         b = a["box"]
         h = max(b[3] - b[1], 6)
@@ -310,11 +324,49 @@ def read_rooms(toks: list[dict], min_conf: float = 0.5) -> tuple[list[Room], lis
             used.add(best)
             lb = labels[best]["box"]
             seed = ((lb[0] + lb[2]) / 2, (lb[3] + b[1]) / 2)
-            rooms.append(Room(labels[best]["text"], lb, a["v"], b, seed, extra={"area_text": a["text"], **({"restored": a["restored"]} if a.get("restored") else {})}))
+            rooms.append(Room(labels[best]["text"], lb, a["v"], b, seed, extra={"area_text": a["text"], **({"restored": a["restored"]} if a.get("restored") else {}), **({"unitless": True} if a.get("unitless") else {})}))
+        elif a.get("unitless"):
+            continue                        # a bare number with no room label above it is not an area
         else:
             rooms.append(Room(None, None, a["v"], b, _center(b), extra={"area_text": a["text"], **({"restored": a["restored"]} if a.get("restored") else {})}))
     free = [l for i, l in enumerate(labels) if i not in used]
     return rooms, free
+
+
+def _label_above(b, labels) -> bool:
+    h = max(b[3] - b[1], 6)
+    for l in labels:
+        lb = l["box"]
+        dx = abs(_center(lb)[0] - _center(b)[0])
+        dy = _center(b)[1] - _center(lb)[1]
+        if 0 < dy < 2.6 * h and dx < max(b[2] - b[0], lb[2] - lb[0]):
+            return True
+    return False
+
+
+def _unitless_areas(toks: list[dict], labels: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Room areas printed without a unit, on a plan that prints none with one: a one-decimal number right under a
+    room label ("MH" over "10,2") or joined to it ("K20.0"). Kept only when MIN_UNITLESS or more read so; each is
+    marked unitless (the answer says so and is an estimate). Returns (areas, labels) as read_rooms builds them."""
+    areas, inline = [], []
+    for t in toks:
+        txt = t["text"].strip()
+        b = quad_box(t["quad"])
+        m = UNITLESS_INLINE_RE.fullmatch(txt)
+        if m and room_word(m.group(1)) and not UNITLESS_RE.fullmatch(txt):
+            v = float(f"{m.group(2)}.{m.group(3)}")
+            if 1.0 <= v <= 200:
+                inline.append({"v": v, "box": b, "rest": m.group(1), "text": txt, "unitless": True})
+            continue
+        m = UNITLESS_RE.fullmatch(txt)
+        if m:
+            v = float(f"{m.group(1)}.{m.group(2)}")
+            if 1.0 <= v <= 200 and _label_above(b, labels):
+                areas.append({"v": v, "box": b, "rest": None, "text": txt, "unitless": True})
+    if len(areas) + len(inline) < MIN_UNITLESS:
+        return [], labels
+    joined = [a["box"] for a in inline]          # "MH 12,0" was also taken as a bare label: it is now a room
+    return inline + areas, [l for l in labels if l["box"] not in joined]
 
 
 # ---------------------------------------------------------------- regions
@@ -874,6 +926,17 @@ def analyse(path: str, allow_run: bool = True, assume: tuple = ()) -> PlanAreas 
         for r in rooms:
             if r.region_ok:
                 r.measured = round(r.pixels * sc.m2_per_px, 2)
+    # numbers printed without a unit (scan hunt 15 Nov) are kept only where the drawing confirms they are areas: they
+    # give the plan's scale themselves (2+ agree with their traced rooms), or the room's own measured area agrees. One
+    # its traced room contradicts ("12,0" read "42,0" or "2,0" under MH) falls back to the measured area or to none.
+    by_print = sc.known and not OS.is_object(sc)
+    for r in rooms:
+        if not (r.extra or {}).get("unitless") or r.printed is None:
+            continue
+        agrees = r.measured is not None and abs(r.measured - r.printed) <= UNITLESS_TOL * r.measured
+        if not agrees and not (by_print and r.measured is None):
+            r.extra["unitless_dropped"] = r.printed
+            r.printed = None
         if NARROW_RETRY and name and not OS.is_object(sc):
             retry_narrow(img, toks, others, rooms, name, sc)
     return PlanAreas(rooms, free, sc, name or "none", orient, sum(1 for r in proto if r.printed is not None))
@@ -1016,7 +1079,7 @@ def takeoff_answer(ctx, q, img):
         return abstain(ROUTE, "image or OCR unavailable")
     from .labels import find_rooms
     from .ocr import ocr_image
-    full = ocr_image(ctx.file, allow_run=False, partial=True) or []
+    full = [t for t in ocr_image(ctx.file, allow_run=False, partial=True) or [] if t["text"].strip() not in FIXTURE_MARKS]
     lab_types = {"bathroom": "bathroom", "wc": "wc_room", "sauna": "sauna", "kitchen": "kitchen",
                  "bedroom": "bedroom", "balcony": "balcony"}
     # one-letter labels (S, K) only when printed upper case: OCR noise reads stray strokes as "s"
@@ -1197,6 +1260,10 @@ def takeoff_answer(ctx, q, img):
             estimate(ans, f"{len(conflict)} printed value(s) disagree with the measured room by more than 10%")
         if fb:
             estimate(ans, fb)
+        unitless = [r for r in rows if r["kind"] == "printed" and (r["room"].extra or {}).get("unitless")]
+        if unitless:
+            estimate(ans, "the plan prints its room areas without a unit: " + ", ".join(
+                f"{r['label']} '{r['room'].extra['area_text']}'" for r in unitless[:6]) + " read as m2")
         restored = [r for r in rows if r["kind"] == "printed" and (r["room"].extra or {}).get("restored")]
         if restored:
             estimate(ans, "; ".join(f"{r['label']}: OCR read '{r['room'].extra['area_text']}' with no decimal comma, "

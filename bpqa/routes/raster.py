@@ -173,6 +173,10 @@ def _with_waste(ctx, a: Answer) -> Answer:
     return a
 
 
+TOTAL_LEAVES_OUT = ("balcony",)
+MAIN_TYPES = ("living", "bedroom")
+
+
 def _rooms_of_every_type(ctx, q) -> Answer:
     """'Total floor area' on a scan with no printed flat area: the room-type takeoff over every known type."""
     from ..compose import ALL_TYPES, _base_query
@@ -180,7 +184,10 @@ def _rooms_of_every_type(ctx, q) -> Answer:
     img = cv2.imread(str(ctx.file))
     if img is None:
         return abstain(ROUTE, "unreadable image")
-    q2 = _base_query(ctx.q.question, ALL_TYPES)
+    # a flat's floor area leaves the balconies out (Finnish huoneistoala, and "floor area" elsewhere): scan hunt 15 Nov,
+    # colorful-13689 added a 27.58 m2 glazed balcony to the total
+    types = [t for t in ALL_TYPES if t not in TOTAL_LEAVES_OUT]
+    q2 = _base_query(ctx.q.question, types)
     b = raster_area.takeoff_answer(ctx, q2, img)
     if b.answered:
         b.explanation = ("No floor area is printed for the whole flat: the rooms of every labelled type are added up "
@@ -189,7 +196,7 @@ def _rooms_of_every_type(ctx, q) -> Answer:
         return _with_waste(ctx, b)
     # one type at a time: the types that are measured are added up, the others are named
     got, missed, seen, first = [], [], set(), None
-    for t in ALL_TYPES:
+    for t in types:
         at = raster_area.takeoff_answer(ctx, _base_query(ctx.q.question, [t]), img)
         if at.answered:
             first = first or at
@@ -222,6 +229,17 @@ def _rooms_of_every_type(ctx, q) -> Answer:
             + (f". Labelled on the plan but not in this sum: {', '.join(left[:12])}; the total is too small by their area"
                if left else "")
             + ". Rooms without a readable label are not included.")
+    # a sum that leaves out the living room, or half the bedrooms, is not the flat's area but a fraction of it (scan hunt
+    # 15 Nov: high_quality-5858 answered 3.15 m2, the bathroom alone, for a flat of about 70 m2): say what was measured
+    from .. import takeoff
+    big = [x for x in left if takeoff.room_types(x) & set(MAIN_TYPES)]
+    big += [x for x in missed if x in MAIN_TYPES and not any(x in takeoff.room_types(y) for y in big)]
+    got_main = [it for it in got if takeoff.room_types(str(it.get("room") or "")) & set(MAIN_TYPES)]
+    no_living = "living" in missed or any("living" in takeoff.room_types(x) for x in left)
+    if big and (no_living or len(big) >= len(got_main)):
+        return abstain(ROUTE, f"no floor area is printed for the whole flat, and the main rooms {', '.join(big[:6])} could "
+                              f"not be measured, so a sum of the rest would be far too small (measured: "
+                              + " + ".join(f"{it.get('room') or 'room'} {it['area_m2']:.2f}" for it in got) + f" = {total:.2f} m2)")
     if left:
         missed = missed + [f"labelled rooms {', '.join(left[:6])}"]
     out = Answer(value=total, unit="m2", route=first.route, confidence=0.4, items=got, explanation=expl,

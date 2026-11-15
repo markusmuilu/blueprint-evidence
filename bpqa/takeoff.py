@@ -45,7 +45,7 @@ LABEL_RE = {
           r"servizio igienico|servizi igienici)",
     "sauna": r"sauna|s|leiliruum|bastu|loylyhuone|lh",
     "kitchen": r"kuche|kche|kueche|cuisine|cucina|kitchen(ette)?|keuken|kokken|tekokken|kok|kook|keittio|"
-               r"keittokomero|k|kk|kt|avok|avokeittio|tupak|coc|cocina|kitchen\s*\d*|kochnische|cuisinette|"
+               r"keittokomero|k|kk|kt|avok|avokeittio|tupak|tupakeittio|olokeittio|coc|cocina|kitchen\s*\d*|kochnische|cuisinette|"
                r"coin cuisine|cucinino|angolo cottura",
     "bedroom": r"schlafzimmer|chambre( a coucher)?|chambre a coucher|camera( da letto)?|camera da letto|"
                r"bedroom\s*\d*|slaapkamer|sovevaerelse|soverum|sovrum|magamistuba|magamistoad|mh\d?|makuuhuone\d?|hab\d?|"

@@ -3,6 +3,24 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-15: scan hunt on unreleased-style scans, branch `scan-hunt`
+
+454 natural-phrasing questions (English and Finnish) over the live app on 20 test-split CubiCasa scans outside the demo
+set (15 PNG, 3 image-only PDF, 2 JPEG) and the Stoa school sheet: no 5xx, no wrong proven against gold. Fixed, scans only:
+areas printed without a unit ("MH" over "10,2", "K20.0") are read on a plan that prints none with a unit, kept only where
+the drawing confirms them (they set the scale, 2+ agreeing with their traced rooms, or the room's own measured area agrees
+within 25%), and always an estimate saying so (high_quality_architectural-10044 kitchen: cannot -> 20.0 m2, bedrooms
+14.23 measured -> 20.2 printed). "Total floor area" summed from labelled rooms abstains, naming the partial sum, when the
+living room or half the bedrooms are not in it (high_quality-5858 was 3.15 m2, the bathroom alone, for a flat of about
+70 m2), and leaves balconies out (colorful-13689 added a 27.58 m2 glazed balcony). OLOKEITTIO is a kitchen
+(high_quality_architectural-1475 kitchen: cannot -> 35.6 m2, total 55.1 -> 90.7 m2) and a lower-case "kk" fixture mark
+is no kitchen label on the area route. A flat summary read with a stray mark ("2H-+KK 45,0M2") is read, as an estimate
+(high_quality_architectural-2145 total floor area and rooms: cannot -> 45.0 m2, 2 rooms). Demo gate 0 differences in value,
+tier or correctness; CubiCasa dev room-type counts (kitchen, bedroom, bathroom, sauna, balcony, wc_room, the 212 dev plans
+with a full OCR cache, 1,336 questions) unchanged: 1,182 correct, proven 266 at 100% before and after. Areas have no
+CubiCasa gold: 22 of the 300 OCR-cached plans print unitless areas; the confirmation keeps them on 7 and drops misreads
+checked by eye on two (high_quality_architectural-1000 "12,0" read "2,0", -9680 "12,0" read "42,0", both back to main's answer).
+
 ## 2026-11-15: never proven on an unstated default; one meaning for "to order", branch `defaults-estimate`
 
 An answer whose value includes a default the question did not state is an estimate on every route, number unchanged

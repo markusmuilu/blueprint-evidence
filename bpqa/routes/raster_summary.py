@@ -26,7 +26,8 @@ CELL = "printed-summary"
 
 # "3H+KT+S", "3h+k+s!", "1 H + TUPAK.", "2H,K,S", "3H+K+S72m2", "6H+K= 176 m2": a digit right before H that is not
 # part of a longer number or word ("B34H", "4.2H" are misreads and rejected), then + or , and the kitchen type.
-START = re.compile(r"(?<![\d.,A-Za-z])(\d)\s*[Hh]\s*[+,]\s*")
+# A stray stroke the OCR reads between H and the plus ("2H-+KK", scan hunt 15 Nov, high_quality_architectural-2145) is skipped.
+START = re.compile(r"(?<![\d.,A-Za-z])(\d)\s*[Hh]\s*[-.]?\s*[+,]\s*")
 COMP = re.compile(r"\s*([A-Za-z]{1,6})\.?(?:\s*\([A-Za-z ]+\))?\s*(?:[+,/]|(?=[^A-Za-z]|$))")
 AREA_IN = re.compile(r"(\d{2,3}(?:[.,]\d{1,2})?)\s*[mM]")
 KITCHEN = {"K": "kitchen", "KK": "kitchenette", "KT": "kitchen space", "TK": "kitchen", "TUPAK": "kitchen with dining space",
@@ -216,6 +217,9 @@ def answer(ctx, q) -> Answer:
     if asks_area and s["area"] is not None and rooms_sum > 1.05 * s["area"]:
         estimate(ans, f"the room areas printed on the plan add up to {rooms_sum:g} m2, more than the {s['area']:g} m2 "
                       f"of the summary: one of the two was misread")
+        ans.tier_cell = ""
+    elif re.search(r"[Hh]\s*[-.]\s*[+,]", s["text"]):
+        estimate(ans, f"the summary line was read with a stray mark between H and the plus ('{s['text'].strip()}')")
         ans.tier_cell = ""
     elif s["conf"] < 0.85:
         estimate(ans, f"the summary line was read with low OCR confidence ({s['conf']:.2f})")
