@@ -3,6 +3,22 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-15: summed scan totals abstain when a big traced region has no label, branch `total-unlabelled`
+
+"Total floor area" on a scan with no printed flat area, summed from the measured labelled rooms, now abstains when the
+room tracing (the walls-only region set the rooms were measured on) closes an interior region with no room label or
+printed area in it that is larger than every measured room (and at least 8 m2), or when such regions of 2 m2 and over
+make up 25% or more of the measured rooms plus them. The abstention names the partial sum, the measured rooms and the
+unlabelled area. Night QA: the FOCSA web listing plan answered 66.23 m2 (BR1, BR2, BR 3, K) with LR and DR, one open
+area of about 53 m2, left out (their labels are read by the OCR but are not room words, so the living-room rule did not
+fire); now cannot, naming 66.23 m2 measured and the 52.9 m2 region. Abstaining, not a gross figure: the traced footprint
+also holds stairwells, shafts, corridors and neighbouring flats (FOCSA: 219 m2 traced against a flat of about 140 m2),
+so a "gross" number would be a second unchecked value. Tyneside listing plan (all rooms labelled): 142.22 m2 before and
+after. Demo gate 0 differences in value, tier or correctness. CubiCasa has no total-area gold: on 80 dev plans with a
+full OCR cache (30 colorful, 50 other), 37 answered a total on main; 9 now abstain, all checked as partial sums
+(colorful-12871 102.06 for a printed 150 m2, high_quality_architectural-7731 67.74 for 152.5, -2105 28.59 for 45.0,
+colorful-8389 4.05 a storeroom alone, high_quality_architectural-8737 25.13 the kitchen alone); 28 unchanged.
+
 ## 2026-11-15: scan hunt on unreleased-style scans, branch `scan-hunt`
 
 454 natural-phrasing questions (English and Finnish) over the live app on 20 test-split CubiCasa scans outside the demo

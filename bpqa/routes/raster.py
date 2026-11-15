@@ -175,6 +175,39 @@ def _with_waste(ctx, a: Answer) -> Answer:
 
 TOTAL_LEAVES_OUT = ("balcony",)
 MAIN_TYPES = ("living", "bedroom")
+# a summed whole-flat total abstains when the room tracing closes a region with no room label in it that is larger
+# than every measured room (and at least UNLAB_BIG_M2), or when such regions of UNLAB_PART_M2 and over add up to
+# UNLAB_SHARE of the measured rooms plus them (night QA 15 Nov, FOCSA listing plan: LR + DR, about 53 m2, left out)
+UNLAB_BIG_M2 = 8.0
+UNLAB_PART_M2 = 2.0
+UNLAB_SHARE = 0.25
+
+
+def _unlabelled_left_out(ctx, items: list, total: float) -> str | None:
+    """Why a sum of the measured labelled rooms is not the flat's area, or None: see UNLAB_BIG_M2."""
+    from . import raster_area
+    try:
+        u = raster_area.unlabelled_regions(str(ctx.file))
+    except Exception:
+        return None
+    if not u or not u["regions"]:
+        return None
+    sizes = [it["area_m2"] for it in items if isinstance(it, dict) and isinstance(it.get("area_m2"), (int, float))]
+    biggest = max(sizes, default=0.0)
+    big = [r for r in u["regions"] if r[0] > biggest and r[0] >= UNLAB_BIG_M2]
+    parts = [r for r in u["regions"] if r[0] >= UNLAB_PART_M2]
+    part_m2 = sum(r[0] for r in parts)
+    share = part_m2 / (total + part_m2) if total + part_m2 > 0 else 0.0
+    if not big and share < UNLAB_SHARE:
+        return None
+    why = (f"a traced region of about {big[0][0]:.1f} m2 with no room label read in it, larger than any measured room"
+           if big else f"traced regions with no room label read in them cover about {part_m2:.1f} m2, "
+                       f"{share:.0%} of the measured rooms plus them")
+    return (f"no floor area is printed for the whole flat, and the labelled rooms add up to only {total:.2f} m2: {why} "
+            f"(unlabelled regions of {UNLAB_PART_M2:g} m2 and over: {part_m2:.1f} m2 in {len(parts)}). A room whose "
+            f"label was not read would be left out of the sum, so the total is not answered; the measured rooms: "
+            + " + ".join(f"{it.get('room') or 'room'} {it['area_m2']:.2f}" for it in items
+                         if isinstance(it, dict) and isinstance(it.get("area_m2"), (int, float))))
 
 
 def _rooms_of_every_type(ctx, q) -> Answer:
@@ -189,6 +222,10 @@ def _rooms_of_every_type(ctx, q) -> Answer:
     types = [t for t in ALL_TYPES if t not in TOTAL_LEAVES_OUT]
     q2 = _base_query(ctx.q.question, types)
     b = raster_area.takeoff_answer(ctx, q2, img)
+    if b.answered and isinstance(b.value, (int, float)):
+        why = _unlabelled_left_out(ctx, [it for it in b.items or [] if isinstance(it, dict) and "area_m2" in it], float(b.value))
+        if why:
+            return abstain(ROUTE, why)
     if b.answered:
         b.explanation = ("No floor area is printed for the whole flat: the rooms of every labelled type are added up "
                          "(rooms without a readable label are not included). " + (b.explanation or ""))
@@ -240,6 +277,9 @@ def _rooms_of_every_type(ctx, q) -> Answer:
         return abstain(ROUTE, f"no floor area is printed for the whole flat, and the main rooms {', '.join(big[:6])} could "
                               f"not be measured, so a sum of the rest would be far too small (measured: "
                               + " + ".join(f"{it.get('room') or 'room'} {it['area_m2']:.2f}" for it in got) + f" = {total:.2f} m2)")
+    why = _unlabelled_left_out(ctx, got, total)
+    if why:
+        return abstain(ROUTE, why)
     if left:
         missed = missed + [f"labelled rooms {', '.join(left[:6])}"]
     out = Answer(value=total, unit="m2", route=first.route, confidence=0.4, items=got, explanation=expl,
