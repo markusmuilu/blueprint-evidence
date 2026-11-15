@@ -14,7 +14,10 @@ same guard ("rooms named TUALETTRUUM": IFC 60.81, the PDF alone withdrawn, no lo
 Apartment scope in Finnish / Swedish / German ("asunnossa B", "lägenheten B", "Wohnung B") is detected by the guard
 (site1002 "Montako makuuhuonetta on asunnossa B?" 9 proven, now 4). A litres question answered in m2 is an estimate
 saying the litres were not computed. Estonian room words added: vannitoad / pesuruum (bathroom), magamistoad, elutoad,
-pesukoda (laundry).
+pesukoda (laundry). Scans: an upright "HO" is read as OH (high_quality-10241 "Kuinka iso on olohuone?" was a cannot, now
+about 25 m2, approximation); a two-digit area with its decimal comma dropped ("23m²" by LH on colorful-11196) is read as
+2,3 m2 on a plan that prints one-decimal areas, as an estimate saying so (sauna: cannot, now 2.30 estimate); a whole-flat
+sum of the measured rooms names the labelled rooms left out (10241: "TERASSI, ET, TK; the total is too small").
 
 ## 2026-11-14: IFC hunt (QA box round 2), branch `ifc-hunt`
 
