@@ -3,6 +3,19 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-15: night QA wrong proven answers, branch `night-proven`
+
+Esplanades plan-01 "How big is room 105?" was 870.29 m2 proven (all 50 spaces summed while the reading carried room 105);
+the IFC route now reads room numbers as "area of room 105" does (78.40 m2, KORIDOR 105, proven), and the guard no longer
+counts a room number as applied by a multi-room sum ("huone 105", "Raum 105" also 78.40). A room-type sum of 0 on a
+storey with space names no room type reads is an estimate, naming the related rooms and their areas (Esplanades
+bathrooms: 0 estimate, "11 spaces named TUALETTRUUM, 60.81 m2"). Witnesses answer the main answer's reading with the
+same guard ("rooms named TUALETTRUUM": IFC 60.81, the PDF alone withdrawn, no longer "2 of 2 agree on 870.29").
+Apartment scope in Finnish / Swedish / German ("asunnossa B", "lägenheten B", "Wohnung B") is detected by the guard
+(site1002 "Montako makuuhuonetta on asunnossa B?" 9 proven, now 4). A litres question answered in m2 is an estimate
+saying the litres were not computed. Estonian room words added: vannitoad / pesuruum (bathroom), magamistoad, elutoad,
+pesukoda (laundry).
+
 ## 2026-11-14: IFC hunt (QA box round 2), branch `ifc-hunt`
 
 Two wrong proven answers on the FZK EG sheet fixed: "laattojen pinta-ala paksuuksittain" was the sum of 6 IfcSpace areas

@@ -141,7 +141,8 @@ FLAT_AREA_NOT = re.compile(r"\b(gross|brutto|bgf|net usable|building'?s?|rakennu
 
 
 # "apartment A", "Wohnung B", "lägenhet A", "huoneisto C": one apartment by its letter
-APT_LETTER = (r"(?:apartment|wohnung|appartement|appartamento|dell'appartamento|lagenhet|lägenhet|huoneisto|asunto)"
+APT_LETTER = (r"(?:apartment|wohnung|appartement|appartamento|dell'appartamento|lagenhet(?:en)?|lägenhet(?:en)?|"
+              r"huoneisto\w*|asunto\w*|asunno\w*|korter\w*)"
               r"\s+([A-Z])\b")
 FLAT_SIZE_Q = re.compile(r"\bhow (big|large)\b|\bkuinka (iso|suuri)\b|\bmiten (iso|suuri)\b|\bwie gross\b|\bhur stor\b|"
                          r"\bwhat size\b|\bkokoinen\b")

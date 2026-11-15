@@ -22,8 +22,8 @@ from .query import fold
 
 UNIT_AFTER = r"\s*(?:mm|cm|m2|m²|m\^2|m3|m³|m\b|metres?|meters?|metri\w*|millimet\w*|senttimet\w*|sq|square|%|percent|prosent|neli\w*|kpl|pcs|x\b)"
 
-GROUP = re.compile(r"\b(apartment|flat|unit|wohnung|whg\.?|huoneisto|asunto|korter|appartement|appartamento|"
-                   r"lagenhet|lejlighed)\s+(?:no\.?\s*|nr\.?\s*|number\s+)?([A-Z]|\d{1,3})(?![\w.])")
+GROUP = re.compile(r"\b((?i:apartment|flat|unit|wohnung|whg\.?|huoneisto\w*|asunto\w*|asunno\w*|korter\w*|appartement|"
+                   r"appartamento|l[aä]genhet(?:en)?|lejlighed(?:en)?))\s+(?:no\.?\s*|nr\.?\s*|number\s+)?([A-Z]|\d{1,3})(?![\w.])")
 STOREY = re.compile(r"\b(this|the same) (floor|storey|story|level|sheet|plan)\b|\bground floor\b|\b(basement|attic|"
                     r"top floor|upper floor)\b|\berdgeschoss\b|\bobergeschoss\b|\bdachgeschoss\b|\bkeller\b|"
                     r"\b\d{1,2}(st|nd|rd|th)\.? (floor|storey|level)\b|\b(first|second|third|fourth|fifth) (floor|storey|level)\b|"
@@ -235,6 +235,17 @@ def _ifc_spaces_matching(M, storey, word: str, exact: bool):
     return out
 
 
+def _multi_room(ans: Answer) -> bool:
+    """An answer summed over several rooms: more than one item, or an explanation "sum of N" with N > 1. A room number
+    the reading carries is not applied by such an answer (Esplanades "how big is room 105": 870.29 m2, all 50 spaces,
+    night QA 15 Nov)."""
+    items = [it for it in ans.items or [] if isinstance(it, dict) and ("guid" in it or "number" in it or "name" in it)]
+    if len(items) > 1:
+        return True
+    m = re.search(r"\bsum of (\d+)\b", ans.explanation or "")
+    return bool(m and int(m.group(1)) > 1)
+
+
 def _guids(ans: Answer) -> set:
     return {it.get("guid") for it in ans.items if isinstance(it, dict) and it.get("guid")}
 
@@ -250,7 +261,8 @@ def unused(ctx, query, ans: Answer, cons: list[dict] | None = None) -> list[dict
         k, v = c["kind"], c["value"]
         if k == "room_no":
             lab = _norm(query.label)
-            if (query.room_no and _norm(query.room_no) == _norm(v)) or (lab and _norm(v) in lab):
+            if ((query.room_no and _norm(query.room_no) == _norm(v)) or (lab and _norm(v) in lab)) \
+                    and not (query.obj == "room" and query.measure in ("area", None) and _multi_room(ans)):
                 continue
             items = [it for it in ans.items if isinstance(it, dict) and ("number" in it or "room" in it or "name" in it)]
             if items and all(_norm(v) in _norm(it.get("number")) + _norm(it.get("room")) + _norm(it.get("name"))
@@ -393,6 +405,9 @@ def _repair(ctx, query, ans, miss, resolve):
     return None
 
 
+ROOM_WORDS_NO = ("room", "rum", "raum", "zimmer", "huone", "tila", "ruum", "piece", "nr", "no", "number", "space")
+
+
 def _ifc_room(ctx, q2, m):
     """One IfcSpace by number or name on the sheet's storey: its area, or a final abstention naming the rooms there."""
     from .routes import ifc_route as R
@@ -406,7 +421,7 @@ def _ifc_room(ctx, q2, m):
         if st is not None and M.storey_of(sp) != st:
             continue
         labs = " ".join(x for x in [getattr(sp, "LongName", None) or "", sp.Name or ""] if x)
-        if re.search(rf"(?<![\d.]){re.escape(val)}(?![\d.])", labs) and (not word or word.lower() in ("room", "rum", "raum", "nr", "no", "number", "space")
+        if re.search(rf"(?<![\d.]){re.escape(val)}(?![\d.])", labs) and (not word or word.lower() in ROOM_WORDS_NO
                                                                          or _cog_match(word, labs) or fold(word) in fold(labs)):
             sps.append(sp)
     where = f"on storey {st.Name}" if st is not None else "in the model"

@@ -685,11 +685,19 @@ def witnesses(body: WitnessBody, cancelled=None):
         row["compute"] = costs.compute_record(row["wall_s"], row["cpu_s"], row["route"])
         row.pop("evidence", None)
 
+    # the witnesses answer the main answer's reading (its cached record), not a fresh rules-only reading
+    main_query = None
+    main_rec = ANSWER_CACHE / f"{key}.json"
+    if main_rec.exists():
+        try:
+            main_query = wit.query_from_dict(json.loads(main_rec.read_text(encoding="utf-8")).get("query"))
+        except ValueError:
+            main_query = None
     t0 = time.perf_counter()
     # background work, one format at a time: a question asked meanwhile waits for one witness solve, not all of them
     gate_witness_solves(wit, GATE)
     with hold_for_witnesses(cancelled):
-        res = wit.run(root, rel, question, out_dir=RENDER_DIR, evidence=True, on_answer=keep)
+        res = wit.run(root, rel, question, out_dir=RENDER_DIR, evidence=True, on_answer=keep, query=main_query)
     if cancelled is not None and cancelled():     # abandoned part way: the skipped formats read as errors, do not cache
         raise Cancelled()
     res["n_disputed"] = wit.spatial_disagreements(res["witnesses"])

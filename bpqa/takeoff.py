@@ -37,7 +37,7 @@ GROUPS = {"wet": ("bathroom", "wc", "sauna")}
 # A label may name several types ("Wohnen/Essen", "ELUTUBA+KOOK"); each part is matched.
 LABEL_RE = {
     "bathroom": r"bad|badezimmer|bain|bains|salle de bains?|salle d'eau|bagno|bagni|bathroom\s*\d*|bath|"
-                r"shower(\s*room)?|dusche|douche(ruimte)?|badkamer|badevaerelse|badrum|vannituba|dushiruum|"
+                r"shower(\s*room)?|dusche|douche(ruimte)?|badkamer|badevaerelse|badrum|vannituba|vannitoad|pesuruum|dushiruum|"
                 r"kh\d?|kph\d?|ph\d?|pe|pesuh(uone)?\d?|sh\d?|kylpyhuone|pesuhuone|suihkuhuone|ban|bano|aseo|"
                 r"salle de douche|doccia|bagno di servizio|ba",
     "wc": r"(m\.|w\.|staff|specimen|public|men'?s|women'?s)?\s*(toilet|toilets|toilette|toiletten|wc\d?|w\.c\.|"
@@ -48,11 +48,11 @@ LABEL_RE = {
                r"keittokomero|k|kk|kt|avok|avokeittio|tupak|coc|cocina|kitchen\s*\d*|kochnische|cuisinette|"
                r"coin cuisine|cucinino|angolo cottura",
     "bedroom": r"schlafzimmer|chambre( a coucher)?|chambre a coucher|camera( da letto)?|camera da letto|"
-               r"bedroom\s*\d*|slaapkamer|sovevaerelse|soverum|sovrum|magamistuba|mh\d?|makuuhuone\d?|hab\d?|"
+               r"bedroom\s*\d*|slaapkamer|sovevaerelse|soverum|sovrum|magamistuba|magamistoad|mh\d?|makuuhuone\d?|hab\d?|"
                r"kinderzimmer|elternzimmer|gastezimmer|chambre d'enfants?|chambre parentale|chambre d'amis|"
                r"camera matrimoniale|camera singola|camera doppia|cameretta|br",
     "living": r"wohnen|wohnzimmer|sejour|sjour|salon|soggiorno|living( room)?|woonkamer|stue|opholdsrum|"
-              r"elutuba|oh|olohuone|sal|salle de sejour|salotto|wohnraum|wohnstube|stube|"
+              r"elutuba|elutoad|oh|olohuone|sal|salle de sejour|salotto|wohnraum|wohnstube|stube|"
               r"lounge|sitting( room)?|family room|drawing room|lounge ?/ ?diner|vardagsrum|lr",
     "dining": r"essen|repas|pranzo|dining|eetkamer|spisestue|rt|ruokailu(tila)?|ruokailuh|esszimmer|"
               r"salle a manger|sala da pranzo|dr",
@@ -60,7 +60,7 @@ LABEL_RE = {
             r"foyer|entrance|gang|esik|et|eteinen|aula|tk|tuulikaappi|dist|kaytava|halle|eingangshalle|vestibule|"
             r"hall d'entree|degagement|anticamera|atrio",
     "utility": r"khh|kodinhoitohuone|buanderie|waschkuche|waschraum|lavanderia|laundry|utility|bijkeuken|"
-               r"bryggers|wasruimte|waschen|trocknen|sechoir|essiccatoio",
+               r"bryggers|wasruimte|pesukoda|waschen|trocknen|sechoir|essiccatoio",
     "storage": r"reduit|rduit|abstellraum|ripostiglio|storage|store|berging|kast|depot|vh\d?|var\d?|varasto|"
                r"vaatehuone|abiruum|cave|keller|closet|walk-in closet|compartiment cave|vano cantina|kellari|"
                r"kellerabteil|kellerraum|cantina|debarras|dispensa",
@@ -120,7 +120,7 @@ Q_TYPE_RE = {
     "wet": r"wet ?rooms?|wet areas?|markatil|kosteat tilat|kosteisiin tiloihin|nassraum|nassraeume|nassraume|nasszell|"
            r"pieces humides|locali umidi|vatrum|markatila|markatilojen",
     "bathroom": r"bathrooms?|bath rooms?|washrooms?|shower rooms?|kylpyhuone|pesuhuone|suihkuhuone|badezimmer|"
-                r"\bbad\b|\bbader\b|salles? de bains?|salles? d'eau|salles? de douche|bagn[oi]\b|vannitub|badevaerelse|badrum",
+                r"\bbad\b|\bbader\b|salles? de bains?|salles? d'eau|salles? de douche|bagn[oi]\b|vannitub|badevaerelse|badrum|vannito|pesuruum",
     "wc": r"toilets?|\bwcs?\b|w\.c\.|restrooms?|lavator(y|ies)|powder rooms?|water closets?|vessa|vesso|"
           r"\bwc-|toilette|gabinett[oi]|servizi igienici|tualett|toalett|\bloos?\b|\bklos?\b",
     "sauna": r"saunas?|saunaan|saunan|saunoihin|saunoj|loylyhuone|saunen|bastu",
@@ -131,7 +131,7 @@ Q_TYPE_RE = {
     "dining": r"dining ?rooms?|esszimmer|salles? a manger|sale da pranzo|sala da pranzo",
     "hall": r"hallways?|corridors?|entrances?|entry|\bhalls?\b|\bsali\w*|\bhalli\w*|eteinen|eteise|kaytav|korridor|\bflur|couloir|"
             r"corridoi|ingress[oi]\b|vestibules?\b|disimpegn",
-    "utility": r"utility rooms?|laundry|kodinhoitohuone|waschkuche|buanderie|lavanderi",
+    "utility": r"utility rooms?|laundry|kodinhoitohuone|waschkuche|buanderie|lavanderi|pesukoda|pesukoja",
     "storage": r"storage|store ?rooms?|closets?|walk-in|varasto|vaatehuone|abstellraum|reduit|ripostigli|"
                r"cantin[ae]\b|kellerabteil|debarras",
     "balcony": r"balcon(y|ies|s|e|i)?\b|terraces?|parveke|parvekkee|balkon|terrass",

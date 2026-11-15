@@ -226,7 +226,12 @@ def _composite(ctx: Context) -> tuple[Query, Answer] | None:
     return compose.run(ctx, p, solve_q)
 
 
-def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
+LITRES_Q = re.compile(r"\b(litres?|liters?|litr(a|aa|oja|ans?)?|l of paint|gallons?)\b", re.I)
+
+
+def solve(ctx: Context, query: Query | None = None, guard: bool = False) -> tuple[Query, Answer]:
+    """`guard`: with a given reading, still apply the constraint guard (the witnesses read the main answer's reading
+    and must apply the same room numbers, names and filters, bpqa/witnesses.py)."""
     import time
     t0 = time.perf_counter()
     given = query is not None
@@ -238,7 +243,7 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
     query, a = _solve(ctx, query)
     if not given and not a.answered:
         query, a = _retry_with_reader(ctx, query, a, time.perf_counter() - t0)
-    if not given and a.answered:
+    if (not given or guard) and a.answered:
         # a room number, label, apartment, storey or filter in the question that the answer did not apply: repaired
         # where the data supports it, else not answered (bpqa/constraints.py)
         from . import constraints
@@ -247,6 +252,14 @@ def solve(ctx: Context, query: Query | None = None) -> tuple[Query, Answer]:
         m2 = float(a.value)              # "in square feet": the same answer, converted (1 m2 = 10.7639 sq ft)
         a.value, a.unit = round(m2 * 10.7639, 1), "sq ft"
         a.explanation = f"{m2:.2f} m2 = {a.value:g} sq ft (1 m2 = 10.7639 sq ft). {a.explanation or ''}".strip()
+    if a.answered and a.unit in ("m2", "sq ft") and LITRES_Q.search(ctx.q.question):
+        # "how many litres of paint": the area to paint is answered, the litres are not (judge review 15 Nov: a plain
+        # m2 value to a litres question, marked proven)
+        a.tier = "estimate"
+        a.tier_reason = ("the question asks for litres; this is the area to paint, litres depend on the paint's "
+                         "coverage and the number of coats")
+        a.explanation = (f"Area to paint, not litres: litres depend on the paint's coverage (e.g. 8 to 10 m2 per litre "
+                         f"per coat) and the number of coats. {a.explanation or ''}").strip()
     if a.answered and query.measure == "area" and isinstance(a.value, float):
         a.value = round(a.value, 2)     # areas are stated to the centimetre squared (QA 14 Nov: "536.718")
     if a.answered and query.extra.get("scope_resolved"):

@@ -524,9 +524,29 @@ def no_room_of_type(M, storey, floor, types):
                and not takeoff.room_types(space_type_label(sp)) & set(types)]
     if related:
         rt = "WC rooms" if "bathroom" in types else "bathrooms"
-        s += (f" {len(related)} {rt} on this storey ({floor_room_names(M, related, 4)}) are not counted; "
+        by = {}
+        for sp in related:
+            try:
+                ar = M.space_area(sp)[0]
+            except Exception:
+                ar = None
+            by.setdefault(space_type_label(sp) or "(unnamed)", []).append(ar)
+        parts = [f"{len(v)} space{'s' if len(v) > 1 else ''} named {k}"
+                 + (f", {sum(v):.2f} m2" if all(x is not None for x in v) else "") for k, v in by.items()]
+        s += (f" {len(related)} {rt} on this storey ({'; '.join(parts[:4])}) are not counted; "
               f"ask for the toilets or 'wet rooms' to include them.")
     return s
+
+
+# space names that are read as no room type but are known not to be a bathroom, WC, kitchen or bedroom
+NOT_A_ROOM_TYPE = re.compile(r"(galerie|gallery|galleria|lift|elevator|aufzug|hissi|server|schacht|shaft|kuilu)\s*\d*")
+
+
+def untyped_names(floor) -> list[str]:
+    """Space labels on the floor that no room type reads (generic 'room' words do not count as a type)."""
+    return sorted({space_type_label(sp) or "(unnamed)" for sp in floor
+                   if not takeoff.room_types(space_type_label(sp)) - {"room"}
+                   and not NOT_A_ROOM_TYPE.fullmatch(takeoff._fold_label(space_type_label(sp)))})
 
 # count objects answered from IfcSpace names (and the WC fixtures for "toilets")
 ROOM_COUNTS = set(takeoff.COUNT_TYPES) | {"toilet"}
@@ -638,6 +658,15 @@ def self_zero(ctx, M, storey, floor, tk, q, path, sheet_note) -> Answer:
     ans = Answer(value=0.0, unit="m2", route=ROUTE, confidence=0.9,
                  items=[{"storey": storey.Name, "rooms_on_storey": len(floor)}],
                  explanation=text + f" Source: {path.name}" + (f"; {sheet_note}." if sheet_note else "."))
+    unread = untyped_names(floor)
+    if unread:
+        # 0 is proven only when every space name on the storey was read as some room type: a name the dictionary
+        # does not cover could be the asked type (night QA 15 Nov, Esplanades bathrooms 0 m2 proven)
+        names = " / ".join(takeoff.TYPE_NAMES[t] for t in tk["types"])
+        ans.tier = "estimate"
+        ans.tier_reason = (f"{len(unread)} space name(s) on storey {storey.Name} are not read as any room type "
+                           f"({', '.join(unread[:8])}{' ...' if len(unread) > 8 else ''}); none is named {names}, "
+                           f"but one of them could be used as one")
     if ctx.evidence:
         try:
             ans.evidence = render(ctx, M, storey, [], q, 0.0, "m2", f"0 rooms of the asked type on storey {storey.Name}")
@@ -917,6 +946,16 @@ def answer(ctx, q) -> Answer:
                     names = sorted({space_type_label(sp) for sp in floor} - {""})
                     return abstain(ROUTE, f"no IfcSpace of type {', '.join(tk['types'])} {where} "
                                           f"(space names: {', '.join(names[:15])})")
+            if q.room_no and not q.label and q.variant not in ("type_sum", "max"):
+                # "how big is room 105": the one space numbered so, on the sheet's storey, as "area of room 105" is
+                # read (night QA 15 Nov: the language-model reading carried room_no and the route summed all 50 spaces)
+                from ..constraints import _ifc_room
+                a = _ifc_room(ctx, q, {"kind": "room_no", "value": q.room_no, "word": "room", "phrase": f"room {q.room_no}"})
+                if a is None:
+                    a = abstain(ROUTE, f"not answered: the question names room {q.room_no}, and only its floor area "
+                                       f"is read by room number here")
+                    a.final = True
+                return a
             if q.label and q.variant != "total":
                 lab = norm(q.label)
                 spaces = [s for s in spaces if lab in space_label_variants(s)]

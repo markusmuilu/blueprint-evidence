@@ -14,12 +14,13 @@ the format (and on the drawing, the items) to check.
 """
 from __future__ import annotations
 
+import copy
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 from .data import Question
-from .query import parse
+from .query import Query, parse
 from .router import Context, solve
 
 AREA_TOL = 0.02          # areas, lengths and volumes agree within 2%, counts exactly (the dataset's own rule)
@@ -82,10 +83,35 @@ def same(a, b, unit: str) -> bool:
     return abs(a - b) <= max(abs(b), abs(a)) * AREA_TOL
 
 
+def main_reading(question: str) -> Query:
+    """The reading the main answer uses: rules first, the language-model reading where the rules read nothing or too
+    little (its parse is cached, so this is the same reading at no new cost). A witness that read the question by the
+    rules alone answered another question (night QA 15 Nov: "rooms named TUALETTRUUM" 60.81 m2, the witnesses
+    agreed on 870.29, the whole floor)."""
+    from . import nemotron as nemo_client
+    from . import phrasing
+    try:
+        return phrasing.read(question, use_llm=nemo_client.enabled())
+    except Exception:
+        return parse(question)
+
+
+def query_from_dict(d: dict | None) -> Query | None:
+    if not d:
+        return None
+    names = {f.name for f in fields(Query)}
+    try:
+        q = Query(**{k: v for k, v in d.items() if k in names})
+    except TypeError:
+        return None
+    return q if q.ok() else None
+
+
 def run(root: Path, rel: str, question: str, out_dir: Path | None = None, evidence: bool = False,
-        on_answer=None) -> dict:
-    """Solve the question once per available format. Returns the witnesses and their agreement."""
-    query = parse(question)
+        on_answer=None, query: Query | None = None) -> dict:
+    """Solve the question once per available format. Returns the witnesses and their agreement. `query` is the main
+    answer's reading; every witness answers that reading, with the same constraint guard as the main answer."""
+    query = query or main_reading(question)
     rows = []
     for w in witnesses_for(root, rel):
         q = Question(qid=-1, path=w.path, question=question)
@@ -94,7 +120,7 @@ def run(root: Path, rel: str, question: str, out_dir: Path | None = None, eviden
                       pdf_only=w.pdf_only, nemotron=False)
         t0, c0 = time.perf_counter(), time.process_time()
         try:
-            _, ans = solve(ctx, query)
+            _, ans = solve(ctx, copy.deepcopy(query), guard=True)
         except Exception as ex:      # one broken witness must not hide the others
             from .answer import abstain
             ans = abstain("witness", f"error: {type(ex).__name__}: {ex}")
