@@ -92,9 +92,18 @@ def resolve(ref: str) -> tuple[Path, str]:
         root, rel = DATA_ROOT, ref
     f = (root / rel).resolve()
     if not f.is_file() and ref.startswith("upload:") and shared.enabled():
-        shared.fetch_upload(m.group(1), UPLOADS)         # uploaded through another container
-        f = (root / rel).resolve()
+        for wait in (0, 4, 8):                           # a big upload is still being copied in pieces: give it a moment
+            if wait:
+                time.sleep(wait)
+            shared.fetch_upload(m.group(1), UPLOADS)     # uploaded through another container
+            f = (root / rel).resolve()
+            if f.is_file():
+                break
     if not f.is_file() or root.resolve() not in f.parents:
+        if ref.startswith("upload:"):
+            raise HTTPException(404, "This uploaded drawing is not available on this server yet (a big file is still "
+                                     "being copied, or the upload has expired after 24 hours). Ask again in a moment, "
+                                     "or upload it again.")
         raise HTTPException(404, f"drawing not found: {ref}")
     return root, rel
 

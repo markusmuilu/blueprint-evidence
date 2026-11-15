@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -57,9 +58,10 @@ def publish_upload(uid: str, folder: Path) -> None:
         return
     files = [p for p in folder.rglob("*") if p.is_file()]
     if sum(p.stat().st_size for p in files) > SHARE_MAX_BYTES:
-        # a very large upload (e.g. a 139 MB TIFF) stays on the container that took it: copying it to the shared
-        # Dict hung the upload request (QA 14 Nov). Questions on it are served by this container.
-        print(f"[shared] upload {uid}: too large to share, kept local", flush=True)
+        # a very large stored file (over SHARE_MAX_BYTES after conversion): copying it in one Dict value hung the upload
+        # request (QA 14 Nov). It is now published in pieces, in the background, so the upload answers at once and a
+        # question that lands on another container still finds it a little later (QA 15 Nov).
+        threading.Thread(target=_publish_chunked, args=(uid, folder, files), daemon=True, name=f"share-{uid}").start()
         return
     tree = {}
     for p in files:
@@ -70,6 +72,33 @@ def publish_upload(uid: str, folder: Path) -> None:
         STATS["puts"] += 1
     except Exception:
         pass         # logged by _try; the upload still works on this container
+
+
+CHUNK_BYTES = 16 * 1024 * 1024
+
+
+def _publish_chunked(uid: str, folder: Path, files: list) -> None:
+    """A big upload in pieces: each file over CHUNK_BYTES under "upc:<uid>:<rel>:<i>", then the tree under "up:<uid>"
+    last (it marks the upload complete), with (b"", mtime, n_chunks) for a chunked file."""
+    t0 = time.time()
+    try:
+        tree = {}
+        for p in files:
+            rel, mtime, data = p.relative_to(folder).as_posix(), int(p.stat().st_mtime), p.read_bytes()
+            if len(data) <= CHUNK_BYTES:
+                tree[rel] = (data, mtime)
+                continue
+            n = (len(data) + CHUNK_BYTES - 1) // CHUNK_BYTES
+            for i in range(n):
+                part = data[i * CHUNK_BYTES:(i + 1) * CHUNK_BYTES]
+                _try(lambda: _d().put(f"upc:{uid}:{rel}:{i}", part), tries=3, wait=1.0)
+            tree[rel] = (b"", mtime, n)
+        _try(lambda: _d().put(f"up:{uid}", tree))
+        _try(lambda: _d().put(f"upm:{uid}", time.time()))
+        STATS["puts"] += 1
+        print(f"[shared] upload {uid}: published in pieces in {time.time() - t0:.1f}s", flush=True)
+    except Exception as ex:      # the upload still works on this container
+        print(f"[shared] upload {uid}: chunked publish failed: {type(ex).__name__}: {ex}", flush=True)
 
 
 def fetch_upload(uid: str, root: Path) -> bool:
@@ -86,7 +115,10 @@ def fetch_upload(uid: str, root: Path) -> bool:
         if tree:
             tmp = root / f".{uid}.{uuid.uuid4().hex[:6]}"
             try:
-                for rel, (data, mtime) in tree.items():
+                for rel, val in tree.items():
+                    data, mtime = val[0], val[1]
+                    if len(val) == 3:            # published in pieces (_publish_chunked)
+                        data = b"".join(_try(lambda i=i: _d().get(f"upc:{uid}:{rel}:{i}")) or b"" for i in range(val[2]))
                     f = tmp / rel
                     f.parent.mkdir(parents=True, exist_ok=True)
                     f.write_bytes(data)
@@ -279,7 +311,7 @@ def purge_expired(ttl: float) -> list[str]:
                 gone.append(uid)
     for uid in gone:
         for k in keys:
-            if (k.startswith(("ev:", "pc:")) and f"u{uid}" in k) or k.startswith(f"pre:upload:{uid}/"):
+            if (k.startswith(("ev:", "pc:")) and f"u{uid}" in k) or k.startswith((f"pre:upload:{uid}/", f"upc:{uid}:")):
                 try:
                     d.pop(k)
                 except Exception:
