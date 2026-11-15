@@ -942,6 +942,66 @@ def analyse(path: str, allow_run: bool = True, assume: tuple = ()) -> PlanAreas 
     return PlanAreas(rooms, free, sc, name or "none", orient, sum(1 for r in proto if r.printed is not None))
 
 
+# ---------------------------------------------------------------- unlabelled regions
+#
+# A whole-flat total that adds up the labelled rooms is too small by every room whose label was not read. Night QA
+# 15 Nov: on the FOCSA web listing plan the living and dining room (one open area of about 53 m2) carry "LR" and
+# "DR", which are not room words here, so the total was 66.23 m2, the bedrooms and kitchen only. The regions the
+# room tracing closes show such a room whatever its label: an interior region with no room label or printed area in it.
+
+UNLAB_MIN_M2 = 1.0          # interior regions smaller than this are wall cavities, shafts or symbols
+
+
+@lru_cache(maxsize=8)
+def unlabelled_regions(path: str) -> dict | None:
+    """The interior regions of the chosen region set (walls-only barrier; regions the free space around the drawing
+    cannot reach) that hold no room label, no printed area and no room of analyse(). Returns {"regions": [(m2,
+    xyxy)] largest first, "interior_m2": all interior regions} or None without a scale or a region set."""
+    pa = analyse(path)
+    if pa is None or not pa.scale.known or not pa.regions or pa.regions == "none":
+        return None
+    f = Path(path)
+    orient, toks, extra = plan_tokens(f, allow_run=False)
+    img = cv2.imread(str(f))
+    if toks is None or img is None:
+        return None
+    for r in extra:                      # the same erased text as analyse()
+        for b in (r.label_box, r.area_box):
+            toks = toks + [{"quad": [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]], "text": "", "conf": 1.0}]
+    if "@" in pa.regions:
+        tag, ppm = pa.regions.split("@")
+        base = walls_base(img, toks, mode="stroke" if tag == "stroke" else "legacy")
+        bar, _ = wall_barrier(img, toks, max(3, round(DOOR_M * float(ppm))), base=base)
+    else:
+        bar = barrier(img, toks, max(1, round(min(img.shape[:2]) / 450)))
+    free = (bar == 0).astype(np.uint8)
+    n, lab = cv2.connectedComponents(free, connectivity=4)
+    edge = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]).tolist()))
+    seeds = []
+    for r in pa.rooms:
+        seeds.append(r.seed)
+        seeds += [_center(b) for b in (r.label_box, r.area_box) if b is not None]
+    for t in toks:
+        if t.get("text") and (room_word(t["text"]) or parse_area(t["text"]) is not None):
+            seeds.append(_center(quad_box(t["quad"])))
+    labelled = set()
+    for x, y in seeds:
+        sp = _seed_pixel(free, x, y)
+        if sp is not None:
+            labelled.add(int(lab[sp[1], sp[0]]))
+    cnt = np.bincount(lab.ravel(), minlength=n)
+    m2 = pa.scale.m2_per_px
+    interior = [c for c in range(1, n) if c not in edge and cnt[c] * m2 >= UNLAB_MIN_M2]
+    out = []
+    for c in interior:
+        if c in labelled:
+            continue
+        ys, xs = np.nonzero(lab == c)
+        out.append((round(float(cnt[c] * m2), 2), (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()))))
+    out.sort(key=lambda o: -o[0])
+    return {"regions": out, "interior_m2": round(float(sum(cnt[c] for c in interior) * m2), 2)}
+
+
 # ---------------------------------------------------------------- takeoff answer
 
 ROUTE = "raster-area"

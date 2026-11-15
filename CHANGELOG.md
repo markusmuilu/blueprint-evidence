@@ -14,6 +14,21 @@ lukuun ottamatta", "except balconies", "without a door leaf") keep their answers
 room 106" ask each item alone and sum them when both are proven (Swiss 1002 163.57 -> 318.72 m2, Molio 9.26 -> 19.69 m2),
 else not answered. Demo gate 0 differences in value, tier or correctness; dev swiss_dwellings (first 1,500) proven 1,500
 at 99.2% and ifc_models proven 1,689 at 99.8%, both unchanged (0 answer differences).
+## 2026-11-15: summed scan totals abstain when a big traced region has no label, branch `total-unlabelled`
+
+"Total floor area" on a scan with no printed flat area, summed from the measured labelled rooms, now abstains when the
+room tracing (the walls-only region set the rooms were measured on) closes an interior region with no room label or
+printed area in it that is larger than every measured room (and at least 8 m2), or when such regions of 2 m2 and over
+make up 25% or more of the measured rooms plus them. The abstention names the partial sum, the measured rooms and the
+unlabelled area. Night QA: the FOCSA web listing plan answered 66.23 m2 (BR1, BR2, BR 3, K) with LR and DR, one open
+area of about 53 m2, left out (their labels are read by the OCR but are not room words, so the living-room rule did not
+fire); now cannot, naming 66.23 m2 measured and the 52.9 m2 region. Abstaining, not a gross figure: the traced footprint
+also holds stairwells, shafts, corridors and neighbouring flats (FOCSA: 219 m2 traced against a flat of about 140 m2),
+so a "gross" number would be a second unchecked value. Tyneside listing plan (all rooms labelled): 142.22 m2 before and
+after. Demo gate 0 differences in value, tier or correctness. CubiCasa has no total-area gold: on 80 dev plans with a
+full OCR cache (30 colorful, 50 other), 37 answered a total on main; 9 now abstain, all checked as partial sums
+(colorful-12871 102.06 for a printed 150 m2, high_quality_architectural-7731 67.74 for 152.5, -2105 28.59 for 45.0,
+colorful-8389 4.05 a storeroom alone, high_quality_architectural-8737 25.13 the kitchen alone); 28 unchanged.
 
 ## 2026-11-15: scan hunt on unreleased-style scans, branch `scan-hunt`
 
