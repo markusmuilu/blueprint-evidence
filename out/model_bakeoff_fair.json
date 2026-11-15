@@ -1,0 +1,346 @@
+{
+ "date": "2026-11-15",
+ "set_file": "tools/bakeoff_fair_set.json",
+ "n": 60,
+ "n_by_category": {
+  "scan_room_type": 11,
+  "scan_door": 12,
+  "scan_window": 13,
+  "area": 12,
+  "swiss_count": 12
+ },
+ "scoring": "eval.score: counts exact, areas within 2%; no reply = wrong",
+ "ours": {
+  "scan_door": [
+   9,
+   12
+  ],
+  "scan_window": [
+   8,
+   13
+  ],
+  "scan_room_type": [
+   11,
+   11
+  ],
+  "swiss_count": [
+   12,
+   12
+  ],
+  "area": [
+   12,
+   12
+  ],
+  "overall": [
+   52,
+   60
+  ],
+  "ci95": [
+   0.7583,
+   0.9309
+  ],
+  "no_reply": 0,
+  "latency_median_s": 0.18,
+  "core32": [
+   26,
+   32
+  ]
+ },
+ "models": [
+  {
+   "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+   "short": "nemotron-3.5-super-vl",
+   "finished": true,
+   "answered_so_far": 60,
+   "scan_door": [
+    2,
+    12
+   ],
+   "scan_window": [
+    3,
+    13
+   ],
+   "scan_room_type": [
+    7,
+    11
+   ],
+   "swiss_count": [
+    6,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    18,
+    60
+   ],
+   "ci95": [
+    0.199,
+    0.4251
+   ],
+   "no_reply": 5,
+   "latency_median_s": 60.23,
+   "ours_wrong_model_right": 0,
+   "ours_right_model_wrong": 34,
+   "core32": [
+    12,
+    32
+   ]
+  },
+  {
+   "model": "meta/llama-3.2-90b-vision-instruct",
+   "short": "llama-3.2-90b-vision",
+   "finished": true,
+   "answered_so_far": 60,
+   "scan_door": [
+    1,
+    12
+   ],
+   "scan_window": [
+    1,
+    13
+   ],
+   "scan_room_type": [
+    4,
+    11
+   ],
+   "swiss_count": [
+    6,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    12,
+    60
+   ],
+   "ci95": [
+    0.1183,
+    0.3178
+   ],
+   "no_reply": 0,
+   "latency_median_s": 81.51,
+   "ours_wrong_model_right": 0,
+   "ours_right_model_wrong": 40,
+   "core32": [
+    6,
+    32
+   ]
+  },
+  {
+   "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+   "short": "nemotron-3-nano-omni",
+   "finished": true,
+   "answered_so_far": 60,
+   "scan_door": [
+    1,
+    12
+   ],
+   "scan_window": [
+    1,
+    13
+   ],
+   "scan_room_type": [
+    5,
+    11
+   ],
+   "swiss_count": [
+    5,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    12,
+    60
+   ],
+   "ci95": [
+    0.1183,
+    0.3178
+   ],
+   "no_reply": 15,
+   "latency_median_s": 24.63,
+   "ours_wrong_model_right": 1,
+   "ours_right_model_wrong": 41,
+   "core32": [
+    6,
+    32
+   ]
+  },
+  {
+   "model": "nvidia/ising-calibration-1.5-31b",
+   "short": "ising-calibration-1.5",
+   "finished": true,
+   "answered_so_far": 60,
+   "scan_door": [
+    0,
+    12
+   ],
+   "scan_window": [
+    0,
+    13
+   ],
+   "scan_room_type": [
+    7,
+    11
+   ],
+   "swiss_count": [
+    4,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    11,
+    60
+   ],
+   "ci95": [
+    0.1056,
+    0.2992
+   ],
+   "no_reply": 1,
+   "latency_median_s": 5.25,
+   "ours_wrong_model_right": 0,
+   "ours_right_model_wrong": 41,
+   "core32": [
+    7,
+    32
+   ]
+  },
+  {
+   "model": "nvidia/nemotron-3.5-bolt-e4b",
+   "short": "nemotron-3.5-bolt",
+   "finished": true,
+   "answered_so_far": 60,
+   "scan_door": [
+    0,
+    12
+   ],
+   "scan_window": [
+    1,
+    13
+   ],
+   "scan_room_type": [
+    6,
+    11
+   ],
+   "swiss_count": [
+    2,
+    12
+   ],
+   "area": [
+    1,
+    12
+   ],
+   "overall": [
+    10,
+    60
+   ],
+   "ci95": [
+    0.0931,
+    0.2803
+   ],
+   "no_reply": 0,
+   "latency_median_s": 1.22,
+   "ours_wrong_model_right": 0,
+   "ours_right_model_wrong": 42,
+   "core32": [
+    7,
+    32
+   ]
+  },
+  {
+   "model": "mistralai/mistral-large-4-1t-a52b",
+   "short": "mistral-large-4",
+   "finished": false,
+   "answered_so_far": 52,
+   "status": "did not finish (free-tier rate limit)",
+   "dnf_reason": "At least 10 of the 12 Swiss and IFC area questions used up the 4096-token budget in reasoning (finish=length after 200 to 330 s), and the harness's 16384-token retry was slow and often hung or was dropped on the free tier. 4 area questions came back; 8 (4 Swiss, 4 IFC) were still open at 04:00. It answered all 48 count questions."
+  }
+ ],
+ "ours_tiers": {
+  "scan_door": {
+   "proven": [
+    0,
+    0
+   ],
+   "estimate": [
+    9,
+    12
+   ]
+  },
+  "scan_window": {
+   "proven": [
+    0,
+    0
+   ],
+   "estimate": [
+    8,
+    13
+   ]
+  },
+  "scan_room_type": {
+   "proven": [
+    1,
+    1
+   ],
+   "estimate": [
+    10,
+    10
+   ]
+  },
+  "swiss_count": {
+   "proven": [
+    12,
+    12
+   ],
+   "estimate": [
+    0,
+    0
+   ]
+  },
+  "area": {
+   "proven": [
+    12,
+    12
+   ],
+   "estimate": [
+    0,
+    0
+   ]
+  }
+ },
+ "time": {
+  "start": "2026-11-15 00:46",
+  "set_frozen": "00:50",
+  "cutoff": "04:00",
+  "finished_at": {
+   "nvidia/ising-calibration-1.5-31b": "00:50 (all 60 cached)",
+   "nvidia/nemotron-3.5-bolt-e4b": "00:50 (all 60 cached)",
+   "nvidia/nemotron-3.5-super-vl-120b-a12b": "00:52 (3 new calls)",
+   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "00:59 (27 new calls)",
+   "meta/llama-3.2-90b-vision-instruct": "01:42 (33 new calls)",
+   "mistralai/mistral-large-4-1t-a52b": "not finished: 52/60 at the 04:00 cutoff (8 area questions open)"
+  }
+ },
+ "intro": "Run 15 Nov 2026, 00:46 to 04:00, NVIDIA build.nvidia.com free tier (one key). Every row answered the same 60 preview TEST questions (41 drawings; ids in `tools/bakeoff_fair_set.json`), so unlike the 14 Nov tables below the rows compare directly. The set is the 32 scan weak-spot questions every earlier comparison used (8 doors, 13 windows, 11 room types) plus 4 scan doors, 12 Swiss counts, 6 Swiss areas and 6 IFC-plan areas. A model that could not answer all 60 by 04:00 has no numbers at all.\n\n**Result: ours 52/60; the best hosted model, nemotron-3.5-super-vl, 18/60.** Ours is ahead in every category (doors 9 vs at most 2, windows 8 vs at most 3, room types 11 vs at most 7, Swiss counts 12 vs at most 6, areas 12 vs at most 1, each out of the same n). Across the five finished models there is one question where a model was right and ours wrong (nemotron-3-nano-omni on a scan door count, question 3624: it said 5, ours 6). mistral-large-4 did not finish.",
+ "method": [
+  "Method and caveats:",
+  "",
+  "- Same prompt, image (long edge 1600 px), token budget (4096, retried at 16384 when a reply is cut) and scoring as the 14 Nov harness and eval.py: counts exact, areas within 2%. A missing or unparseable reply counts as wrong (the \"No number in reply\" column). A transport error (timeout, rate limit, dropped connection) is not a reply: the question stays open and is retried.",
+  "- Replies cached on 14 Nov (out/nemo_cache, keyed by model, prompt, image and token budget) were reused. New calls tonight: super-vl 3, nano-omni 27, llama-3.2-90b 33, mistral-large-4 20 that returned; ising and bolt were fully cached. Latency is the original call's wall time on the free tier, not a property of the model.",
+  "- Ours: the router at commit a0422a3 with eval.py's settings (checks on, Nemotron off), run on the same 60 questions. It answered all 60 (no abstentions); the median time is on a local CPU with warm caches. On the core 32 it gets 26/32 here against 25/32 in the 14 Nov comparison because the router has changed since (one scan room-type answer, question 2058, is now right).",
+  "- How the extension was picked: in the 14 Nov harness's fixed run order (weak110 then base150, round-robin by category, each category shuffled with `random.Random(1)`), taking the first questions of each needed category not already in the set. That order is seeded and independent of any model's answers, and it is why most replies were already cached.",
+  "- mistral-large-4 did not finish. At least 10 of the 12 Swiss and IFC area questions used up the 4096-token budget in reasoning (finish=length after 200 to 330 s), and the harness's 16384-token retry was slow and often hung or was dropped on the free tier. 4 area questions came back; 8 (4 Swiss, 4 IFC) were still open at 04:00. It answered all 48 count questions. Its 14 Nov partial numbers stay in the history section; they are not comparable to this table.",
+  "- 60 questions is a small sample: ours 52/60 has a 95% interval of 76% to 93%, and per category n is 11 to 13. A difference of one or two questions between hosted models is noise; the gap between ours and every hosted model is not.",
+  "- Reproduce: `python tools/bakeoff_fair.py set` (prints the frozen set), `run --model <id>` per model (add `--until HH:MM`, `--call-timeout S`), `ours`, `report`. The report writes this section, `out/model_bakeoff_fair.json` and `app/static/bakeoff.json` (the Results page's bake-off table). Rerunning `tools/model_bakeoff.py report` regenerates the whole doc from the 14 Nov data and drops this section."
+ ]
+}

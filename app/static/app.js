@@ -2786,41 +2786,26 @@ async function renderResLinks() {
   } catch (_) { /* no files in this build: the links stay hidden */ }
 }
 
-/* The model bake-off (docs/model_bakeoff.md, 14 Nov): every hosted model as a row, each category as right/n on the
-   questions it was run on, with ours on those same questions under it. Slow models finished few questions, so the
-   n differ; the doc pairs every answer question by question. Naive column: the 150-question baseline sample. */
-const BAKE_CATS = [["naive", "Naive sample"], ["doors", "Scan doors"], ["windows", "Scan windows"], ["rooms", "Scan room types"],
-  ["other", "Scan other counts"], ["swiss", "Swiss counts"], ["areas", "Areas (Swiss, IFC)"], ["text", "PDF text only"]];
-// [right, n, ours % on the same questions]; naive: [accuracy %, n, ours %]
-const BAKEOFF = [
-  { model: "nemotron-3.5-super-vl", naive: "base", doors: [2, 22, 73], windows: [5, 22, 55], rooms: [30, 44, 91], other: [13, 16, 94], swiss: [20, 40, 100], areas: [6, 60, 100] },
-  { model: "mistral-large-4", naive: [100, 2, 100], doors: [3, 8, 88], windows: [6, 13, 62], rooms: [8, 11, 91], swiss: [1, 1, 100], text: [9, 12, 100] },
-  { model: "llama-3.2-90b-vision", naive: [30, 20, 100], doors: [1, 12, 83], windows: [2, 12, 58], rooms: [5, 15, 93], swiss: [4, 7, 100], areas: [1, 8, 100] },
-  { model: "ising-calibration-1.5", naive: [26, 149, 96], doors: [0, 40, 68], windows: [1, 43, 53], rooms: [32, 55, 93], other: [10, 16, 94], swiss: [13, 40, 100], areas: [1, 60, 100] },
-  { model: "nemotron-3.5-bolt", naive: [26, 150, 95], doors: [0, 41, 66], windows: [2, 43, 53], rooms: [31, 55, 93], other: [11, 16, 94], swiss: [11, 40, 100], areas: [3, 60, 100] },
-  { model: "nemotron-3-nano-omni (stopped early)", naive: [0, 1, 100], doors: [0, 14, 93], windows: [0, 12, 58], rooms: [7, 14, 93] },
-  { model: "nemotron-3-ultra (text only)", text: [16, 60, 100] },
-  { model: "nemotron-3-super (text only)", text: [0, 30, 100] },
-];
-const BAKE_OURS = { doors: [27, 41], windows: [23, 43], rooms: [51, 55], other: [15, 16], swiss: [54, 54], areas: [91, 91], text: [60, 60] };
-function renderBakeoff() {
-  const b = tileData.base;
-  const cell = (k, v) => {
-    if (!v) return `<td class="num dim">-</td>`;
-    if (v === "base") {
-      if (!b) return `<td class="num dim">-</td>`;
-      return `<td class="num"><span class="bk-m">${pct(b.nemo_accuracy)} <span class="dim">of ${num(b.n)}</span></span><span class="bk-o">ours ${pct(b.ours_accuracy)}</span></td>`;
+/* The model bake-off, fair rerun (docs/model_bakeoff.md, 15 Nov): every hosted model and ours on the same fixed question
+   set, so the rows compare. Read from bakeoff.json (tools/bakeoff_fair.py report): cats [[key, title]], ours and each
+   row {key: [right, n]}; a row with "status" did not answer every question and gets no numbers at all. The 14 Nov
+   table, with a different n per model, stays in the doc as history. */
+let bakeData = null;
+async function renderBakeoff() {
+  if (!bakeData) {
+    try { bakeData = await api("bakeoff.json"); } catch (e) {
+      $("#bakeTable").innerHTML = `<tbody><tr><td class="dim">The bake-off data is missing (app/static/bakeoff.json, made by tools/bakeoff_fair.py).</td></tr></tbody>`;
+      return;
     }
-    if (k === "naive") return `<td class="num"><span class="bk-m">${v[0]}% <span class="dim">of ${v[1]}</span></span><span class="bk-o">ours ${v[2]}%</span></td>`;
-    return `<td class="num"><span class="bk-m">${v[0]}/${v[1]}</span><span class="bk-o">ours ${v[2]}%</span></td>`;
-  };
-  const ours = `<tr class="group"><td>Ours, all questions of the set</td><td class="num">${b ? `${pct(b.ours_accuracy)} <span class="dim">of ${num(b.n)}</span>` : "-"}</td>`
-    + BAKE_CATS.slice(1).map(([k]) => `<td class="num">${BAKE_OURS[k][0]}/${BAKE_OURS[k][1]}</td>`).join("") + `</tr>`;
-  $("#bakeTable").innerHTML = `<thead><tr><th>Model</th>${BAKE_CATS.map(([, t]) => `<th class="num">${esc(t)}</th>`).join("")}</tr></thead><tbody>${ours}`
-    + BAKEOFF.map((r) => `<tr><td>${esc(r.model)}</td>${BAKE_CATS.map(([k]) => cell(k, r[k])).join("")}</tr>`).join("") + `</tbody>`;
-  $("#bakeNote").textContent = "Right / questions the model was run on, and ours on those same questions under it. Hosted models on NVIDIA Build (free tier), "
-    + "same prompt and scoring as the naive baseline. Slow models finished only a few questions, so n is small and differs per model: "
-    + "read the gaps as direction, not precision. Every model and category: docs/model_bakeoff.md.";
+  }
+  const d = bakeData;
+  const cell = (v) => v ? `<td class="num">${v[0]}/${v[1]}</td>` : `<td class="num dim">-</td>`;
+  const ours = `<tr class="group"><td>Ours (Blueprint Evidence)</td>${d.cats.map(([k]) => cell(d.ours[k])).join("")}</tr>`;
+  const rows = d.rows.map((r) => r.status
+    ? `<tr><td>${esc(r.model)}</td><td class="dim" colspan="${d.cats.length}">${esc(r.status)}</td></tr>`
+    : `<tr><td>${esc(r.model)}</td>${d.cats.map(([k]) => cell(r[k])).join("")}</tr>`).join("");
+  $("#bakeTable").innerHTML = `<thead><tr><th>Model</th>${d.cats.map(([, t]) => `<th class="num">${esc(t)}</th>`).join("")}</tr></thead><tbody>${ours}${rows}</tbody>`;
+  $("#bakeNote").textContent = d.note;
 }
 
 async function loadOverview() {
