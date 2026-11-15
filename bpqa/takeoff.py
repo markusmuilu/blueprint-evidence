@@ -246,6 +246,14 @@ def parse_takeoff(question: str) -> dict | None:
     return out
 
 
+ORDER_WORD = re.compile(r"\b(order|buy|purchase|tilata|tilaan|ostaa|bestellen|kaufen|commander|acheter|ordinare|comprare)\w*")
+
+
+def says_order(f: str) -> bool:
+    """True when a folded question says order / buy: the default waste then goes into a takeoff's value."""
+    return bool(ORDER_WORD.search(f))
+
+
 def waste_from_question(tk: dict, raw: str, f: str | None = None) -> dict:
     """Waste for floor takeoffs, set on `tk` in place: a stated percentage, or the default when the question
     says order/buy for a material. "needed"/"required" stays net (the dataset's own flooring questions answer
@@ -257,8 +265,7 @@ def waste_from_question(tk: dict, raw: str, f: str | None = None) -> dict:
     inp = parse_inputs(raw)
     if inp.get("waste_pct") is not None:
         tk["waste_pct"], tk["waste_src"] = inp["waste_pct"], "given in the question"
-    elif tk.get("material") and re.search(r"\b(order|buy|purchase|tilata|tilaan|ostaa|bestellen|kaufen|commander|acheter|"
-                                          r"ordinare|comprare)\w*", f):
+    elif tk.get("material") and says_order(f):
         tk["waste_pct"] = DEFAULT_WASTE_PCT
         tk["waste_src"] = f"default {DEFAULT_WASTE_PCT:g}% cutting allowance (say 'with 15% waste' or 'no waste' to change)"
     return tk
@@ -453,7 +460,10 @@ def summary(rows: list[dict], tk: dict, unit: str = "m2") -> tuple[float, list[d
     w = tk.get("waste_pct") or 0
     if w and unit == "m2":
         net, total = total, round(total * (1 + w / 100.0), 2)
-        items.append({"totals": {"net_m2": net, "waste_pct": w, "waste_m2": round(total - net, 2), "order_m2": total}})
+        from .walls import default_waste_reason
+        items.append({"totals": {"net_m2": net, "waste_pct": w, "waste_m2": round(total - net, 2), "order_m2": total,
+                                 "defaults": [default_waste_reason(w)] if str(tk.get("waste_src", "")).startswith("default")
+                                 else []}})
         expl = f"{total:.2f} {unit} to order = net {net:.2f} ({lines}) + {w:g}% waste {total - net:.2f}. {describe(tk)}."
     head = interpretation(tk, [((f"{r['label']} {r['number']}" if r.get("number") and str(r["number"]) not in str(r["label"])
                                  else r["label"]), r["area"]) for r in rows])

@@ -128,6 +128,13 @@ def _parse_inputs(question: str) -> dict:
     return out
 
 
+def default_waste_reason(pct: float | None = None) -> str:
+    """Estimate reason for a value that includes the default waste (judge review 15 Nov: a quantity to order built on
+    a waste nobody asked for was marked proven)."""
+    pct = DEFAULT_WASTE_PCT if pct is None else pct
+    return f"includes the default {pct:g}% waste; say 'no waste' or 'with 5% waste' to change it"
+
+
 def surfaces(tk: dict) -> tuple[bool, bool, str]:
     """(floor, walls, how it was read) for a takeoff interpretation."""
     s = tk.get("surface", "floor")
@@ -252,6 +259,22 @@ def summary(rooms: list[dict], tk: dict, question: str) -> tuple[float, list, st
         both = (f" Floor only: {floor_t:.2f} m2, with {waste:g}% waste {floor_t * k:.2f} m2. Floor plus walls: {net:.2f} m2, "
                 f"with {waste:g}% waste {net * k:.2f} m2.")
         totals["floor_only_order_m2"] = round(floor_t * k, 2)
+    # Defaults the value rests on that the question did not state: the answer is then an estimate (bpqa/router.py reads
+    # totals["defaults"]). A stated waste, a height from the model and walls asked for keep the route's own tier.
+    defaults = []
+    if inp.get("order") and "waste_pct" not in inp:
+        defaults.append(default_waste_reason())
+    if want_walls:
+        if tk.get("surface") == "floor" and not inp.get("tile_m") and not inp.get("full_height"):
+            defaults.append("the walls are taken as tiled to full height, which the question did not say; ask for "
+                            "'floor tiles' for the floor alone or 'tiles to 1.2 m' for a tiling height")
+        hs = sorted({h for h in assumed if "ceiling height" in h})
+        if hs:
+            defaults.append("the walls use an " + hs[0].split(" (")[0].replace("ASSUMED", "assumed")
+                            + " (not in the drawing); say e.g. 'ceiling height 2.6 m' to change it")
+        if any("ceiling height" not in h for h in assumed):
+            defaults.append("door and window openings use assumed heights")
+    totals["defaults"] = defaults
     expl = (f"{value:.2f} m2 = {'; '.join(lines)}. Value is the {totals['value_is']}.{both} Surfaces: {how}. Per room: "
             + " | ".join(per) + (" | ..." if len(items) > 12 else "") + "."
             + (" Assumptions: " + "; ".join(sorted(assumed)) + "." if assumed else ""))

@@ -604,12 +604,20 @@ def _tiling(ctx, d: dict, sc, tk: dict, ok: list[dict]) -> dict:
                            + ", ".join(h["text"] for h in ok if not h.get("perimeter_m")) + " has none"}
     base, what = ((walls_t, "walls only") if asked == "walls" else
                   (floor + walls_t, "floor plus walls") if asked == "floor+walls" else (floor, "floor only"))
-    add = stated or (not plain and bool(inp.get("order")))
+    # "to order" / "buy" means the same on every route: the default waste goes into the value (final judge review
+    # 15 Nov: 23.6 m2 here, floor plus default waste on the other routes), and the answer says so in its reason
+    from ..query import fold
+    from ..takeoff import says_order
+    add = stated or (says_order(fold(ctx.q.question)) if asked == "floor" else bool(inp.get("order")))
     value = round(base * (k if add else 1.0), 1)
     src = "given in the question" if stated else f"default {W.DEFAULT_WASTE_PCT:g}% cutting allowance"
     read = how if not plain else ("floor only: this route answers plain tiling with the floor area" if want_walls else how)
+    m = k if add else 1.0
+    sfx = f" with {waste:g}% waste" if add else ""
+    alt = (f"; floor only {floor * m:.1f} m2, floor plus walls {(floor + walls_t) * m:.1f} m2"
+           + (f" (both{sfx})" if add else "") if walls_t is not None else "")
     head = (f"about {value:g} m2 = {what} {base:.1f} m2" + (f" + {waste:g}% waste ({src})" if add else ", no waste added")
-            + f". Surfaces: {read}.")
+            + f"{alt}. Surfaces: {read}.")
     both = f" Floor only: {floor:.1f} m2, with {waste:g}% waste {floor * k:.1f} m2."
     if walls_t is not None:
         both += (f" Floor plus walls: {floor + walls_t:.1f} m2, with {waste:g}% waste {(floor + walls_t) * k:.1f} m2 (walls "
@@ -617,6 +625,8 @@ def _tiling(ctx, d: dict, sc, tk: dict, ok: list[dict]) -> dict:
                  + ", ".join(f"{h['text']} {h['perimeter_m']:.1f} m, {n} door(s)" for h, _, n in rows[:8])
                  + (", ..." if len(rows) > 8 else "") + (f"; {hsrc}" if "ASSUMED" in hsrc else "") + ").")
     why = f"; walls use an {hsrc.split(' (')[0]}" if asked in ("walls", "floor+walls") and "ASSUMED" in hsrc else ""
+    if add and not stated:
+        why += "; " + W.default_waste_reason()
     return {"value": value, "text": head + both, "why": why}
 
 

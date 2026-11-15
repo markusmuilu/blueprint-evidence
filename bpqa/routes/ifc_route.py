@@ -602,6 +602,15 @@ def room_type_count(M, storey, q) -> dict:
             note += f"; 'toilets' read as toilet rooms (the dataset's IFC convention); {fx_note}"
     if not typed and not spaces:
         return {"why": f"no IfcSpace {where}"}
+    unread = untyped_names([s for s in spaces if s not in typed]) if len(typed) <= 1 else []
+    if unread:
+        # 0 or 1 is proven only when every other space name was read as some room type: a name the dictionary does
+        # not cover could be the asked type (final judge review 15 Nov: Esplanades "How many bathrooms?" 0 proven,
+        # "How many bedrooms?" 1 proven). The same rule as a type sum of 0 (self_zero).
+        names = takeoff.TYPE_NAMES[t]
+        est = (est + "; " if est else "") + (
+            f"{len(unread)} space name(s) {where} are not read as any room type ({', '.join(unread[:8])}"
+            f"{' ...' if len(unread) > 8 else ''}); a count of {len(typed)} may miss a {names} named so")
     return {"used": [(s, None) for s in typed], "value": len(typed), "note": note, "estimate": est}
 
 

@@ -3,6 +3,20 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-15: never proven on an unstated default; one meaning for "to order", branch `defaults-estimate`
+
+An answer whose value includes a default the question did not state is an estimate on every route, number unchanged
+(router.defaults_estimate reads the defaults walls.summary / takeoff.summary list): the default 10% waste ("includes the
+default 10% waste; say 'no waste' or 'with 5% waste' to change it"), walls taken as tiled to full height when only
+"tiles" was asked, an assumed ceiling or opening height. "How many square meters of tiling should I order for the
+toilets?": Esplanades plan-01 473.81 m2 and Molio plan-04 86.47 m2, proven before, now estimates; a stated waste with
+the surfaces asked and heights from the model keeps proven. IFC room-type counts of 0 or 1 on a storey with space names
+no room type reads are estimates (Esplanades 2nd floor "How many bathrooms?" 0, "How many bedrooms?" 1). School sheet:
+"to order" / "buy" adds the default waste as the other routes do (toilets 23.6 -> 26.0 m2, estimate with the reason), a
+floor-only takeoff adds waste only on order / buy as the IFC floor path does ("floor tiles do I need" 26.0 -> 23.6), and
+the first line states floor only and floor plus walls. Demo gate 0 differences in value, tier or correctness (no tiling
+question in it); ifc_models dev 397 proven at 100% and swiss_dwellings dev (first 1500) 1500 proven at 99.1%, both unchanged.
+
 ## 2026-11-15: night QA wrong proven answers, branch `night-proven`
 
 Esplanades plan-01 "How big is room 105?" was 870.29 m2 proven (all 50 spaces summed while the reading carried room 105);

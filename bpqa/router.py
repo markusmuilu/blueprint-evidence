@@ -229,6 +229,24 @@ def _composite(ctx: Context) -> tuple[Query, Answer] | None:
 LITRES_Q = re.compile(r"\b(litres?|liters?|litr(a|aa|oja|ans?)?|l of paint|gallons?)\b", re.I)
 
 
+def defaults_estimate(a: Answer) -> Answer:
+    """An answer whose value includes a default the question did not state (the default waste, an assumed ceiling
+    height, walls taken as tiled to full height) is an estimate, whatever route gave it; the number is unchanged
+    (final judge review 15 Nov: tiling to order was proven on a 10% waste nobody asked for). The takeoff summaries
+    list those defaults under items[...]["totals"]["defaults"] (bpqa/walls.py, bpqa/takeoff.py)."""
+    found = [d for it in a.items if isinstance(it, dict) and isinstance(it.get("totals"), dict)
+             for d in it["totals"].get("defaults") or []]
+    said = a.tier_reason or ""
+    # a route that already says its heights are assumed (Swiss DXF, scans) is not told so twice
+    new = [d for d in dict.fromkeys(found) if d not in said and not ("height" in d and "height" in said)]
+    if not new:
+        return a
+    if a.tier == "proven":
+        return _demote(a, "; ".join(new))
+    from .answer import estimate
+    return estimate(a, "; ".join(new))
+
+
 def solve(ctx: Context, query: Query | None = None, guard: bool = False) -> tuple[Query, Answer]:
     """`guard`: with a given reading, still apply the constraint guard (the witnesses read the main answer's reading
     and must apply the same room numbers, names and filters, bpqa/witnesses.py)."""
@@ -252,6 +270,8 @@ def solve(ctx: Context, query: Query | None = None, guard: bool = False) -> tupl
         m2 = float(a.value)              # "in square feet": the same answer, converted (1 m2 = 10.7639 sq ft)
         a.value, a.unit = round(m2 * 10.7639, 1), "sq ft"
         a.explanation = f"{m2:.2f} m2 = {a.value:g} sq ft (1 m2 = 10.7639 sq ft). {a.explanation or ''}".strip()
+    if a.answered:
+        a = defaults_estimate(a)
     if a.answered and a.unit in ("m2", "sq ft") and LITRES_Q.search(ctx.q.question):
         # "how many litres of paint": the area to paint is answered, the litres are not (judge review 15 Nov: a plain
         # m2 value to a litres question, marked proven)
