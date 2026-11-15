@@ -937,8 +937,8 @@ def analyse(path: str, allow_run: bool = True, assume: tuple = ()) -> PlanAreas 
         if not agrees and not (by_print and r.measured is None):
             r.extra["unitless_dropped"] = r.printed
             r.printed = None
-        if NARROW_RETRY and name and not OS.is_object(sc):
-            retry_narrow(img, toks, others, rooms, name, sc)
+    if sc.known and NARROW_RETRY and name and not OS.is_object(sc):   # once per plan, after the unitless check (was indented
+        retry_narrow(img, toks, others, rooms, name, sc)     # into that loop by mistake, 15 Nov)
     return PlanAreas(rooms, free, sc, name or "none", orient, sum(1 for r in proto if r.printed is not None))
 
 
