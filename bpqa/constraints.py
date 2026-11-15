@@ -61,7 +61,7 @@ PARTS = re.compile(r"(?:,|\band\b)\s+(?:how many|how much|what (?:is|are)|which|
                    r"\brespectively\b")
 PART_NOUN = re.compile(r"\b(?:number of|areas?|lengths?|volumes?|heights?|widths?|counts?)\b")
 # "which sanitary furniture is present in room 110": asks for things by name, never for a number
-WHICH = re.compile(r"^\s*(?:which|what (?:kind|kinds|type|types|sort) of)\b")
+WHICH = re.compile(r"^\s*(?:which|what (?:kind|kinds|type|types|sort) of|kumpi|kummassa|kummalla|welche[rsn]?|vilken|vilket|vilka)\b")
 # room numbers: "room 3.05", "kitchen 3.14", "Kontor 213", "room 205", "MH 9.7", "MH 1"
 ROOM_NO = re.compile(r"(?<![\w.])(\d{1,2}\.\d{1,2})(?![\w.])(?!" + UNIT_AFTER + r")")
 ROOM_WORD_NO = re.compile(r"\b(room|rum|raum|zimmer|huone|ruum|piece|nr\.?|no\.?|number|space)\s+(\d{2,4})(?![\w.])", re.I)

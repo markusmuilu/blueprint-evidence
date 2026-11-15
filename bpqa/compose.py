@@ -166,6 +166,8 @@ _APT = r"(?:apartments?|flats?|units?|dwellings?|asun(?:to|non|nossa)|huoneisto\
 _ID = r"([a-z]|\d{1,3})"
 _OR = r"(?:or|and|vs\.?|versus|than|compared (?:to|with)|vai|ja|oder|und|eller|och)"
 CMP_APT = re.compile(rf"\b{_APT}\s+{_ID}\s+{_OR}\s+(?:(?:the\s+)?{_APT}\s+)?{_ID}\b(?!\s*(?:m|cm|mm|m2)\b)")
+# "Kumpi asunto on isompi, A vai B, ja kuinka paljon?": the two ids after the apartment word, mid-sentence (Mac QA 15 Nov)
+CMP_APT_MID = re.compile(rf"\b{_APT}\b[^?]*?[,:]\s*{_ID}\s+(?:or|vai|tai|oder|eller)\s+{_ID}\b(?!\s*(?:m|cm|mm|m2)\b)")
 CMP_APT_TAIL = re.compile(rf"\b{_APT}\b.*?[,:]\s*{_ID}\s+(?:or|vai|oder|eller)\s+{_ID}\s*\??$")
 CMP_SIZE = re.compile(r"\b(bigger|larger|smaller|greater|difference|differ|compare|more area|less area|how much (more|less|"
                       r"bigger|larger|smaller)|isompi|suurempi|pienempi|ero\w*|grosser|kleiner|unterschied|storre|mindre|"
@@ -182,7 +184,7 @@ def compare_apartments(f: str) -> dict | None:
     A count ("how many more rooms does A have than B") is not read here."""
     if COUNT_CUE.search(f) or MATERIAL.search(f) or not CMP_SIZE.search(f):
         return None
-    m = CMP_APT.search(f) or CMP_APT_TAIL.search(f)
+    m = CMP_APT.search(f) or CMP_APT_TAIL.search(f) or CMP_APT_MID.search(f)
     if not m:
         return None
     a, b = m.group(1).upper(), m.group(2).upper()
