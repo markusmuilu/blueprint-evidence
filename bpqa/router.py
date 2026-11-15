@@ -203,7 +203,7 @@ def _composite(ctx: Context) -> tuple[Query, Answer] | None:
     p = compose.plan(ctx.q.question)
     if p is None:
         return None
-    if p["kind"] not in ("parts", "which_storey"):
+    if p["kind"] not in ("parts", "which_storey", "compare_apartments"):
         # a list or superlative the property lookups already answer (IFC: "what are all the spaces on level 2 with
         # their areas", "which room is the largest") keeps that answer: names, storeys and heights included
         rq = phrasing.read(ctx.q.question, use_llm=False)
