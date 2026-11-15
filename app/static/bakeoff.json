@@ -1,0 +1,199 @@
+{
+ "title": "Fair rerun, same questions for every model (15 Nov)",
+ "n": 60,
+ "cats": [
+  [
+   "scan_door",
+   "Scan doors"
+  ],
+  [
+   "scan_window",
+   "Scan windows"
+  ],
+  [
+   "scan_room_type",
+   "Scan room types"
+  ],
+  [
+   "swiss_count",
+   "Swiss counts"
+  ],
+  [
+   "area",
+   "Areas (Swiss, IFC)"
+  ],
+  [
+   "overall",
+   "All questions"
+  ]
+ ],
+ "ours": {
+  "scan_door": [
+   9,
+   12
+  ],
+  "scan_window": [
+   8,
+   13
+  ],
+  "scan_room_type": [
+   11,
+   11
+  ],
+  "swiss_count": [
+   12,
+   12
+  ],
+  "area": [
+   12,
+   12
+  ],
+  "overall": [
+   52,
+   60
+  ]
+ },
+ "rows": [
+  {
+   "model": "nemotron-3.5-super-vl",
+   "scan_door": [
+    2,
+    12
+   ],
+   "scan_window": [
+    3,
+    13
+   ],
+   "scan_room_type": [
+    7,
+    11
+   ],
+   "swiss_count": [
+    6,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    18,
+    60
+   ]
+  },
+  {
+   "model": "llama-3.2-90b-vision",
+   "scan_door": [
+    1,
+    12
+   ],
+   "scan_window": [
+    1,
+    13
+   ],
+   "scan_room_type": [
+    4,
+    11
+   ],
+   "swiss_count": [
+    6,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    12,
+    60
+   ]
+  },
+  {
+   "model": "nemotron-3-nano-omni",
+   "scan_door": [
+    1,
+    12
+   ],
+   "scan_window": [
+    1,
+    13
+   ],
+   "scan_room_type": [
+    5,
+    11
+   ],
+   "swiss_count": [
+    5,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    12,
+    60
+   ]
+  },
+  {
+   "model": "ising-calibration-1.5",
+   "scan_door": [
+    0,
+    12
+   ],
+   "scan_window": [
+    0,
+    13
+   ],
+   "scan_room_type": [
+    7,
+    11
+   ],
+   "swiss_count": [
+    4,
+    12
+   ],
+   "area": [
+    0,
+    12
+   ],
+   "overall": [
+    11,
+    60
+   ]
+  },
+  {
+   "model": "nemotron-3.5-bolt",
+   "scan_door": [
+    0,
+    12
+   ],
+   "scan_window": [
+    1,
+    13
+   ],
+   "scan_room_type": [
+    6,
+    11
+   ],
+   "swiss_count": [
+    2,
+    12
+   ],
+   "area": [
+    1,
+    12
+   ],
+   "overall": [
+    10,
+    60
+   ]
+  },
+  {
+   "model": "mistral-large-4",
+   "status": "did not finish (free-tier rate limit)"
+  }
+ ],
+ "note": "Right / 60: every model and our system on the same 60 preview test questions (12 scan doors, 13 scan windows, 11 scan room types, 12 Swiss counts, 12 Swiss and IFC areas). Hosted models on NVIDIA Build (free tier), same prompt and scoring as the naive baseline (counts exact, areas within 2%, no reply counts as wrong). A model that could not answer every question within the free-tier rate limit has no numbers. Small sample: read the gaps as direction, not precision. Details: docs/model_bakeoff.md.",
+ "source": "out/model_bakeoff_fair.json (tools/bakeoff_fair.py)"
+}
