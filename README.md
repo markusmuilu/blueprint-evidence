@@ -41,6 +41,15 @@ rules cannot read a question, an NVIDIA Nemotron model maps it to one of a fixed
 and the result is checked like any other query. In the live app no language model produces a number:
 measurement is always done by code on the drawing.
 
+## Training on Verda
+
+The detector experiments ran on a Verda GPU instance (a spot RTX A6000, 48 GB) alongside a local GPU during
+the hackathon, with Verda's Junction credits. The shipped detector is a small YOLO26 model trained on tiles
+of the scans on the local GPU. On Verda a medium YOLO26 model was trained at several image scales; on the
+tuning images it gained about 2 to 3 points on toilets, sinks and showers, but not on doors or windows, and
+it needed about 1.5x the CPU time per scan plus a rebuilt calibration table. It is therefore not in the live
+app yet, and it is the starting point for improving the scan side. Thanks to Verda for the GPU credits.
+
 ## Results
 
 | test set | questions | right | notes |
