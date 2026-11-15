@@ -85,6 +85,74 @@ STOP = {"room", "rooms", "space", "spaces", "area", "areas", "total", "floor", "
         "kitchens", "living", "storage", "balcony", "balconies", "corridor_"}
 
 
+# negation (morning check 15 Nov, N1): "rooms that are not bedrooms", "bedrooms excluding apartment A", "sinks except
+# in the kitchen". The object follows the word, except Finnish "X lukuun ottamatta" / "X pois lukien" where it comes
+# first. An object that names no room type, room or apartment ("doorways without a door leaf do not count") is a
+# definition the routes already follow and is not checked.
+NEG_AFTER = re.compile(r"\b(not|excluding|except(?: for)?|without|other than|apart from|besides|ohne|ausser|utom|paitsi|"
+                       r"ilman|eivat|ei)\b([^?.;,()]*)")
+NEG_BEFORE = re.compile(r"([^?.;,()]*)\b(lukuun ottamatta|pois lukien)\b")
+NEG_GROUP = re.compile(r"\b(?:apartments?|flats?|units?|wohnung\w*|asunno\w*|asunto\w*|huoneisto\w*|lagenhet\w*|"
+                       r"lejlighed\w*|korter\w*)\s+(?:no\.?\s*|nr\.?\s*)?([a-z]|\d{1,3})\b")
+NEG_SAID = re.compile(r"\b(excluding|excluded|except|outside|not in|other than|apart from|not counting)\b", re.I)
+# a door or window count limited to one room or room type (N2): "doors does the kitchen have", "windows in the
+# bedrooms", "ovea makuuhuoneissa". The kind of door ("entrance doors", "Innentüren") is not a room.
+COUNT_CUE = re.compile(r"\b(how many|number of|count|kuinka monta|montako|wie viele|wieviele|hur manga|antal|anzahl)\b")
+OPENING_WORD = re.compile(r"\b(doors?|doorways?|windows?|ovi|ovea|ovet|ovia|ovien|oven|oviaukko\w*|ikkun\w*|tur|turen|"
+                          r"fenster\w*|dorr\w*|fonster\w*)\b")
+DOOR_KIND = re.compile(r"\b(entrance|entry|front|main|interior|exterior|internal|external|inner|outer|fire|sliding|"
+                       r"double|single)\s+(doors?|windows?)\b|\([^)]*\)")
+DOES_HAVE = re.compile(r"\bdoes (?:the|this|that|room|our|my)\b.{0,40}?\bhave\b|\b(?:of|in|into|for) (?:the|this|that|room)"
+                       r"\s+\d|\b(?:of|in|into) (?:the|this|that) \w+ room\b")
+# two apartments or two rooms joined by and (N4): "apartment A and B", "room 105 and room 106", "asunnot A ja B"
+PAIR_SEP = r"\s*(?:,|\band\b|\bja\b|\bund\b|\boch\b|\bog\b|\bet\b|&|\+)\s*"
+PAIR_GROUP = re.compile(r"\b((?i:apartments?|flats?|units?|wohnung(?:en)?|asunno\w*|asunto\w*|huoneisto\w*|l[aä]genhet\w*))"
+                        r"\s+([A-Z]|\d{1,3})" + PAIR_SEP + r"(?:(?i:the\s+)?(?i:apartment|flat|unit|wohnung|asunto|"
+                        r"asunno\w*|huoneisto\w*|l[aä]genhet\w*)\s+)?([A-Z]|\d{1,3})(?![\w.])")
+PAIR_ROOM = re.compile(r"\b((?i:rooms?|rum|raum|r[aä]ume|zimmer|huone\w*|spaces?|tila\w*))\s+(\d{1,4}(?:\.\d{1,2})?)"
+                       + PAIR_SEP + r"(?:(?i:the\s+)?(?i:room|rum|raum|zimmer|huone\w*|space|tila\w*)\s+)?"
+                       r"(\d{1,4}(?:\.\d{1,2})?)(?![\w.])(?!" + UNIT_AFTER + r")")
+PAIR_NO_SUM = re.compile(r"height|width|wide|tall|average|mean|korkeu|levey|keskim|hohe|breite|durchschnitt|compare|"
+                         r"larger|bigger|smaller|difference|versus|\bvs\b|\bor\b|tai\b|oder\b|each|per\b|kumpi|which")
+
+
+def _types_in(text: str) -> set:
+    from . import takeoff
+    out = set()
+    for t, rx in takeoff._Q_TYPE_RE.items():
+        if rx.search(text):
+            out |= set(takeoff.GROUPS.get(t, (t,)))
+    return out
+
+
+def _neg_detect(f: str) -> list[dict]:
+    out = []
+    objs = [(m.group(0), m.group(2)) for m in NEG_AFTER.finditer(f)] + [(m.group(0), m.group(1)) for m in NEG_BEFORE.finditer(f)]
+    for phrase, obj in objs:
+        g = NEG_GROUP.search(obj)
+        if g or ROOM_NO.search(obj) or ROOM_WORD_NO.search(obj):
+            out.append({"kind": "negation", "value": "scope", "phrase": phrase.strip(), "types": set()})
+            continue
+        types = _types_in(OPENING_WORD.sub(" ", obj))
+        if types:
+            out.append({"kind": "negation", "value": "type", "phrase": phrase.strip(), "types": types})
+    return out
+
+
+def _room_count_detect(f: str) -> dict | None:
+    if not COUNT_CUE.search(f) or not OPENING_WORD.search(f):
+        return None
+    g = DOOR_KIND.sub(" ", f)
+    g2 = OPENING_WORD.sub(" ", g)
+    types = _types_in(g2)
+    m = DOES_HAVE.search(g)
+    if not types and not m:
+        return None
+    what = "windows" if re.search(r"window|ikkun|fenster|fonster", g) and not re.search(r"door|ovi|ovea|ovet|tur|dorr", g) else "doors"
+    return {"kind": "room_count", "value": what, "types": types,
+            "phrase": m.group(0) if m else ", ".join(sorted(types))}
+
+
 def _cog(w: str) -> str:
     """Spelling-tolerant form of a word for matching a question word with a printed room label across languages:
     'corridors' and 'KORIDOR' both give 'koridor'."""
@@ -176,6 +244,14 @@ def detect(question: str) -> list[dict]:
     m = WHICH.search(f)
     if m and not any(rx.search(f) for _, rx in MEASURE_RX) and not re.search(r"\bhow many\b", f):
         out.append({"kind": "which", "value": "", "phrase": m.group(0).strip()})
+    negs = _neg_detect(f)
+    if negs:            # "bedrooms excluding apartment A": the apartment is the exclusion, not the scope
+        scopes = [n["phrase"] for n in negs if n["value"] == "scope"]
+        out = [c for c in out if not (c["kind"] in ("group", "room_no") and any(fold(c["phrase"]) in s for s in scopes))]
+    out += negs
+    rc = _room_count_detect(f)
+    if rc:
+        out.append(rc)
     if not any(c["kind"] == "compare" for c in out):
         for meas, rx in MEASURE_RX:
             mm = rx.search(f)
@@ -326,6 +402,35 @@ def unused(ctx, query, ans: Answer, cons: list[dict] | None = None) -> list[dict
                                      "answer is one number, for one part at most; ask for each part separately")
                         if k == "parts" else
                         f"the question asks '{c['phrase']} ...' (things by name), and the answer is a number"})
+        elif k == "negation":
+            if NEG_SAID.search(ans.explanation or ""):
+                continue
+            if v == "scope":
+                out.append({**c, "why": f"the question excludes something ('{c['phrase']}'), and the answer did not "
+                                        f"apply that exclusion"})
+                continue
+            from . import takeoff
+            X = c["types"]
+            cnt = takeoff.COUNT_TYPES.get(query.obj or "")
+            tk = query.extra.get("takeoff") or {}
+            tk_types = set(tk.get("types") or [])
+            if (cnt and cnt in X) or (tk_types & X):
+                out.append({**c, "why": f"the question excludes {', '.join(sorted(X))} rooms ('{c['phrase']}'), and the "
+                                        f"answer counts exactly those rooms"})
+            elif cnt or tk_types:
+                continue        # another room type: "bathrooms, not counting separate WC rooms" (dataset phrasing)
+            elif query.measure == "area" and X <= {"balcony"}:
+                continue        # net floor area "except balconies, loggias, terraces": the routes leave them out
+            else:
+                out.append({**c, "why": f"the question excludes {', '.join(sorted(X))} rooms ('{c['phrase']}'), and the "
+                                        f"answer did not apply that exclusion"})
+        elif k == "room_count":
+            if ans.unit not in ("count", "rooms"):
+                continue
+            if (ans.route or "").startswith(("ifc-props", "pdf-text")):
+                continue        # the property lookups count the elements of one space (router room_scope)
+            out.append({**c, "why": f"the question counts {v} of one room or room type ('{c['phrase']}'), and the answer "
+                                    f"was not limited to it (it counts the whole plan, or the rooms themselves)"})
         elif k == "named":
             if query.label and _norm(query.label) == _norm(v):
                 continue
@@ -532,10 +637,114 @@ def _swiss_group(ctx, query, m):
 
 # ---------------------------------------------------------------- the guard
 
+def _pair(question: str):
+    """(span, word, x, y) for "apartment A and B" / "room 105 and room 106", else None."""
+    raw = re.sub(r"'[^']*'|\"[^\"]*\"|«[^»]*»|„[^“”]*[“”]|“[^”]*”", lambda m: " " * len(m.group(0)), question)
+    for rx in (PAIR_GROUP, PAIR_ROOM):
+        m = rx.search(raw)
+        if m and m.group(2) != m.group(3):
+            return m.span(), m.group(1), m.group(2), m.group(3)
+    return None
+
+
+def _singular(word: str) -> str:
+    w = word.lower()
+    if w in ("rooms", "spaces", "apartments", "flats", "units"):
+        return word[:-1]
+    if w in ("wohnungen",):
+        return word[:-2]
+    if w in ("räume", "raume"):
+        return "Raum"
+    return word
+
+
+def _pair_check(ctx, ans: Answer, pair):
+    """N4 (morning check 15 Nov): "the total area of apartment A and B" answered for A only, marked proven. Each item
+    is asked alone; both answered proven in the same unit gives their sum, anything else is not answered."""
+    (s, e), word, x, y = pair
+    q = ctx.q.question
+    named = [it for it in ans.items if isinstance(it, dict) and any(it.get(k) for k in ("number", "name", "room"))]
+    names = " ".join(str(it.get(k) or "") for it in named for k in ("number", "name", "room"))
+    tok = lambda v, t: re.search(rf"(?<![\w.]){re.escape(v)}(?![\w.])", t)
+    if len(named) == 2 and tok(x, names) and tok(y, names):
+        return None                 # the answer already covers exactly the two
+    w1 = _singular(word)
+    reason = None
+    if PAIR_NO_SUM.search(fold(q)) or not isinstance(ans.value, (int, float)) or isinstance(ans.value, bool):
+        reason = "a sum of the two does not answer it"
+    else:
+        from dataclasses import replace
+        from .router import Context, solve
+        parts = []
+        for v in (x, y):
+            sub_q = q[:s] + f"{w1} {v}" + q[e:]
+            sub = Context(root=ctx.root, q=replace(ctx.q, question=sub_q), out_dir=ctx.out_dir, evidence=False,
+                          checks=ctx.checks, pdf_only=ctx.pdf_only, nemotron=ctx.nemotron, assume=ctx.assume)
+            _, a = solve(sub)
+            parts.append((v, a))
+        bad = [(v, a) for v, a in parts if not (a.answered and a.tier == "proven" and isinstance(a.value, (int, float))
+                                                and not isinstance(a.value, bool) and a.unit == ans.unit)]
+        if not bad:
+            (v1, a1), (v2, a2) = parts
+            val = a1.value + a2.value
+            val = round(val, 2) if isinstance(val, float) else val
+            unit = "" if ans.unit == "count" else f" {ans.unit}"
+            out = Answer(value=val, unit=ans.unit, route=ans.route, confidence=min(a1.confidence, a2.confidence),
+                         tier="proven", items=list(a1.items) + list(a2.items),
+                         explanation=f"{val:g}{unit} = {w1} {v1} {a1.value:g} + {w1} {v2} {a2.value:g}. "
+                                     f"{w1} {v1}: {a1.explanation} {w1} {v2}: {a2.explanation}")
+            return out
+        reason = "; ".join(f"{w1} {v} alone is not answered as proven" + (f" ({a.tier_reason or a.explanation})" if a.answered else
+                                                                          f" ({(a.explanation or '').removeprefix('not answered: ')})")
+                           for v, a in bad)
+    shown = f"{ans.value:g}" if isinstance(ans.value, (int, float)) else str(ans.value)
+    a = abstain(ans.route, f"not answered: the question asks about {word} {x} and {y}, and the answer covers "
+                           f"{word} {x} only ({shown} {ans.unit or ''}".rstrip() + f"); {reason}")
+    a.final = True
+    a.items = [{"unapplied": [q[s:e]], "would_answer": ans.value}]
+    return a
+
+
+def _length_as_area(ctx, query, ans: Answer):
+    """N3 (morning check 15 Nov): "how much baseboard for room 3.16" answered with the room's floor area, marked
+    proven. A baseboard or length question is never answered with an area."""
+    from .baseboard import BASEBOARD_RE
+    f = fold(ctx.q.question)
+    if ans.answered and ans.unit in UNITS_OF["area"] and (BASEBOARD_RE.search(f) or MEASURE_RX[2][1].search(f)) \
+            and not MEASURE_RX[1][1].search(f) and not re.search(r"\btil(e|es|ing)\b|laatt|fliese|paint|maal", f):
+        shown = f"{ans.value:g}" if isinstance(ans.value, (int, float)) else str(ans.value)
+        a = abstain(ans.route, f"not answered: the question asks for a length (baseboard, in metres), and the answer is "
+                               f"an area ({shown} {ans.unit}), which does not answer it")
+        a.final = True
+        a.items = [{"unapplied": ["length"], "would_answer": ans.value}]
+        return a
+    return ans
+
+
 def check(ctx, query, ans: Answer, resolve) -> tuple:
     """(query, answer) after the guard. `resolve(q)` solves the same drawing with another reading."""
+    q2, a2 = _check(ctx, query, ans, resolve)
+    try:
+        a2 = _length_as_area(ctx, q2, a2)
+    except Exception:
+        pass
+    return q2, a2
+
+
+def _check(ctx, query, ans: Answer, resolve) -> tuple:
     if not ans.answered:
         return query, ans
+    try:
+        pair = _pair(ctx.q.question)
+    except Exception:
+        pair = None
+    if pair:
+        try:
+            a = _pair_check(ctx, ans, pair)
+        except Exception:
+            a = None
+        if a is not None:
+            return query, a
     try:
         cons = detect(ctx.q.question)
         if not cons and not (ans.route == "ifc" and query.obj == "room"):
