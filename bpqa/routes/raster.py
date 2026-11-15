@@ -204,9 +204,26 @@ def _rooms_of_every_type(ctx, q) -> Answer:
     if first is None or not got:
         return b
     total = round(sum(it["area_m2"] for it in got), 2)
+    # the room labels read on the plan that are not in the sum, by name (night QA 15 Nov, high_quality-10241: a total
+    # of the measured rooms only, with H, ET and TK left out unsaid)
+    left = []
+    try:
+        _, toks, _ = raster_area.plan_tokens(ctx.file, allow_run=False)
+        inside = {str(it.get("room") or "").strip().upper() for it in got}
+        for t in toks or []:
+            s = t["text"].strip()
+            if raster_area.room_word(s) and s.upper() not in inside and s not in left:
+                left.append(s)
+    except Exception:
+        left = []
     expl = (f"{total:.2f} m2: no floor area is printed for the whole flat, so the rooms of every labelled type are added "
             f"up, one type at a time: " + " + ".join(f"{it.get('room') or 'room'} {it['area_m2']:.2f}" for it in got)
-            + (f". Not measured: {', '.join(missed)}" if missed else "") + ". Rooms without a readable label are not included.")
+            + (f". Not measured: {', '.join(missed)}" if missed else "")
+            + (f". Labelled on the plan but not in this sum: {', '.join(left[:12])}; the total is too small by their area"
+               if left else "")
+            + ". Rooms without a readable label are not included.")
+    if left:
+        missed = missed + [f"labelled rooms {', '.join(left[:6])}"]
     out = Answer(value=total, unit="m2", route=first.route, confidence=0.4, items=got, explanation=expl,
                  evidence=first.evidence)
     estimate(out, "the flat's area is not printed; sum of the labelled rooms"

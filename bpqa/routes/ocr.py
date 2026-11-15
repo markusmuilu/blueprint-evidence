@@ -84,4 +84,16 @@ def ocr_image(f: Path, allow_run: bool = True, partial: bool = False) -> list[di
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(t, ensure_ascii=False), encoding="utf-8")
         toks += t
-    return toks
+    return [fix_swaps(t) for t in toks]
+
+
+# OCR letter swaps on short Finnish room labels, read upright with high confidence: "OH" (olohuone) read "HO"
+# (night QA 15 Nov, high_quality-10241: the living room was never found). "HO" is no plan abbreviation.
+SWAPS = {"HO": "OH"}
+
+
+def fix_swaps(t: dict) -> dict:
+    s = (t.get("text") or "").strip()
+    if s in SWAPS and not t.get("mirror") and t.get("conf", 0) >= 0.9:
+        return dict(t, text=SWAPS[s], ocr_read=s)
+    return t

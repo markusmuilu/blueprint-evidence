@@ -49,6 +49,8 @@ MIN_REGION_FRAC = 0.0008  # of the image area; smaller regions are a glyph or a 
 MAX_REGION_FRAC = 0.35
 
 AREA_RE = re.compile(r"(?<![\d+\-±])(\d{1,3})\s?[,.]\s?(\d{1,2})\s?\.?\s?(m|M)(?:\s?[2²?*'!azZ]|(?=\s|$))(?![\dxX])")
+# a printed area whose decimal comma the OCR dropped: "23m2" for "2,3 m2" (the unit's 2 may read as ?, � or ²)
+NODEC_RE = re.compile(r"([1-9])(\d)\s?(?:m|M)\s?[2²?*'!�]")
 TOTAL_RE = re.compile(r"KERROSALA|HUONEISTOALA|ASUINALA|ALA\s*YHT|YHTEENSA|HTM|KEM|TOTAL|PINTA-?ALA", re.I)
 
 
@@ -221,9 +223,10 @@ def plan_tokens(f: Path, allow_run: bool = True, min_conf: float = 0.5):
 
 
 def tokens_r0(f: Path, allow_run: bool = True) -> list[dict] | None:
+    from .ocr import fix_swaps
     p = cache_path(f, 0, False)
     if p.exists():
-        return json.loads(p.read_text(encoding="utf-8"))
+        return [fix_swaps(t) for t in json.loads(p.read_text(encoding="utf-8"))]
     if not allow_run:
         return None
     img = cv2.imread(str(f))
@@ -268,10 +271,16 @@ def read_rooms(toks: list[dict], min_conf: float = 0.5) -> tuple[list[Room], lis
     if skip:
         toks = [t for t in toks if id(t) not in skip]
     areas, labels = [], []
+    one_dec = sum(1 for t in toks if (m := AREA_RE.search(t["text"])) and len(m.group(2)) == 1 and parse_area(t["text"]))
     for t in toks:
         b = quad_box(t["quad"])
         pa = parse_area(t["text"])
-        if pa is not None:
+        if pa is None and one_dec >= 3 and (m := NODEC_RE.fullmatch(t["text"].strip())):
+            # "2,3 m2" read "23m2": the comma dropped. On a plan that prints its areas with one decimal (3 or more
+            # read so), a bare two-digit area is read as d,d and marked (night QA 15 Nov, colorful-11196 LH)
+            areas.append({"v": float(f"{m.group(1)}.{m.group(2)}"), "box": b, "rest": None, "text": t["text"],
+                          "restored": f"{m.group(1)},{m.group(2)} m2"})
+        elif pa is not None:
             v, rest = pa
             areas.append({"v": v, "box": b, "rest": rest if room_word(rest) else None, "text": t["text"]})
         elif room_word(t["text"]):
@@ -301,9 +310,9 @@ def read_rooms(toks: list[dict], min_conf: float = 0.5) -> tuple[list[Room], lis
             used.add(best)
             lb = labels[best]["box"]
             seed = ((lb[0] + lb[2]) / 2, (lb[3] + b[1]) / 2)
-            rooms.append(Room(labels[best]["text"], lb, a["v"], b, seed, extra={"area_text": a["text"]}))
+            rooms.append(Room(labels[best]["text"], lb, a["v"], b, seed, extra={"area_text": a["text"], **({"restored": a["restored"]} if a.get("restored") else {})}))
         else:
-            rooms.append(Room(None, None, a["v"], b, _center(b), extra={"area_text": a["text"]}))
+            rooms.append(Room(None, None, a["v"], b, _center(b), extra={"area_text": a["text"], **({"restored": a["restored"]} if a.get("restored") else {})}))
     free = [l for i, l in enumerate(labels) if i not in used]
     return rooms, free
 
@@ -1188,6 +1197,11 @@ def takeoff_answer(ctx, q, img):
             estimate(ans, f"{len(conflict)} printed value(s) disagree with the measured room by more than 10%")
         if fb:
             estimate(ans, fb)
+        restored = [r for r in rows if r["kind"] == "printed" and (r["room"].extra or {}).get("restored")]
+        if restored:
+            estimate(ans, "; ".join(f"{r['label']}: OCR read '{r['room'].extra['area_text']}' with no decimal comma, "
+                                    f"read as {r['room'].extra['restored']} (the plan prints its areas with one decimal)"
+                                    for r in restored))
         sr = takeoff.scope_reason(tk, [r["label"] for r in rows])
         if sr:
             estimate(ans, sr)        # "the WC" with two WCs summed: an estimate, as on the IFC, DXF and PDF routes
