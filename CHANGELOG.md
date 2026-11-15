@@ -3,6 +3,16 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-15: two apartments compared, the area of each apartment, branch `compare-parts`
+
+"Is apartment A or B bigger, and by how much?" / "Which apartment is bigger, A or B?" / "How much bigger is apartment A
+than B?" / "Kumpi on isompi, asunto A vai B?" (compose.compare_apartments): each apartment is answered on its own with
+the existing rule ("What is the area of apartment A?") and the two are subtracted, citing both (site1002 floor 9393:
+"A, by 8.42 m2", A 163.57, B 155.15, proven; was not understood). "Difference in area between apartment A and B" gives
+the number (8.42 m2). An apartment not on the plan makes it a cannot naming it. "What is the area of each apartment?" /
+"How big is each apartment?" read as the per-apartment areas (was not understood). Proven only when both halves are.
+A count comparison ("how many more rooms does A have than B") is not read here.
+
 ## 2026-11-15: night QA wrong proven answers, branch `night-proven`
 
 Esplanades plan-01 "How big is room 105?" was 870.29 m2 proven (all 50 spaces summed while the reading carried room 105);

@@ -107,6 +107,9 @@ def plan(question: str) -> dict | None:
         return None                        # one schedule entry or sheet: the schedule routes read those
     if WHICH_STOREY.search(f) and not COUNT_CUE.search(f):
         return {"kind": "which_storey"}
+    cmp = compare_apartments(f)
+    if cmp:
+        return cmp
     types = _types(question)
     if types and COUNT_CUE.search(f) and FOLLOW_SIZE.search(f) and not MATERIAL.search(f):
         # "how many meeting rooms are there and how big are they": the rooms of that type, one row each, with the count
@@ -116,6 +119,9 @@ def plan(question: str) -> dict | None:
         return {"kind": "parts", "parts": parts}
     if APTS_AREA.search(f) and not COUNT_CUE.search(f) and not MATERIAL.search(f):
         # "the total area of the apartments on this floor": the room areas grouped by apartment
+        return {"kind": "per_apartment", "types": types}
+    if EACH_APT_AREA.search(f) and not COUNT_CUE.search(f) and not MATERIAL.search(f):
+        # "what is the area of each apartment": the same rows as "the areas of the apartments", per apartment
         return {"kind": "per_apartment", "types": types}
     rooms = bool(types) or bool(ROOMS_ANY.search(f))
     if not rooms or MATERIAL.search(f):
@@ -151,6 +157,77 @@ def plan(question: str) -> dict | None:
         # A model's own space list (ifc-props) answers first (router._composite). "list the room types" is not this
         return {"kind": "list", "types": types}
     return None
+
+
+# ---- two apartments compared (final judge review 15 Nov, fix 5): "is apartment A or B bigger, and by how much?",
+# "how much bigger is apartment A than B", "difference in area between flat 1 and flat 2". Each apartment is answered
+# with the existing per-apartment rule ("what is the area of apartment A?") and the two are subtracted.
+_APT = r"(?:apartments?|flats?|units?|dwellings?|asun(?:to|non|nossa)|huoneisto\w*|wohnung\w*|lagenhet\w*)"
+_ID = r"([a-z]|\d{1,3})"
+_OR = r"(?:or|and|vs\.?|versus|than|compared (?:to|with)|vai|ja|oder|und|eller|och)"
+CMP_APT = re.compile(rf"\b{_APT}\s+{_ID}\s+{_OR}\s+(?:(?:the\s+)?{_APT}\s+)?{_ID}\b(?!\s*(?:m|cm|mm|m2)\b)")
+CMP_APT_TAIL = re.compile(rf"\b{_APT}\b.*?[,:]\s*{_ID}\s+(?:or|vai|oder|eller)\s+{_ID}\s*\??$")
+CMP_SIZE = re.compile(r"\b(bigger|larger|smaller|greater|difference|differ|compare|more area|less area|how much (more|less|"
+                      r"bigger|larger|smaller)|isompi|suurempi|pienempi|ero\w*|grosser|kleiner|unterschied|storre|mindre|"
+                      r"skillnad)\b")
+BY_HOW_MUCH = re.compile(r"\b(how much|by how many|by what|difference|differ|kuinka paljon|paljonko|ero\w*|wie viel|"
+                         r"unterschied|hur mycket|skillnad)\b")
+EACH_APT_AREA = re.compile(r"\b(area|size|floor area|how big|how large|pinta-ala\w*|koko|flache|grosse|yta|storlek)\b.*"
+                           r"\b(each|every|per)\s+(apartment|flat|unit|dwelling)\b|"
+                           r"\b(each|every)\s+(apartment|flat|unit|dwelling)\b.*\b(area|size|how big|how large)\b")
+
+
+def compare_apartments(f: str) -> dict | None:
+    """{kind: compare_apartments, a, b, by} for a folded question comparing the size of two apartments, else None.
+    A count ("how many more rooms does A have than B") is not read here."""
+    if COUNT_CUE.search(f) or MATERIAL.search(f) or not CMP_SIZE.search(f):
+        return None
+    m = CMP_APT.search(f) or CMP_APT_TAIL.search(f)
+    if not m:
+        return None
+    a, b = m.group(1).upper(), m.group(2).upper()
+    if a == b:
+        return None
+    which = re.search(r"\b(which|bigger|larger|smaller|greater|kumpi|isompi|suurempi|pienempi|welche|grosser|kleiner|"
+                      r"vilken|storre|mindre)\b", f)
+    return {"kind": "compare_apartments", "a": a, "b": b, "by": bool(BY_HOW_MUCH.search(f)), "number": not which}
+
+
+def run_compare_apartments(ctx, p: dict, solve_q, shell: Query) -> tuple[Query, Answer]:
+    """Each apartment's area by the existing rule, then the difference; both answers are cited."""
+    ids = (p["a"], p["b"])
+    got = [(i, *solve_q(f"What is the area of apartment {i}?", None)) for i in ids]
+    shell.measure, shell.obj = "area", "apartment"
+    shell.extra["parts"] = [{"question": f"What is the area of apartment {i}?", "query": q.as_dict()} for i, q, _ in got]
+    bad = [(i, a) for i, _, a in got if not a.answered or not isinstance(a.value, (int, float))]
+    if bad:
+        return shell, abstain(next((a.route for _, _, a in got if a.route), "compose"),
+                              "cannot compare: " + "; ".join(f"apartment {i}: {a.abstain or f'answer {a.value!r} is not an area'}"
+                                                             for i, a in bad))
+    (ia, _, aa), (ib, _, ab) = got
+    va, vb = round(float(aa.value), 2), round(float(ab.value), 2)
+    diff = round(abs(va - vb), 2)
+    big, small = ((ia, va), (ib, vb)) if va >= vb else ((ib, vb), (ia, va))
+    if diff < 0.005:
+        head = f"Apartments {ia} and {ib} are the same size: {va:.2f} m2 each"
+        value = 0.0 if p["by"] or p.get("number") else f"same size, {va:.2f} m2"
+    else:
+        pct = 100.0 * diff / small[1] if small[1] else 0.0
+        head = (f"Apartment {big[0]} is bigger by {diff:.2f} m2 ({pct:.1f}%): {big[0]} {big[1]:.2f} m2, "
+                f"{small[0]} {small[1]:.2f} m2")
+        value = diff if p.get("number") else f"{big[0]}, by {diff:.2f} m2" if p["by"] else big[0]
+    unc = [(i, a) for i, _, a in got if a.tier != "proven"]
+    a = Answer(value=value, unit="m2" if isinstance(value, float) else "", route=aa.route,
+               confidence=min(aa.confidence or 0, ab.confidence or 0), evidence=aa.evidence,
+               explanation=f"{head}. Apartment {ia}: {va:.2f} m2, {aa.explanation or ''} | Apartment {ib}: {vb:.2f} m2, "
+                           f"{ab.explanation or ''}",
+               items=[{"label": f"apartment {ia}", "value": va, "tier": aa.tier, "route": aa.route},
+                      {"label": f"apartment {ib}", "value": vb, "tier": ab.tier, "route": ab.route},
+                      {"label": "difference", "value": diff}],
+               cost_usd=(aa.cost_usd or 0) + (ab.cost_usd or 0),
+               tier="proven" if not unc else "estimate",
+               tier_reason="; ".join(f"apartment {i}: {x.tier_reason or 'estimate'}" for i, x in unc))
+    return shell, a
 
 
 FOLLOW_SIZE = re.compile(r"\b(and|,)\s+(how big|how large|what size|what sizes|what are their (areas|sizes)|their (areas|sizes))\b|"
@@ -392,6 +469,8 @@ def run(ctx, p: dict, solve_q) -> tuple[Query, Answer]:
         return shell, which_storey(ctx)
     if kind == "parts":
         return run_parts(ctx, p["parts"], solve_q, shell)
+    if kind == "compare_apartments":
+        return run_compare_apartments(ctx, p, solve_q, shell)
     types = p.get("types") or []
     if kind == "share":
         qt, at, rt = _base(ctx, question, types, solve_q)
@@ -552,6 +631,9 @@ def describe(p: dict) -> str:
         return f"the floor area of the {noun}, summed per apartment"
     if k == "which_storey":
         return "the storey this drawing shows"
+    if k == "compare_apartments":
+        return (f"the floor area of apartment {p['a']} and of apartment {p['b']}, each answered on its own, "
+                f"then compared" + (" and subtracted" if p.get("by") else ""))
     return k
 
 
