@@ -3,6 +3,18 @@
 What moved the numbers. Dev numbers are measured with `eval.py --split dev`; test was run only at the
 end of a session. Accuracy counts an abstention as wrong; precision is correct / answered.
 
+## 2026-11-15: guard for dropped clauses, branch `guard-clauses`
+
+Morning check N1 to N4, status only (bpqa/constraints.py): a negation whose room type, room or apartment the answer did
+not apply ("rooms are not bedrooms" 9 proven, "bedrooms excluding apartment A" 5, "sinks excluding the kitchen" 2), a
+door or window count of one room or room type ("doors does the kitchen have" 30, "windows in the bedrooms" 9 = the
+bedrooms, "ovea makuuhuoneissa" 5), and a baseboard or length question answered in m2 ("baseboard for room 3.16" 15.2 m2)
+are now not answered, with the reason. The dataset exclusions ("not counting separate WC rooms", "erillisiä WC-tiloja
+lukuun ottamatta", "except balconies", "without a door leaf") keep their answers. "Apartment A and B" and "room 105 and
+room 106" ask each item alone and sum them when both are proven (Swiss 1002 163.57 -> 318.72 m2, Molio 9.26 -> 19.69 m2),
+else not answered. Demo gate 0 differences in value, tier or correctness; dev swiss_dwellings (first 1,500) proven 1,500
+at 99.2% and ifc_models proven 1,689 at 99.8%, both unchanged (0 answer differences).
+
 ## 2026-11-15: scan hunt on unreleased-style scans, branch `scan-hunt`
 
 454 natural-phrasing questions (English and Finnish) over the live app on 20 test-split CubiCasa scans outside the demo
