@@ -2,7 +2,7 @@
 
 Ask a question about a construction drawing and get the answer with the evidence marked on the drawing, so
 you can check where every number came from. Built at Junction 2026 for Stoa's challenge "Make Blueprints
-Talk".
+Talk"; 2nd place in the Verda challenge.
 
 - **Live app:** https://muilu-markus--blueprint-evidence.us-east.modal.run
 - **Results, every test question with our answer:** [results/README.md](results/README.md)
